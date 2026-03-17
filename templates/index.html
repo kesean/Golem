@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dev Support AI</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Dev Support AI</h1>
+      <p class="subtitle">Ask a technical question and get a developer support–style answer.</p>
+    </header>
+
+    <main>
+      <div class="input-area">
+        <textarea
+          id="question"
+          placeholder="e.g. Why am I getting a 401 error when calling the API with my key?"
+          rows="4"
+        ></textarea>
+        <button id="ask-btn" onclick="askQuestion()">Ask</button>
+      </div>
+
+      <div id="response-area" class="response-area hidden">
+        <div class="response-label">Answer</div>
+        <div id="answer" class="answer"></div>
+      </div>
+
+      <div id="error-area" class="error-area hidden">
+        <span id="error-message"></span>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
