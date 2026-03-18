@@ -76,20 +76,56 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   padding: 1.25rem 1.5rem;
 }
 
-.response-label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #6b6b67;
-  margin-bottom: 0.75rem;
+.section {
+  padding: 1rem 0;
+  border-bottom: 1px solid #ececea;
 }
 
-.answer {
+.section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.section:first-child {
+  padding-top: 0;
+}
+
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #534ab7;
+  margin-bottom: 0.5rem;
+}
+
+.section-body {
   font-size: 0.95rem;
   line-height: 1.75;
-  white-space: pre-wrap;
   color: #1c1c1a;
+}
+
+.steps-list {
+  padding-left: 1.25rem;
+}
+
+.steps-list li,
+.docs-list li {
+  margin-bottom: 0.35rem;
+}
+
+.docs-list {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+
+.docs-list a {
+  color: #534ab7;
+  text-decoration: none;
+}
+
+.docs-list a:hover {
+  text-decoration: underline;
 }
 
 .error-area {

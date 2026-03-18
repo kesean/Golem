@@ -1,10 +1,11 @@
 """
 app.py — Flask app and API routes.
 
-Phase 1: Basic /ask endpoint that calls Claude and returns a plain response.
+Phase 2: /ask returns structured JSON parsed from Claude's response.
 """
 
 import os
+import json
 from flask import Flask, render_template, request, jsonify
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -39,14 +40,17 @@ def ask():
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1024,
+            max_tokens=2048,
             system=SYSTEM_PROMPT,
             messages=build_messages(question),
         )
 
-        answer = response.content[0].text
-        return jsonify({"answer": answer})
+        raw = response.content[0].text
+        structured = json.loads(raw)
+        return jsonify(structured)
 
+    except json.JSONDecodeError:
+        return jsonify({"error": "Claude returned an unexpected format.", "raw": raw}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

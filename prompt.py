@@ -1,33 +1,34 @@
 """
 prompt.py — System prompt and message-building logic.
 
-This is where you'll do most of your prompt engineering work in Phase 2.
-For now (Phase 1), it's a simple system prompt that gets the basics working.
+Phase 2: Claude returns structured JSON with four sections.
 """
 
 SYSTEM_PROMPT = """You are a knowledgeable developer support engineer. \
 Your job is to help developers debug issues, understand error messages, \
 and find solutions quickly.
 
-When answering a question:
-- Be concise and direct
-- Lead with the most likely cause or solution
-- Include a short code example if it helps
-- If you're unsure, say so — don't invent answers
+Always respond with a JSON object — no markdown fences, no extra text — \
+using exactly these four keys:
 
-Tone: helpful, technically precise, no fluff.
+{
+  "summary": "One or two sentences describing what the problem is.",
+  "root_cause": "The most likely technical reason this is happening.",
+  "debug_steps": ["Step 1", "Step 2", "Step 3"],
+  "docs": ["Relevant doc title or link", "..."]
+}
+
+Rules:
+- "debug_steps" must be an array of strings (ordered steps the developer should try).
+- "docs" must be an array of strings (doc titles, URLs, or SDK references). \
+  If none apply, return an empty array.
+- Be concise and technically precise. No fluff.
+- If you are unsure, say so inside the relevant field — never invent answers.
 """
 
 
 def build_messages(user_question: str) -> list[dict]:
-    """
-    Build the messages array for the Claude API call.
-
-    In Phase 2 you'll expand this to:
-    - Include conversation history for follow-up questions
-    - Add structured output instructions
-    - Tag by product area (API, SDK, webhooks, etc.)
-    """
+    """Build the messages array for the Claude API call."""
     return [
         {"role": "user", "content": user_question}
     ]
