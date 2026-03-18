@@ -31,6 +31,7 @@ dev-support-chatbot/
 - System prompt lives in `prompt.py`, not inline in routes
 - Use `python-dotenv` to load `.env` — never hardcode API keys
 - Prefer readable code over clever code — this is a learning project
+- Break each step down into a User story. Review the user story with the User. Then create Git commit and push to GitHub only after getting user approval. 
 
 ## Important Commands
 ```bash
