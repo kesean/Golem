@@ -3,7 +3,112 @@
  *
  * Phase 3: Stream XML chunks from /ask/stream.
  *   Each chunk is parsed incrementally; new text fades in per section.
+ *   History is stored in localStorage and replayed client-side (no API call).
  */
+
+// ─── History (localStorage) ───────────────────────────────────────────────────
+
+const HISTORY_KEY = 'devSupportHistory';
+const MAX_HISTORY = 50;
+let activeHistoryId = null;
+
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveToHistory(question, rawXml) {
+  const history = loadHistory();
+  const id = Date.now();
+  history.push({ id, question, rawXml, timestamp: id });
+  if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  return id;
+}
+
+function clearHistory() {
+  localStorage.removeItem(HISTORY_KEY);
+  activeHistoryId = null;
+  renderHistorySidebar();
+}
+
+function formatRelativeTime(timestamp) {
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function renderHistorySidebar() {
+  const list = document.getElementById('history-list');
+  const history = loadHistory();
+  list.innerHTML = '';
+
+  if (history.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'history-empty';
+    empty.textContent = 'No history yet.';
+    list.appendChild(empty);
+    return;
+  }
+
+  [...history].reverse().forEach(entry => {
+    const li = document.createElement('li');
+    li.className = 'history-item' + (entry.id === activeHistoryId ? ' active' : '');
+    li.dataset.id = entry.id;
+
+    const q = document.createElement('div');
+    q.className = 'history-item-q';
+    q.textContent = entry.question;
+
+    const t = document.createElement('div');
+    t.className = 'history-item-time';
+    t.textContent = formatRelativeTime(entry.timestamp);
+
+    li.appendChild(q);
+    li.appendChild(t);
+    li.addEventListener('click', () => loadHistoryEntry(entry));
+    list.appendChild(li);
+  });
+}
+
+function loadHistoryEntry(entry) {
+  activeHistoryId = entry.id;
+  renderHistorySidebar();
+
+  document.getElementById('question').value = entry.question;
+  document.getElementById('error-area').classList.add('hidden');
+
+  resetState();
+  ['summary', 'root-cause', 'debug-steps', 'docs'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+  document.getElementById('docs-section').classList.add('hidden');
+
+  const responseArea = document.getElementById('response-area');
+  responseArea.classList.remove('hidden', 'fade-in');
+  void responseArea.offsetWidth;
+  responseArea.classList.add('fade-in');
+
+  parseAndRender(entry.rawXml);
+
+  // Stored response is complete — finalize any open list items
+  if (!state.stepsClosed) {
+    state.stepsClosed = true;
+    finalizeList(document.getElementById('debug-steps'), false);
+  }
+  if (!state.docsClosed) {
+    state.docsClosed = true;
+    finalizeList(document.getElementById('docs'), true);
+  }
+}
 
 // ─── Render state ────────────────────────────────────────────────────────────
 
@@ -225,6 +330,10 @@ async function askQuestion() {
     // Final parse to ensure last chunk is fully rendered
     parseAndRender(accumulated);
 
+    // Save to history and refresh sidebar
+    activeHistoryId = saveToHistory(question, accumulated);
+    renderHistorySidebar();
+
   } catch (err) {
     errorMsg.textContent = err.message;
     errorArea.classList.remove('hidden');
@@ -237,6 +346,7 @@ async function askQuestion() {
 // ─── Keyboard shortcut ───────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  renderHistorySidebar();
   document.getElementById('question').addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') askQuestion();
   });
