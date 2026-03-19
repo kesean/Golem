@@ -31,6 +31,7 @@ dev-support-chatbot/
 - System prompt lives in `prompt.py`, not inline in routes
 - Use `python-dotenv` to load `.env` — never hardcode API keys
 - Prefer readable code over clever code — this is a learning project
+- Keep commit messages short and direct.
 - Break each step down into a User story. Review the user story with the User. Then create Git commit and push to GitHub only after getting user approval. 
 
 ## Important Commands
@@ -48,9 +49,6 @@ python app.py
 - **Phase 1**: Basic Flask app, simple API call, raw response displayed
 - **Phase 2**: Structured output (Summary / Root Cause / Debug Steps / Docs)
 - **Phase 3**: Streaming responses, conversation history, product area tags
-
-## Current Phase
-Phase 1 — get the basic app working end to end.
 
 ## API Notes
 - Model: `claude-sonnet-4-6`
