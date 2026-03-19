@@ -164,3 +164,13 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Per-chunk fade-in for streaming text and list items */
+@keyframes chunkFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.chunk-fade {
+  animation: chunkFadeIn 0.2s ease;
+}
