@@ -67,11 +67,17 @@ function renderHistorySidebar() {
     q.className = 'history-item-q';
     q.textContent = entry.question;
 
+    const tagSection = extractSection(entry.rawXml, 'product_tag');
+    const tagEl = document.createElement('div');
+    tagEl.className = 'history-item-tag' + (tagSection?.content ? '' : ' hidden');
+    tagEl.textContent = tagSection?.content || '';
+
     const t = document.createElement('div');
     t.className = 'history-item-time';
     t.textContent = formatRelativeTime(entry.timestamp);
 
     li.appendChild(q);
+    li.appendChild(tagEl);
     li.appendChild(t);
     li.addEventListener('click', () => loadHistoryEntry(entry));
     list.appendChild(li);
@@ -91,6 +97,9 @@ function loadHistoryEntry(entry) {
     if (el) el.innerHTML = '';
   });
   document.getElementById('docs-section').classList.add('hidden');
+  const badge = document.getElementById('product-tag-badge');
+  badge.textContent = '';
+  badge.classList.add('hidden');
 
   const responseArea = document.getElementById('response-area');
   responseArea.classList.remove('hidden', 'fade-in');
@@ -210,6 +219,14 @@ function extractSection(text, tag) {
 function parseAndRender(accumulated) {
   let anyContent = false;
 
+  // ── Product tag ───────────────────────────────────────────────────────────
+  const productTag = extractSection(accumulated, 'product_tag');
+  if (productTag && productTag.content) {
+    const badge = document.getElementById('product-tag-badge');
+    badge.textContent = productTag.content;
+    badge.classList.remove('hidden');
+  }
+
   // ── Summary ──────────────────────────────────────────────────────────────
   const summary = extractSection(accumulated, 'summary');
   if (summary) {
@@ -291,6 +308,9 @@ async function askQuestion() {
     if (el) el.innerHTML = '';
   });
   document.getElementById('docs-section').classList.add('hidden');
+  const badge = document.getElementById('product-tag-badge');
+  badge.textContent = '';
+  badge.classList.add('hidden');
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Thinking…';

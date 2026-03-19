@@ -35,6 +35,7 @@ def parse_xml_response(text: str) -> dict:
     docs = [line.strip() for line in docs_raw.splitlines() if line.strip()]
 
     return {
+        "product_tag": extract('product_tag'),
         "summary": extract('summary'),
         "root_cause": extract('root_cause'),
         "debug_steps": debug_steps,

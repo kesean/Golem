@@ -27,10 +27,10 @@
 | XML-tagged section format for incremental rendering | ✅ Done |
 | Per-section streaming: text fades in chunk by chunk | ✅ Done |
 | Response card fades in on first content arrival | ✅ Done |
-| Conversation history (localStorage) | 🔲 Todo |
-| Chat thread UI showing prior Q&A exchanges | 🔲 Todo |
-| Product area tags (e.g. Authentication, Rate Limits, SDK) | 🔲 Todo |
-| Product area tag badge displayed in UI | 🔲 Todo |
+| Conversation history (localStorage) | ✅ Done |
+| Chat thread UI showing prior Q&A exchanges | ✅ Done |
+| Product area tags (e.g. Authentication, Rate Limits, SDK) | ✅ Done |
+| Product area tag badge displayed in UI | ✅ Done |
 
 ## Phase 4/5 — Data, Auth, Users
 

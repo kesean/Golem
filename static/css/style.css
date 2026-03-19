@@ -176,8 +176,37 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   padding-bottom: 0;
 }
 
-.section:first-child {
+.response-header + .section {
   padding-top: 0;
+}
+
+.response-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+  min-height: 1.4rem;
+}
+
+.product-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.65rem;
+  background: #f0eeff;
+  color: #534ab7;
+  border-radius: 20px;
+}
+
+.history-item-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0.1rem 0.45rem;
+  background: #f0eeff;
+  color: #534ab7;
+  border-radius: 20px;
+  margin-top: 0.25rem;
 }
 
 .section-label {
