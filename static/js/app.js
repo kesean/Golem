@@ -11,14 +11,18 @@ const state = {
   summaryLen: 0,
   rootCauseLen: 0,
   stepsFinalized: 0,
+  stepsClosed: false,
   docsFinalized: 0,
+  docsClosed: false,
 };
 
 function resetState() {
   state.summaryLen = 0;
   state.rootCauseLen = 0;
   state.stepsFinalized = 0;
+  state.stepsClosed = false;
   state.docsFinalized = 0;
+  state.docsClosed = false;
 }
 
 // ─── DOM helpers ─────────────────────────────────────────────────────────────
@@ -117,7 +121,7 @@ function parseAndRender(accumulated) {
 
   // ── Debug Steps ───────────────────────────────────────────────────────────
   const debugSteps = extractSection(accumulated, 'debug_steps');
-  if (debugSteps) {
+  if (debugSteps && !state.stepsClosed) {
     const lines = debugSteps.content
       .split('\n')
       .map(l => l.replace(/^Step\s*\d+:\s*/i, '').trim())
@@ -128,14 +132,17 @@ function parseAndRender(accumulated) {
       anyContent = true;
     }
     if (debugSteps.closed) {
+      state.stepsClosed = true;
       finalizeList(document.getElementById('debug-steps'), false);
     }
+  } else if (debugSteps) {
+    anyContent = true;
   }
 
   // ── Docs ──────────────────────────────────────────────────────────────────
   const docs = extractSection(accumulated, 'docs');
   const docsSection = document.getElementById('docs-section');
-  if (docs) {
+  if (docs && !state.docsClosed) {
     const lines = docs.content.split('\n').map(l => l.trim()).filter(Boolean);
 
     if (lines.length > 0) {
@@ -147,8 +154,11 @@ function parseAndRender(accumulated) {
     }
 
     if (docs.closed) {
+      state.docsClosed = true;
       finalizeList(document.getElementById('docs'), true);
     }
+  } else if (docs) {
+    anyContent = true;
   }
 
   return anyContent;
