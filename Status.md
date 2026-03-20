@@ -36,6 +36,8 @@
 
 | Feature | Status |
 |---------|--------|
-| Persistent conversation storage (Convex or similar) | 🔲 Todo |
-| User accounts and authentication | 🔲 Todo |
-| Per-user conversation history | 🔲 Todo |
+| Vite frontend setup (migrate from raw JS) | ✅ Done |
+| Clerk auth — sign-in/sign-up gate | 🔲 Todo |
+| Flask JWT verification on /ask/stream | 🔲 Todo |
+| Convex schema + history table | 🔲 Todo |
+| Replace localStorage with Convex per-user history | 🔲 Todo |
