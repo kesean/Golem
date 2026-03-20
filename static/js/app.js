@@ -213,7 +213,22 @@ function extractSection(text, tag) {
     ? text.slice(contentStart, closeIdx)
     : text.slice(contentStart);
 
-  return { content: raw.trim(), closed: closeIdx !== -1 };
+  let content = raw.trim();
+
+  // While the section is still open, the buffer may end with a partial
+  // closing tag (e.g. "</root_" before "</root_cause>" has fully arrived).
+  // Strip it so it never gets rendered as visible text.
+  if (closeIdx === -1) {
+    const partialIdx = content.lastIndexOf('</');
+    if (partialIdx !== -1) {
+      const partial = content.slice(partialIdx);
+      if (`</${tag}>`.startsWith(partial)) {
+        content = content.slice(0, partialIdx).trimEnd();
+      }
+    }
+  }
+
+  return { content, closed: closeIdx !== -1 };
 }
 
 function parseAndRender(accumulated) {
