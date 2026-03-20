@@ -37,7 +37,7 @@
 | Feature | Status |
 |---------|--------|
 | Vite frontend setup (migrate from raw JS) | ✅ Done |
-| Clerk auth — sign-in/sign-up gate | 🔲 Todo |
-| Flask JWT verification on /ask/stream | 🔲 Todo |
+| Clerk auth — sign-in/sign-up gate | ✅ Done |
+| Flask JWT verification on /ask/stream | ✅ Done |
 | Convex schema + history table | 🔲 Todo |
 | Replace localStorage with Convex per-user history | 🔲 Todo |

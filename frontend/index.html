@@ -5,62 +5,81 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dev Support AI</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <!-- Prevent flash of unstyled/wrong content while Clerk resolves -->
+  <style>body { visibility: hidden; background: #f5f5f4; }</style>
 </head>
 <body>
-  <div class="container">
 
-    <aside class="history-sidebar" id="history-sidebar">
-      <div class="history-header">
-        <span class="history-title">History</span>
-        <button class="clear-btn" onclick="clearHistory()">Clear</button>
-      </div>
-      <ul class="history-list" id="history-list"></ul>
-    </aside>
-
-    <div class="main-content">
-      <header>
-        <h1>Dev Support AI</h1>
-        <p class="subtitle">Ask a technical question and get a developer support–style answer.</p>
-      </header>
-
-      <main>
-        <div class="input-area">
-          <textarea
-            id="question"
-            placeholder="e.g. Why am I getting a 401 error when calling the API with my key?"
-            rows="4"
-          ></textarea>
-          <button id="ask-btn" onclick="askQuestion()">Ask</button>
-        </div>
-
-        <div id="response-area" class="response-area hidden">
-          <div class="response-header">
-            <span id="product-tag-badge" class="product-tag hidden"></span>
-          </div>
-          <div class="section">
-            <div class="section-label">Summary</div>
-            <div id="summary" class="section-body"></div>
-          </div>
-          <div class="section">
-            <div class="section-label">Root Cause</div>
-            <div id="root-cause" class="section-body"></div>
-          </div>
-          <div class="section">
-            <div class="section-label">Debug Steps</div>
-            <ol id="debug-steps" class="section-body steps-list"></ol>
-          </div>
-          <div class="section" id="docs-section">
-            <div class="section-label">Docs</div>
-            <ul id="docs" class="section-body docs-list"></ul>
-          </div>
-        </div>
-
-        <div id="error-area" class="error-area hidden">
-          <span id="error-message"></span>
-        </div>
-      </main>
+  <!-- Auth wall: shown until user signs in -->
+  <div id="auth-wall" class="auth-wall">
+    <div class="auth-card">
+      <h1>Dev Support AI</h1>
+      <p class="subtitle">Sign in to get developer support–style answers.</p>
     </div>
+  </div>
 
+  <!-- App root: hidden until authenticated (inline style avoids FOUC before CSS loads) -->
+  <div id="app-root" style="display:none">
+    <div class="container">
+
+      <aside class="history-sidebar" id="history-sidebar">
+        <div class="history-header">
+          <span class="history-title">History</span>
+          <button class="clear-btn" onclick="clearHistory()">Clear</button>
+        </div>
+        <ul class="history-list" id="history-list"></ul>
+      </aside>
+
+      <div class="main-content">
+        <header>
+          <div class="header-row">
+            <div>
+              <h1>Dev Support AI</h1>
+              <p class="subtitle">Ask a technical question and get a developer support–style answer.</p>
+            </div>
+            <button id="sign-out-btn" class="sign-out-btn">Sign out</button>
+          </div>
+        </header>
+
+        <main>
+          <div class="input-area">
+            <textarea
+              id="question"
+              placeholder="e.g. Why am I getting a 401 error when calling the API with my key?"
+              rows="4"
+            ></textarea>
+            <button id="ask-btn" onclick="askQuestion()">Ask</button>
+          </div>
+
+          <div id="response-area" class="response-area hidden">
+            <div class="response-header">
+              <span id="product-tag-badge" class="product-tag hidden"></span>
+            </div>
+            <div class="section">
+              <div class="section-label">Summary</div>
+              <div id="summary" class="section-body"></div>
+            </div>
+            <div class="section">
+              <div class="section-label">Root Cause</div>
+              <div id="root-cause" class="section-body"></div>
+            </div>
+            <div class="section">
+              <div class="section-label">Debug Steps</div>
+              <ol id="debug-steps" class="section-body steps-list"></ol>
+            </div>
+            <div class="section" id="docs-section">
+              <div class="section-label">Docs</div>
+              <ul id="docs" class="section-body docs-list"></ul>
+            </div>
+          </div>
+
+          <div id="error-area" class="error-area hidden">
+            <span id="error-message"></span>
+          </div>
+        </main>
+      </div>
+
+    </div>
   </div>
 
   <script type="module" src="/src/main.js"></script>

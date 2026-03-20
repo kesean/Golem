@@ -7,15 +7,61 @@ Phase 3: /ask/stream streams raw text chunks, frontend parses JSON on completion
 
 import os
 import re
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+import json
+import urllib.request
+from functools import wraps, lru_cache
+from flask import Flask, request, jsonify, Response, stream_with_context, g
 from anthropic import Anthropic
 from dotenv import load_dotenv
+import jwt
 from prompt import SYSTEM_PROMPT, build_messages
 
 load_dotenv()
 
 app = Flask(__name__)
 client = Anthropic()  # Reads ANTHROPIC_API_KEY from environment automatically
+
+CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
+
+
+@lru_cache(maxsize=1)
+def _fetch_jwks() -> dict:
+    """Fetch and cache Clerk's public JWKS. Cache persists for the process lifetime."""
+    with urllib.request.urlopen(CLERK_JWKS_URL, timeout=5) as resp:
+        return json.loads(resp.read())
+
+
+def verify_clerk_token(token: str) -> dict:
+    """Verify a Clerk JWT using the RS256 public key. Returns decoded payload."""
+    if not CLERK_JWKS_URL:
+        raise RuntimeError("CLERK_JWKS_URL is not configured")
+
+    jwks = _fetch_jwks()
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
+
+    key_data = next((k for k in jwks["keys"] if k["kid"] == kid), None)
+    if not key_data:
+        raise ValueError("No matching JWK found for kid: " + str(kid))
+
+    public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key_data))
+    return jwt.decode(token, public_key, algorithms=["RS256"], options={"verify_aud": False})
+
+
+def require_auth(f):
+    """Decorator that enforces Clerk JWT auth on a route."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Unauthorized"}), 401
+        token = auth_header.split(" ", 1)[1]
+        try:
+            g.clerk_payload = verify_clerk_token(token)
+        except Exception:
+            return jsonify({"error": "Invalid or expired token"}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 
 def parse_xml_response(text: str) -> dict:
@@ -41,11 +87,6 @@ def parse_xml_response(text: str) -> dict:
         "debug_steps": debug_steps,
         "docs": docs,
     }
-
-
-@app.route("/")
-def index():
-    return render_template("index.html")
 
 
 @app.route("/ask", methods=["POST"])
@@ -79,6 +120,7 @@ def ask():
 
 
 @app.route("/ask/stream", methods=["POST"])
+@require_auth
 def ask_stream():
     """
     Accepts a JSON body: { "question": "..." }

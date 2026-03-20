@@ -299,7 +299,7 @@ function parseAndRender(accumulated) {
 
 // ─── Main ask handler ────────────────────────────────────────────────────────
 
-export async function askQuestion() {
+export async function askQuestion(getToken = null) {
   const questionEl   = document.getElementById('question')
   const btn          = document.getElementById('ask-btn')
   const responseArea = document.getElementById('response-area')
@@ -326,9 +326,15 @@ export async function askQuestion() {
   btn.innerHTML = '<span class="spinner"></span>Thinking…'
 
   try {
+    const headers = { 'Content-Type': 'application/json' }
+    if (getToken) {
+      const token = await getToken()
+      if (token) headers['Authorization'] = `Bearer ${token}`
+    }
+
     const res = await fetch('/ask/stream', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ question }),
     })
 

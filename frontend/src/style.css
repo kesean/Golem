@@ -8,6 +8,60 @@ body {
   padding: 2rem 1rem;
 }
 
+/* ── Auth wall ───────────────────────────────────────────────────────────── */
+
+.auth-wall {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+}
+
+.auth-card {
+  background: #fff;
+  border: 1px solid #d4d2c8;
+  border-radius: 12px;
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+
+.auth-card h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.auth-card .subtitle {
+  margin-bottom: 1.75rem;
+}
+
+/* ── Header row (title + sign-out) ──────────────────────────────────────── */
+
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sign-out-btn {
+  align-self: flex-start;
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 400;
+  background: none;
+  color: #6b6b67;
+  border: 1px solid #d4d2c8;
+  border-radius: 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sign-out-btn:hover { background: #f5f5f4; color: #1c1c1a; }
+
 .container {
   display: flex;
   gap: 1.5rem;
