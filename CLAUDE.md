@@ -45,11 +45,6 @@ python app.py
 # App runs at http://localhost:5000
 ```
 
-## Phases
-- **Phase 1**: Basic Flask app, simple API call, raw response displayed
-- **Phase 2**: Structured output (Summary / Root Cause / Debug Steps / Docs)
-- **Phase 3**: Streaming responses, conversation history, product area tags
-
 ## API Notes
 - Model: `claude-sonnet-4-6`
 - Max tokens: 1024 for Phase 1, increase in later phases
