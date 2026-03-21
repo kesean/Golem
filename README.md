@@ -2,6 +2,8 @@
 
 A developer support chatbot that answers technical questions the way a developer support engineer would — structured, specific, and actionable. Built as a portfolio project to practice Claude API integration, prompt engineering, and modern web tooling.
 
+![Dev Support AI screenshot](docs/assets/images/chatbot.png)
+
 ## What it does
 
 You type a technical question. The app streams back a response broken into four sections:
