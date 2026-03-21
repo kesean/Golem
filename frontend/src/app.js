@@ -3,36 +3,40 @@
  *
  * Phase 3: Stream XML chunks from /ask/stream.
  *   Each chunk is parsed incrementally; new text fades in per section.
- *   History is stored in localStorage and replayed client-side (no API call).
  *
  * Phase 4: ES module — imported by main.js, functions exposed via window.*
+ *
+ * US3: History stored in Convex (per-user, cloud-persisted) instead of localStorage.
  */
 
-// ─── History (localStorage) ───────────────────────────────────────────────────
+import { api } from '../convex/_generated/api.js'
 
-const HISTORY_KEY = 'devSupportHistory'
-const MAX_HISTORY = 50
+// ─── Module state (set by initApp) ────────────────────────────────────────────
+
+let _convex = null
+let _userId = null
+let _getToken = null
 let activeHistoryId = null
 
-function loadHistory() {
+// ─── History (Convex) ─────────────────────────────────────────────────────────
+
+async function loadHistory() {
+  if (!_convex || !_userId) return []
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')
+    return await _convex.query(api.history.list, { userId: _userId })
   } catch {
     return []
   }
 }
 
-function saveToHistory(question, rawXml) {
-  const history = loadHistory()
-  const id = Date.now()
-  history.push({ id, question, rawXml, timestamp: id })
-  if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY)
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
-  return id
+async function saveToHistory(question, rawXml) {
+  if (!_convex || !_userId) return null
+  return await _convex.mutation(api.history.add, { userId: _userId, question, rawXml })
 }
 
-export function clearHistory() {
-  localStorage.removeItem(HISTORY_KEY)
+export async function clearHistory() {
+  if (!_convex || !_userId) return
+  await _convex.mutation(api.history.clear, { userId: _userId })
   activeHistoryId = null
   renderHistorySidebar()
 }
@@ -47,9 +51,9 @@ function formatRelativeTime(timestamp) {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-function renderHistorySidebar() {
+async function renderHistorySidebar() {
   const list = document.getElementById('history-list')
-  const history = loadHistory()
+  const history = await loadHistory()
   list.innerHTML = ''
 
   if (history.length === 0) {
@@ -60,10 +64,10 @@ function renderHistorySidebar() {
     return
   }
 
-  ;[...history].reverse().forEach(entry => {
+  history.forEach(entry => {
     const li = document.createElement('li')
-    li.className = 'history-item' + (entry.id === activeHistoryId ? ' active' : '')
-    li.dataset.id = entry.id
+    li.className = 'history-item' + (entry._id === activeHistoryId ? ' active' : '')
+    li.dataset.id = entry._id
 
     const q = document.createElement('div')
     q.className = 'history-item-q'
@@ -76,7 +80,7 @@ function renderHistorySidebar() {
 
     const t = document.createElement('div')
     t.className = 'history-item-time'
-    t.textContent = formatRelativeTime(entry.timestamp)
+    t.textContent = formatRelativeTime(entry._creationTime)
 
     li.appendChild(q)
     li.appendChild(tagEl)
@@ -87,7 +91,7 @@ function renderHistorySidebar() {
 }
 
 function loadHistoryEntry(entry) {
-  activeHistoryId = entry.id
+  activeHistoryId = entry._id
   renderHistorySidebar()
 
   document.getElementById('question').value = entry.question
@@ -299,7 +303,7 @@ function parseAndRender(accumulated) {
 
 // ─── Main ask handler ────────────────────────────────────────────────────────
 
-export async function askQuestion(getToken = null) {
+export async function askQuestion() {
   const questionEl   = document.getElementById('question')
   const btn          = document.getElementById('ask-btn')
   const responseArea = document.getElementById('response-area')
@@ -327,8 +331,8 @@ export async function askQuestion(getToken = null) {
 
   try {
     const headers = { 'Content-Type': 'application/json' }
-    if (getToken) {
-      const token = await getToken()
+    if (_getToken) {
+      const token = await _getToken()
       if (token) headers['Authorization'] = `Bearer ${token}`
     }
 
@@ -365,7 +369,7 @@ export async function askQuestion(getToken = null) {
 
     parseAndRender(accumulated)
 
-    activeHistoryId = saveToHistory(question, accumulated)
+    activeHistoryId = await saveToHistory(question, accumulated)
     renderHistorySidebar()
 
   } catch (err) {
@@ -379,8 +383,11 @@ export async function askQuestion(getToken = null) {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-export function initApp() {
-  renderHistorySidebar()
+export async function initApp({ convex, userId, getToken }) {
+  _convex = convex
+  _userId = userId
+  _getToken = getToken
+  await renderHistorySidebar()
   document.getElementById('question').addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') askQuestion()
   })

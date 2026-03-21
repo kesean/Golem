@@ -1,4 +1,5 @@
 import { Clerk } from '@clerk/clerk-js'
+import { ConvexClient } from 'convex/browser'
 import './style.css'
 import { askQuestion, clearHistory, initApp } from './app.js'
 
@@ -7,24 +8,31 @@ await clerk.load()
 
 const authWall = document.getElementById('auth-wall')
 
-function showApp() {
-  authWall.style.display = 'none'
-  document.getElementById('app-root').style.display = ''
-  document.body.style.visibility = 'visible'
+async function showApp() {
+  const convex = new ConvexClient(import.meta.env.VITE_CONVEX_URL)
+
+  window.askQuestion = askQuestion
+  window.clearHistory = clearHistory
 
   document.getElementById('sign-out-btn').addEventListener('click', async () => {
     await clerk.signOut()
     window.location.reload()
   })
 
-  window.askQuestion = () => askQuestion(() => clerk.session?.getToken())
-  window.clearHistory = clearHistory
-  initApp()
+  await initApp({
+    convex,
+    userId: clerk.user.id,
+    getToken: () => clerk.session?.getToken(),
+  })
+
+  // Reveal UI only after full setup so onclick handlers are always defined
+  authWall.style.display = 'none'
+  document.getElementById('app-root').style.display = ''
+  document.body.style.visibility = 'visible'
 }
 
 if (clerk.user) {
-  showApp()
+  await showApp()
 } else {
-  // Redirect to Clerk's hosted sign-in page; on return clerk.user will be set
   await clerk.redirectToSignIn({ redirectUrl: window.location.href })
 }
