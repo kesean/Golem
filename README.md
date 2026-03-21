@@ -77,13 +77,43 @@ Open [http://localhost:5173](http://localhost:5173).
 ## Project phases
 
 ### Phase 1 — Basic app
-Minimal Flask backend with an `/ask` endpoint wired to the Claude API. Vanilla JS frontend with a textarea and button. Raw API response displayed in the UI.
+
+| Feature | Status |
+|---------|--------|
+| Flask app scaffolding | ✅ Done |
+| Anthropic SDK integration | ✅ Done |
+| `/ask` POST endpoint | ✅ Done |
+| Vanilla JS frontend with textarea + button | ✅ Done |
+| Raw API response displayed in UI | ✅ Done |
 
 ### Phase 2 — Structured output
-System prompt engineered to return responses in four labeled sections. Documentation links detected and rendered as clickable anchors. Error handling for malformed responses.
+
+| Feature | Status |
+|---------|--------|
+| System prompt engineering for structured responses | ✅ Done |
+| Four-section response: Summary, Root Cause, Debug Steps, Docs | ✅ Done |
+| Docs rendered as clickable links when URLs detected | ✅ Done |
+| Error handling for malformed responses | ✅ Done |
 
 ### Phase 3 — Streaming, history, product tags
-Switched to `/ask/stream` using Server-Sent Events so responses stream in chunk by chunk. XML-tagged sections allow each part of the response to fade in incrementally as it arrives. Conversation history stored in localStorage with a sidebar UI. Product area tag badge added to each response.
 
-### Phase 4/5 — Auth and data
-Frontend migrated to Vite as an ES module build. Clerk added as a sign-in gate — unauthenticated users are redirected before they can reach the app. Flask verifies Clerk JWTs on every request using PyJWT. localStorage history replaced with a Convex database table scoped per user, so history persists across devices and sessions.
+| Feature | Status |
+|---------|--------|
+| `/ask/stream` endpoint using `client.messages.stream()` | ✅ Done |
+| XML-tagged section format for incremental rendering | ✅ Done |
+| Per-section streaming: text fades in chunk by chunk | ✅ Done |
+| Response card fades in on first content arrival | ✅ Done |
+| Conversation history (localStorage) | ✅ Done |
+| Chat thread UI showing prior Q&A exchanges | ✅ Done |
+| Product area tags (e.g. Authentication, Rate Limits, SDK) | ✅ Done |
+| Product area tag badge displayed in UI | ✅ Done |
+
+### Phase 4/5 — Data, auth, users
+
+| Feature | Status |
+|---------|--------|
+| Vite frontend setup (migrate from raw JS) | ✅ Done |
+| Clerk auth — sign-in/sign-up gate | ✅ Done |
+| Flask JWT verification on /ask/stream | ✅ Done |
+| Convex schema + history table | ✅ Done |
+| Replace localStorage with Convex per-user history | ✅ Done |
