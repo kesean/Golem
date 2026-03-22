@@ -117,3 +117,14 @@ Open [http://localhost:5173](http://localhost:5173).
 | Flask JWT verification on /ask/stream | ✅ Done |
 | Convex schema + history table | ✅ Done |
 | Replace localStorage with Convex per-user history | ✅ Done |
+
+### Phase 6 — Security hardening
+
+| Feature | Status |
+|---------|--------|
+| Remove unprotected `/ask` endpoint | ✅ Done |
+| Derive Convex userId server-side via `ctx.auth` | ✅ Done |
+| Replace indefinite JWKS cache with 1-hour TTL | ✅ Done |
+| Question length limit (2000 chars) + Content-Type validation | ✅ Done |
+| Distinct JWT error logging (expired, malformed, JWKS failure) | ✅ Done |
+| Per-IP rate limiting on `/ask/stream` (20 req/min) | ✅ Done |

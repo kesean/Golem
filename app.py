@@ -11,6 +11,8 @@ import logging
 import urllib.request
 from functools import wraps
 from flask import Flask, request, jsonify, Response, stream_with_context, g
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from anthropic import Anthropic
 from dotenv import load_dotenv
 import jwt
@@ -19,6 +21,7 @@ from prompt import SYSTEM_PROMPT, build_messages
 load_dotenv()
 
 app = Flask(__name__)
+limiter = Limiter(get_remote_address, app=app, default_limits=[])
 client = Anthropic()  # Reads ANTHROPIC_API_KEY from environment automatically
 
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
@@ -85,6 +88,7 @@ def require_auth(f):
 
 @app.route("/ask/stream", methods=["POST"])
 @require_auth
+@limiter.limit("20 per minute")
 def ask_stream():
     """
     Accepts a JSON body: { "question": "..." }
