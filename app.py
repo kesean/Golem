@@ -80,11 +80,17 @@ def ask_stream():
     Streams raw text chunks from Claude as text/plain.
     Frontend accumulates chunks, then parses the JSON and renders structured sections.
     """
+    if not request.is_json:
+        return jsonify({"error": "Content-Type must be application/json"}), 415
+
     data = request.get_json()
     question = data.get("question", "").strip()
 
     if not question:
         return jsonify({"error": "No question provided"}), 400
+
+    if len(question) > 2000:
+        return jsonify({"error": "Question exceeds 2000 character limit"}), 400
 
     def generate():
         with client.messages.stream(
