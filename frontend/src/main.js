@@ -11,6 +11,11 @@ const authWall = document.getElementById('auth-wall')
 async function showApp() {
   const convex = new ConvexClient(import.meta.env.VITE_CONVEX_URL)
 
+  // Authenticate the Convex client with the Clerk "convex" JWT template
+  convex.setAuth(async ({ forceRefreshToken }) => {
+    return await clerk.session?.getToken({ template: 'convex' }) ?? null
+  })
+
   window.askQuestion = askQuestion
   window.clearHistory = clearHistory
 
@@ -21,7 +26,6 @@ async function showApp() {
 
   await initApp({
     convex,
-    userId: clerk.user.id,
     getToken: () => clerk.session?.getToken(),
   })
 

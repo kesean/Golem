@@ -14,29 +14,28 @@ import { api } from '../convex/_generated/api.js'
 // ─── Module state (set by initApp) ────────────────────────────────────────────
 
 let _convex = null
-let _userId = null
 let _getToken = null
 let activeHistoryId = null
 
 // ─── History (Convex) ─────────────────────────────────────────────────────────
 
 async function loadHistory() {
-  if (!_convex || !_userId) return []
+  if (!_convex) return []
   try {
-    return await _convex.query(api.history.list, { userId: _userId })
+    return await _convex.query(api.history.list, {})
   } catch {
     return []
   }
 }
 
 async function saveToHistory(question, rawXml) {
-  if (!_convex || !_userId) return null
-  return await _convex.mutation(api.history.add, { userId: _userId, question, rawXml })
+  if (!_convex) return null
+  return await _convex.mutation(api.history.add, { question, rawXml })
 }
 
 export async function clearHistory() {
-  if (!_convex || !_userId) return
-  await _convex.mutation(api.history.clear, { userId: _userId })
+  if (!_convex) return
+  await _convex.mutation(api.history.clear, {})
   activeHistoryId = null
   renderHistorySidebar()
 }
@@ -383,9 +382,8 @@ export async function askQuestion() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-export async function initApp({ convex, userId, getToken }) {
+export async function initApp({ convex, getToken }) {
   _convex = convex
-  _userId = userId
   _getToken = getToken
   await renderHistorySidebar()
   document.getElementById('question').addEventListener('keydown', e => {
