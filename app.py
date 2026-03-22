@@ -1,12 +1,10 @@
 """
 app.py — Flask app and API routes.
 
-Phase 2: /ask returns structured JSON parsed from Claude's response.
-Phase 3: /ask/stream streams raw text chunks, frontend parses JSON on completion.
+Phase 3: /ask/stream streams raw text chunks, frontend parses XML on completion.
 """
 
 import os
-import re
 import json
 import urllib.request
 from functools import wraps, lru_cache
@@ -62,61 +60,6 @@ def require_auth(f):
             return jsonify({"error": "Invalid or expired token"}), 401
         return f(*args, **kwargs)
     return decorated
-
-
-def parse_xml_response(text: str) -> dict:
-    """Parse the XML-tagged response from Claude into a structured dict."""
-    def extract(tag):
-        match = re.search(rf'<{tag}>(.*?)</{tag}>', text, re.DOTALL)
-        return match.group(1).strip() if match else ""
-
-    debug_raw = extract('debug_steps')
-    debug_steps = [
-        re.sub(r'^Step\s*\d+:\s*', '', line).strip()
-        for line in debug_raw.splitlines()
-        if line.strip()
-    ]
-
-    docs_raw = extract('docs')
-    docs = [line.strip() for line in docs_raw.splitlines() if line.strip()]
-
-    return {
-        "product_tag": extract('product_tag'),
-        "summary": extract('summary'),
-        "root_cause": extract('root_cause'),
-        "debug_steps": debug_steps,
-        "docs": docs,
-    }
-
-
-@app.route("/ask", methods=["POST"])
-def ask():
-    """
-    Accepts a JSON body: { "question": "..." }
-    Returns:            { "answer": "..." }
-
-    Phase 2: will return structured JSON with Summary, Root Cause, etc.
-    Phase 3: will switch to a streaming response.
-    """
-    data = request.get_json()
-    question = data.get("question", "").strip()
-
-    if not question:
-        return jsonify({"error": "No question provided"}), 400
-
-    try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            messages=build_messages(question),
-        )
-
-        raw = response.content[0].text
-        return jsonify(parse_xml_response(raw))
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/ask/stream", methods=["POST"])
