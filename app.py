@@ -7,6 +7,7 @@ Phase 3: /ask/stream streams raw text chunks, frontend parses XML on completion.
 import os
 import json
 import time
+import logging
 import urllib.request
 from functools import wraps
 from flask import Flask, request, jsonify, Response, stream_with_context, g
@@ -66,7 +67,17 @@ def require_auth(f):
         token = auth_header.split(" ", 1)[1]
         try:
             g.clerk_payload = verify_clerk_token(token)
-        except Exception:
+        except urllib.error.URLError as e:
+            logging.error("JWKS fetch failed: %s", e)
+            return jsonify({"error": "Auth service unavailable"}), 503
+        except jwt.ExpiredSignatureError:
+            logging.warning("Rejected expired JWT")
+            return jsonify({"error": "Token expired"}), 401
+        except jwt.DecodeError as e:
+            logging.warning("Malformed JWT: %s", e)
+            return jsonify({"error": "Invalid token"}), 401
+        except Exception as e:
+            logging.error("Unexpected auth error: %s", e)
             return jsonify({"error": "Invalid or expired token"}), 401
         return f(*args, **kwargs)
     return decorated
