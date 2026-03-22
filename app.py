@@ -6,8 +6,9 @@ Phase 3: /ask/stream streams raw text chunks, frontend parses XML on completion.
 
 import os
 import json
+import time
 import urllib.request
-from functools import wraps, lru_cache
+from functools import wraps
 from flask import Flask, request, jsonify, Response, stream_with_context, g
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -22,11 +23,20 @@ client = Anthropic()  # Reads ANTHROPIC_API_KEY from environment automatically
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
 
 
-@lru_cache(maxsize=1)
+_jwks_cache: dict | None = None
+_jwks_cached_at: float = 0.0
+JWKS_TTL = 3600  # 1 hour
+
+
 def _fetch_jwks() -> dict:
-    """Fetch and cache Clerk's public JWKS. Cache persists for the process lifetime."""
+    """Fetch Clerk's public JWKS, cached for JWKS_TTL seconds."""
+    global _jwks_cache, _jwks_cached_at
+    if _jwks_cache and time.time() - _jwks_cached_at < JWKS_TTL:
+        return _jwks_cache
     with urllib.request.urlopen(CLERK_JWKS_URL, timeout=5) as resp:
-        return json.loads(resp.read())
+        _jwks_cache = json.loads(resp.read())
+        _jwks_cached_at = time.time()
+    return _jwks_cache
 
 
 def verify_clerk_token(token: str) -> dict:
