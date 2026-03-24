@@ -328,22 +328,25 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Fade-in when structured sections appear */
-.response-area.fade-in {
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
+/* Staggered section fade-in after full response loads */
+@keyframes sectionFadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Per-chunk fade-in for streaming text and list items */
-@keyframes chunkFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+.sections-ready .section {
+  opacity: 0;
+  animation: sectionFadeIn 0.35s ease forwards;
 }
 
-.chunk-fade {
-  animation: chunkFadeIn 0.2s ease;
+.sections-ready .section:nth-child(1) { animation-delay: 0.00s; }
+.sections-ready .section:nth-child(2) { animation-delay: 0.08s; }
+.sections-ready .section:nth-child(3) { animation-delay: 0.16s; }
+.sections-ready .section:nth-child(4) { animation-delay: 0.24s; }
+.sections-ready .section:nth-child(5) { animation-delay: 0.32s; }
+
+.sections-ready .response-header {
+  opacity: 0;
+  animation: sectionFadeIn 0.35s ease forwards;
+  animation-delay: 0.00s;
 }
