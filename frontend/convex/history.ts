@@ -1,5 +1,14 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
+
+// Public — no auth required, used for shareable links
+export const getById = query({
+  args: { id: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id as Id<"history">)
+  },
+});
 
 export const list = query({
   args: {},
