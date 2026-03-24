@@ -100,6 +100,7 @@ def ask_stream():
 
     data = request.get_json()
     question = data.get("question", "").strip()
+    history  = data.get("history", [])
 
     if not question:
         return jsonify({"error": "No question provided"}), 400
@@ -107,12 +108,15 @@ def ask_stream():
     if len(question) > 2000:
         return jsonify({"error": "Question exceeds 2000 character limit"}), 400
 
+    if not isinstance(history, list):
+        return jsonify({"error": "Invalid history format"}), 400
+
     def generate():
         with client.messages.stream(
             model="claude-sonnet-4-6",
             max_tokens=2048,
             system=SYSTEM_PROMPT,
-            messages=build_messages(question),
+            messages=build_messages(question, history),
         ) as stream:
             for text in stream.text_stream:
                 yield text

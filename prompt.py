@@ -37,8 +37,11 @@ Rules:
 """
 
 
-def build_messages(user_question: str) -> list[dict]:
-    """Build the messages array for the Claude API call."""
-    return [
-        {"role": "user", "content": user_question}
-    ]
+def build_messages(user_question: str, history: list[dict] | None = None) -> list[dict]:
+    """Build the messages array for the Claude API call.
+
+    history is a list of prior {role, content} turns (user + assistant alternating).
+    """
+    messages = list(history or [])
+    messages.append({"role": "user", "content": user_question})
+    return messages

@@ -16,6 +16,7 @@ marked.setOptions({ breaks: true })
 let _convex = null
 let _getToken = null
 let activeHistoryId = null
+let _conversationHistory = []  // [{role, content}, ...] sent to Claude each turn
 
 // ─── History (Convex) ─────────────────────────────────────────────────────────
 
@@ -33,10 +34,52 @@ async function saveToHistory(question, rawXml) {
   return await _convex.mutation(api.history.add, { question, rawXml })
 }
 
+export function shareResponse() {
+  if (!activeHistoryId) return
+  const url = `${window.location.origin}${window.location.pathname}?share=${activeHistoryId}`
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('share-btn')
+    btn.textContent = 'Copied link!'
+    setTimeout(() => { btn.textContent = 'Share' }, 2000)
+  })
+}
+
+export function copyResponse() {
+  const parts = [
+    ['Summary', 'summary'],
+    ['Root Cause', 'root-cause'],
+    ['Debug Steps', 'debug-steps'],
+    ['Docs', 'docs'],
+  ]
+  const text = parts
+    .map(([label, id]) => {
+      const content = document.getElementById(id)?.innerText.trim()
+      return content ? `${label}\n${content}` : ''
+    })
+    .filter(Boolean)
+    .join('\n\n')
+
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-btn')
+    btn.textContent = 'Copied!'
+    setTimeout(() => { btn.textContent = 'Copy' }, 2000)
+  })
+}
+
+export function newConversation() {
+  _conversationHistory = []
+  activeHistoryId = null
+  document.getElementById('question').value = ''
+  document.getElementById('response-area').classList.add('hidden')
+  document.getElementById('error-area').classList.add('hidden')
+  renderHistorySidebar()
+}
+
 export async function clearHistory() {
   if (!_convex) return
   await _convex.mutation(api.history.clear, {})
   activeHistoryId = null
+  _conversationHistory = []
   renderHistorySidebar()
 }
 
@@ -53,9 +96,11 @@ function formatRelativeTime(timestamp) {
 async function renderHistorySidebar() {
   const list = document.getElementById('history-list')
   const history = await loadHistory()
+  const term = document.getElementById('history-search')?.value.toLowerCase() || ''
+  const filtered = term ? history.filter(e => e.question.toLowerCase().includes(term)) : history
   list.innerHTML = ''
 
-  if (history.length === 0) {
+  if (filtered.length === 0) {
     const empty = document.createElement('li')
     empty.className = 'history-empty'
     empty.textContent = 'No history yet.'
@@ -63,7 +108,7 @@ async function renderHistorySidebar() {
     return
   }
 
-  history.forEach(entry => {
+  filtered.forEach(entry => {
     const li = document.createElement('li')
     li.className = 'history-item' + (entry._id === activeHistoryId ? ' active' : '')
     li.dataset.id = entry._id
@@ -91,6 +136,7 @@ async function renderHistorySidebar() {
 
 function loadHistoryEntry(entry) {
   activeHistoryId = entry._id
+  _conversationHistory = []  // history entries start a fresh context
   renderHistorySidebar()
   document.getElementById('question').value = entry.question
   document.getElementById('error-area').classList.add('hidden')
@@ -211,7 +257,7 @@ export async function askQuestion() {
     const res = await fetch('/ask/stream', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, history: _conversationHistory }),
     })
 
     if (!res.ok) {
@@ -232,6 +278,11 @@ export async function askQuestion() {
     skeleton.classList.add('hidden')
     renderResponse(accumulated)
 
+    // Append to in-memory conversation (cap at 10 turns = 20 messages)
+    _conversationHistory.push({ role: 'user', content: question })
+    _conversationHistory.push({ role: 'assistant', content: accumulated })
+    if (_conversationHistory.length > 20) _conversationHistory.splice(0, 2)
+
     activeHistoryId = await saveToHistory(question, accumulated)
     renderHistorySidebar()
 
@@ -251,6 +302,21 @@ export async function initApp({ convex, getToken }) {
   _convex   = convex
   _getToken = getToken
   await renderHistorySidebar()
+
+  window._filterHistory = () => renderHistorySidebar()
+
+  // Load shared response if ?share= param is present
+  const shareId = new URLSearchParams(window.location.search).get('share')
+  if (shareId && _convex) {
+    const entry = await _convex.query(api.history.getById, { id: shareId })
+    if (entry) {
+      activeHistoryId = entry._id
+      document.getElementById('question').value = entry.question
+      renderResponse(entry.rawXml)
+    }
+    // Clean up URL without reload
+    window.history.replaceState({}, '', window.location.pathname)
+  }
 
   const isMac = navigator.userAgentData?.platform === 'macOS' || /Mac/.test(navigator.userAgent)
   document.getElementById('shortcut-hint').textContent = isMac ? '⌘↵ to submit' : 'Ctrl+↵ to submit'

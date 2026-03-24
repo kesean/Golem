@@ -1,7 +1,7 @@
 import { Clerk } from '@clerk/clerk-js'
 import { ConvexClient } from 'convex/browser'
 import './style.css'
-import { askQuestion, clearHistory, initApp } from './app.js'
+import { askQuestion, clearHistory, newConversation, copyResponse, shareResponse, initApp } from './app.js'
 
 const clerk = new Clerk(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY)
 await clerk.load()
@@ -18,6 +18,9 @@ async function showApp() {
 
   window.askQuestion = askQuestion
   window.clearHistory = clearHistory
+  window.newConversation = newConversation
+  window.copyResponse = copyResponse
+  window.shareResponse = shareResponse
 
   document.getElementById('sign-out-btn').addEventListener('click', async () => {
     await clerk.signOut()

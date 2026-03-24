@@ -27,6 +27,9 @@
           <span class="history-title">History</span>
           <button class="clear-btn" onclick="clearHistory()">Clear</button>
         </div>
+        <div class="history-search">
+          <input type="text" id="history-search" placeholder="Search…" oninput="window._filterHistory()" />
+        </div>
         <ul class="history-list" id="history-list"></ul>
       </aside>
 
@@ -37,7 +40,10 @@
               <h1>Dev Support AI</h1>
               <p class="subtitle">Ask a technical question and get a developer support–style answer.</p>
             </div>
-            <button id="sign-out-btn" class="sign-out-btn">Sign out</button>
+            <div class="header-actions">
+              <button onclick="newConversation()" class="sign-out-btn">New conversation</button>
+              <button id="sign-out-btn" class="sign-out-btn">Sign out</button>
+            </div>
           </div>
         </header>
 
@@ -68,6 +74,10 @@
           <div id="response-area" class="response-area hidden">
             <div class="response-header">
               <span id="product-tag-badge" class="product-tag hidden"></span>
+              <div class="response-actions">
+                <button id="share-btn" class="copy-btn" onclick="shareResponse()">Share</button>
+                <button id="copy-btn" class="copy-btn" onclick="copyResponse()">Copy</button>
+              </div>
             </div>
             <div class="section">
               <div class="section-label">Summary</div>
