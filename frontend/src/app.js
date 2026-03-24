@@ -6,7 +6,10 @@
  * US3: History stored in Convex (per-user, cloud-persisted).
  */
 
+import { marked } from 'marked'
 import { api } from '../convex/_generated/api.js'
+
+marked.setOptions({ breaks: true })
 
 // ─── Module state (set by initApp) ────────────────────────────────────────────
 
@@ -122,10 +125,10 @@ function renderResponse(accumulated) {
   badge.classList.toggle('hidden', !productTag?.content)
 
   // Summary
-  document.getElementById('summary').textContent = summary?.content || ''
+  document.getElementById('summary').innerHTML = marked.parse(summary?.content || '')
 
   // Root cause
-  document.getElementById('root-cause').textContent = rootCause?.content || ''
+  document.getElementById('root-cause').innerHTML = marked.parse(rootCause?.content || '')
 
   // Debug steps
   const stepsEl = document.getElementById('debug-steps')
@@ -137,7 +140,7 @@ function renderResponse(accumulated) {
       .filter(Boolean)
       .forEach(line => {
         const li = document.createElement('li')
-        li.textContent = line
+        li.innerHTML = marked.parseInline(line)
         stepsEl.appendChild(li)
       })
   }

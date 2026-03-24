@@ -278,6 +278,36 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   color: #1c1c1a;
 }
 
+.section-body p { margin-bottom: 0.5rem; }
+.section-body p:last-child { margin-bottom: 0; }
+
+.section-body code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.85em;
+  background: #f0eeff;
+  color: #3c3489;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+.section-body pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.section-body pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
 .steps-list {
   padding-left: 1.25rem;
 }
