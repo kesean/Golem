@@ -48,7 +48,21 @@
               placeholder="e.g. Why am I getting a 401 error when calling the API with my key?"
               rows="4"
             ></textarea>
-            <button id="ask-btn" onclick="askQuestion()">Ask</button>
+            <div class="input-actions">
+              <span id="shortcut-hint" class="shortcut-hint"></span>
+              <button id="ask-btn" onclick="askQuestion()">Ask</button>
+            </div>
+          </div>
+
+          <div id="skeleton" class="skeleton-area hidden">
+            <div class="skeleton-line" style="width:30%;margin-bottom:1rem"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line" style="width:80%"></div>
+            <div class="skeleton-line" style="width:60%;margin-bottom:1rem"></div>
+            <div class="skeleton-line" style="width:35%;margin-bottom:0.5rem"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line" style="width:75%"></div>
+            <div class="skeleton-line" style="width:50%"></div>
           </div>
 
           <div id="response-area" class="response-area hidden">

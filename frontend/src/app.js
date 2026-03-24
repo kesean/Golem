@@ -192,12 +192,14 @@ export async function askQuestion() {
   const question = questionEl.value.trim()
   if (!question) return
 
+  const skeleton = document.getElementById('skeleton')
   responseArea.classList.add('hidden')
   responseArea.classList.remove('sections-ready')
   errorArea.classList.add('hidden')
+  skeleton.classList.remove('hidden')
 
   btn.disabled = true
-  btn.innerHTML = '<span class="spinner"></span>Thinking…'
+  btn.textContent = 'Thinking…'
 
   try {
     const headers = { 'Content-Type': 'application/json' }
@@ -227,12 +229,14 @@ export async function askQuestion() {
       accumulated += decoder.decode(value, { stream: true })
     }
 
+    skeleton.classList.add('hidden')
     renderResponse(accumulated)
 
     activeHistoryId = await saveToHistory(question, accumulated)
     renderHistorySidebar()
 
   } catch (err) {
+    skeleton.classList.add('hidden')
     errorMsg.textContent = err.message
     errorArea.classList.remove('hidden')
   } finally {
@@ -247,6 +251,10 @@ export async function initApp({ convex, getToken }) {
   _convex   = convex
   _getToken = getToken
   await renderHistorySidebar()
+
+  const isMac = navigator.userAgentData?.platform === 'macOS' || /Mac/.test(navigator.userAgent)
+  document.getElementById('shortcut-hint').textContent = isMac ? '⌘↵ to submit' : 'Ctrl+↵ to submit'
+
   document.getElementById('question').addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') askQuestion()
   })

@@ -178,6 +178,18 @@ h1 {
   gap: 0.75rem;
 }
 
+.input-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.shortcut-hint {
+  font-size: 0.78rem;
+  color: #9b9b97;
+}
+
 textarea {
   width: 100%;
   padding: 0.85rem 1rem;
@@ -329,6 +341,31 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .docs-list a:hover {
   text-decoration: underline;
+}
+
+/* ── Loading skeleton ────────────────────────────────────────────────────── */
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+
+.skeleton-area {
+  margin-top: 1.75rem;
+  background: #fff;
+  border: 1px solid #d4d2c8;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+
+.skeleton-line {
+  height: 0.8rem;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ececea 25%, #e2dfd9 50%, #ececea 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  margin-bottom: 0.6rem;
+  width: 100%;
 }
 
 .error-area {
