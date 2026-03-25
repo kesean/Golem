@@ -108,7 +108,7 @@ Open [http://localhost:5173](http://localhost:5173).
 | Product area tags (e.g. Authentication, Rate Limits, SDK) | ✅ Done |
 | Product area tag badge displayed in UI | ✅ Done |
 
-### Phase 4/5 — Data, auth, users
+### Phase 4 — Data, auth, users
 
 | Feature | Status |
 |---------|--------|
@@ -118,7 +118,7 @@ Open [http://localhost:5173](http://localhost:5173).
 | Convex schema + history table | ✅ Done |
 | Replace localStorage with Convex per-user history | ✅ Done |
 
-### Phase 6 — Security hardening
+### Phase 5 — Security hardening
 
 | Feature | Status |
 |---------|--------|
@@ -128,3 +128,21 @@ Open [http://localhost:5173](http://localhost:5173).
 | Question length limit (2000 chars) + Content-Type validation | ✅ Done |
 | Distinct JWT error logging (expired, malformed, JWKS failure) | ✅ Done |
 | Per-IP rate limiting on `/ask/stream` (20 req/min) | ✅ Done |
+
+### Phase 6 — Polish & UX
+
+| Feature | Status |
+|---------|--------|
+| Markdown rendering in responses (code blocks, bold, lists) | ✅ Done |
+| Mobile-responsive layout | ✅ Done |
+| Keyboard shortcut hint (⌘↵ / Ctrl+↵) | ✅ Done |
+| Loading skeleton while waiting for response | ✅ Done |
+
+### Phase 7 — Product features
+
+| Feature | Status |
+|---------|--------|
+| Multi-turn conversation with New Conversation button | ✅ Done |
+| Search/filter history sidebar | ✅ Done |
+| Copy response to clipboard | ✅ Done |
+| Shareable links via `?share=` param | ✅ Done |
