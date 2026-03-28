@@ -145,7 +145,7 @@ function loadHistoryEntry(entry) {
 
 // ─── XML parser ───────────────────────────────────────────────────────────────
 
-function extractSection(text, tag) {
+export function extractSection(text, tag) {
   const openIdx = text.indexOf(`<${tag}>`)
   if (openIdx === -1) return null
   const contentStart = openIdx + tag.length + 2
@@ -158,7 +158,7 @@ function extractSection(text, tag) {
 
 // ─── Render full response ─────────────────────────────────────────────────────
 
-function renderResponse(accumulated) {
+export function renderResponse(accumulated) {
   const productTag = extractSection(accumulated, 'product_tag')
   const summary    = extractSection(accumulated, 'summary')
   const rootCause  = extractSection(accumulated, 'root_cause')
