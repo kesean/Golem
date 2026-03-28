@@ -19,7 +19,7 @@
   /* Text */
   --text:   #cfe0f0;
   --text-2: #7a9bbd;
-  --text-3: #4a6e8f;
+  --text-3: #6f92b7;  /* lightened from #4a6e8f to pass 4.5:1 contrast on dark surfaces */
 
   /* Type */
   --font-display: 'Fraunces', Georgia, serif;
@@ -202,7 +202,8 @@ body {
 .history-search input::placeholder { color: var(--text-3); }
 
 .history-search input:focus {
-  outline: none;
+  outline: 2px solid var(--teal);
+  outline-offset: 0;
   border-color: var(--teal);
   background: var(--surface-2);
 }
@@ -337,15 +338,21 @@ textarea {
 textarea::placeholder { color: var(--text-3); }
 
 textarea:focus {
-  outline: none;
+  outline: 2px solid var(--teal);
+  outline-offset: 0;
   border-color: var(--teal);
-  box-shadow: 0 0 0 3px rgba(89,201,165,0.1);
+  box-shadow: 0 0 0 3px rgba(89,201,165,0.18);
 }
 
 button {
   font-family: var(--font-body);
   cursor: pointer;
   transition: all 0.15s;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
 }
 
 #ask-btn {
@@ -620,3 +627,15 @@ button {
 .sections-ready .section:nth-child(3) { animation-delay: 0.14s; }
 .sections-ready .section:nth-child(4) { animation-delay: 0.21s; }
 .sections-ready .section:nth-child(5) { animation-delay: 0.28s; }
+
+/* ── Reduced motion ──────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

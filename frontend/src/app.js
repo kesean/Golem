@@ -129,7 +129,13 @@ async function renderHistorySidebar() {
     li.appendChild(q)
     li.appendChild(tagEl)
     li.appendChild(t)
+    li.setAttribute('tabindex', '0')
+    li.setAttribute('role', 'button')
+    li.setAttribute('aria-label', entry.question)
     li.addEventListener('click', () => loadHistoryEntry(entry))
+    li.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); loadHistoryEntry(entry) }
+    })
     list.appendChild(li)
   })
 }
