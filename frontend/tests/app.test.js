@@ -147,3 +147,75 @@ describe('renderResponse', () => {
     expect(document.getElementById('docs-section').classList.contains('hidden')).toBe(true)
   })
 })
+
+// ── newConversation ───────────────────────────────────────────────────────────
+
+describe('newConversation', () => {
+  it('clears the question textarea', () => {
+    document.getElementById('question').value = 'some question'
+    newConversation()
+    expect(document.getElementById('question').value).toBe('')
+  })
+
+  it('hides the response area', () => {
+    document.getElementById('response-area').classList.remove('hidden')
+    newConversation()
+    expect(document.getElementById('response-area').classList.contains('hidden')).toBe(true)
+  })
+
+  it('hides the error area', () => {
+    document.getElementById('error-area').classList.remove('hidden')
+    newConversation()
+    expect(document.getElementById('error-area').classList.contains('hidden')).toBe(true)
+  })
+})
+
+// ── copyResponse ──────────────────────────────────────────────────────────────
+
+// Helper: mock innerText on all elements copyResponse reads (jsdom lacks innerText support)
+function mockInnerText(id, value) {
+  const el = document.getElementById(id)
+  Object.defineProperty(el, 'innerText', { get: () => value, configurable: true })
+}
+
+describe('copyResponse', () => {
+  it('calls clipboard.writeText with formatted response sections', async () => {
+    // jsdom does not implement innerText; mock it via property descriptor for all four ids
+    mockInnerText('summary', 'A test summary.')
+    mockInnerText('root-cause', 'The root cause.')
+    mockInnerText('debug-steps', '') // empty → filtered out
+    mockInnerText('docs', '')        // empty → filtered out
+
+    copyResponse()
+    await Promise.resolve() // flush the .then() microtask
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledOnce()
+    const written = navigator.clipboard.writeText.mock.calls[0][0]
+    expect(written).toContain('Summary')
+    expect(written).toContain('A test summary.')
+    expect(written).toContain('Root Cause')
+    expect(written).toContain('The root cause.')
+  })
+
+  it('changes copy-btn label to "Copied!" after clipboard write', async () => {
+    mockInnerText('summary', 'x')
+    mockInnerText('root-cause', '')
+    mockInnerText('debug-steps', '')
+    mockInnerText('docs', '')
+
+    copyResponse()
+    await Promise.resolve()
+
+    expect(document.getElementById('copy-btn').textContent).toBe('Copied!')
+  })
+})
+
+// ── shareResponse ─────────────────────────────────────────────────────────────
+
+describe('shareResponse', () => {
+  it('does not call clipboard when there is no active history entry', () => {
+    // activeHistoryId is null by default in a fresh module import
+    shareResponse()
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled()
+  })
+})
