@@ -5,7 +5,21 @@
       "Bash(gh repo:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(pip install:*)",
+      "Bash(pytest --version)",
+      "Bash(pytest tests/ --collect-only)",
+      "Bash(python -m pytest tests/ --collect-only)",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, ''.''\\); from tests.conftest import client, valid_token, expired_token, mock_jwks, FAKE_JWKS, _make_token; print\\(''✓ conftest.py imported successfully''\\); print\\(f''✓ FAKE_JWKS has {len\\(FAKE_JWKS[\"\"keys\"\"]\\)} key\\(s\\)''\\); print\\(f''✓ Test token generated: {_make_token\\(\\)[:20]}...''\\)\")",
+      "Bash(pytest tests/test_prompt.py -v)",
+      "Bash(pytest tests/test_auth.py -v)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(npm install:*)",
+      "Bash(npm test:*)",
+      "Bash(pytest tests/ -v)",
+      "Bash(gh pr:*)",
+      "Bash(git pull:*)"
     ]
   }
 }
