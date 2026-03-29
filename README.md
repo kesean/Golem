@@ -146,3 +146,14 @@ Open [http://localhost:5173](http://localhost:5173).
 | Search/filter history sidebar | ✅ Done |
 | Copy response to clipboard | ✅ Done |
 | Shareable links via `?share=` param | ✅ Done |
+
+### Phase 8 — Production deployment
+
+| Feature | Status |
+|---------|--------|
+| Redis-backed rate limiting (replaces in-process limiter) | 🔲 Planned |
+| Per-user daily limit: 10 requests/day (keyed to Clerk user ID) | 🔲 Planned |
+| Global daily cap: 70 requests/day across all users | 🔲 Planned |
+| Flask backend deployed to Railway (with Redis add-on) | 🔲 Planned |
+| Frontend deployed to Vercel (Vite static build) | 🔲 Planned |
+| Production environment variables configured (no secrets in code) | 🔲 Planned |
