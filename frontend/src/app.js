@@ -1,7 +1,7 @@
 /**
  * app.js — Frontend logic for the Dev Support AI chatbot.
  *
- * Phase 3: Stream XML chunks from /ask/stream.
+ * Phase 3: Render XML response from /ask.
  * Phase 4: ES module — imported by main.js, functions exposed via window.*
  * US3: History stored in Convex (per-user, cloud-persisted).
  */
@@ -164,12 +164,12 @@ export function extractSection(text, tag) {
 
 // ─── Render full response ─────────────────────────────────────────────────────
 
-export function renderResponse(accumulated) {
-  const productTag = extractSection(accumulated, 'product_tag')
-  const summary    = extractSection(accumulated, 'summary')
-  const rootCause  = extractSection(accumulated, 'root_cause')
-  const debugSteps = extractSection(accumulated, 'debug_steps')
-  const docs       = extractSection(accumulated, 'docs')
+export function renderResponse(xmlText) {
+  const productTag = extractSection(xmlText, 'product_tag')
+  const summary    = extractSection(xmlText, 'summary')
+  const rootCause  = extractSection(xmlText, 'root_cause')
+  const debugSteps = extractSection(xmlText, 'debug_steps')
+  const docs       = extractSection(xmlText, 'docs')
 
   // Badge
   const badge = document.getElementById('product-tag-badge')
@@ -260,7 +260,7 @@ export async function askQuestion() {
       if (token) headers['Authorization'] = `Bearer ${token}`
     }
 
-    const res = await fetch('/ask/stream', {
+    const res = await fetch('/ask', {
       method: 'POST',
       headers,
       body: JSON.stringify({ question, history: _conversationHistory }),
@@ -271,25 +271,17 @@ export async function askQuestion() {
       throw new Error(data.error || 'Something went wrong.')
     }
 
-    const reader  = res.body.getReader()
-    const decoder = new TextDecoder()
-    let accumulated = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      accumulated += decoder.decode(value, { stream: true })
-    }
+    const { response } = await res.json()
 
     skeleton.classList.add('hidden')
-    renderResponse(accumulated)
+    renderResponse(response)
 
     // Append to in-memory conversation (cap at 10 turns = 20 messages)
     _conversationHistory.push({ role: 'user', content: question })
-    _conversationHistory.push({ role: 'assistant', content: accumulated })
+    _conversationHistory.push({ role: 'assistant', content: response })
     if (_conversationHistory.length > 20) _conversationHistory.splice(0, 2)
 
-    activeHistoryId = await saveToHistory(question, accumulated)
+    activeHistoryId = await saveToHistory(question, response)
     renderHistorySidebar()
 
   } catch (err) {

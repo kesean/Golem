@@ -1,7 +1,5 @@
 """
 app.py — Flask app and API routes.
-
-Phase 3: /ask/stream streams raw text chunks, frontend parses XML on completion.
 """
 
 import os
@@ -10,7 +8,7 @@ import time
 import logging
 import urllib.request
 from functools import wraps
-from flask import Flask, request, jsonify, Response, stream_with_context, g
+from flask import Flask, request, jsonify, g
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from anthropic import Anthropic
@@ -86,14 +84,13 @@ def require_auth(f):
     return decorated
 
 
-@app.route("/ask/stream", methods=["POST"])
+@app.route("/ask", methods=["POST"])
 @require_auth
 @limiter.limit("20 per minute")
-def ask_stream():
+def ask():
     """
-    Accepts a JSON body: { "question": "..." }
-    Streams raw text chunks from Claude as text/plain.
-    Frontend accumulates chunks, then parses the JSON and renders structured sections.
+    Accepts a JSON body: { "question": "...", "history": [...] }
+    Returns a JSON response: { "response": "<xml>..." }
     """
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
@@ -111,17 +108,16 @@ def ask_stream():
     if not isinstance(history, list):
         return jsonify({"error": "Invalid history format"}), 400
 
-    def generate():
-        with client.messages.stream(
-            model="claude-sonnet-4-6",
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            messages=build_messages(question, history),
-        ) as stream:
-            for text in stream.text_stream:
-                yield text
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=2048,
+        system=SYSTEM_PROMPT,
+        messages=build_messages(question, history),
+    )
 
-    return Response(stream_with_context(generate()), content_type="text/plain; charset=utf-8")
+    if not message.content:
+        return jsonify({"error": "No response from model"}), 502
+    return jsonify({"response": message.content[0].text})
 
 
 if __name__ == "__main__":
