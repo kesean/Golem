@@ -1,7 +1,5 @@
 """
 prompt.py — System prompt and message-building logic.
-
-Phase 3: Claude responds with XML-tagged sections for incremental streaming rendering.
 """
 
 SYSTEM_PROMPT = """You are a knowledgeable developer support engineer. \

@@ -87,3 +87,4 @@ def test_history_is_forwarded_to_anthropic(client, mock_jwks, valid_token):
     messages = mock_create.call_args.kwargs["messages"]
     assert messages[0] == {"role": "user", "content": "Previous question"}
     assert messages[-1] == {"role": "user", "content": "Follow-up?"}
+    assert len(messages) == 3

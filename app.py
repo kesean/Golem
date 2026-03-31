@@ -115,6 +115,8 @@ def ask():
         messages=build_messages(question, history),
     )
 
+    if not message.content:
+        return jsonify({"error": "No response from model"}), 502
     return jsonify({"response": message.content[0].text})
 
 
