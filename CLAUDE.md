@@ -14,7 +14,7 @@ Built with: Python 3 · Flask · Anthropic Python SDK · Clerk · Convex · Vite
 ## Project Structure
 ```
 dev-support-chatbot/
-├── app.py              # Flask app + API routes (JWT auth, rate limiting, streaming)
+├── app.py              # Flask app + API routes (JWT auth, rate limiting)
 ├── prompt.py           # System prompt and message-building logic
 ├── requirements.txt    # Python dependencies
 ├── CLAUDE.md           # This file
@@ -61,7 +61,7 @@ cd frontend && npx convex dev
 
 ## Auth & Security
 - Clerk handles sign-in/sign-up (JWT issued to frontend)
-- Flask verifies Clerk JWTs on every `/ask/stream` request via RS256 + JWKS
+- Flask verifies Clerk JWTs on every `/ask` request via RS256 + JWKS
 - Rate limiting via Flask-Limiter:
   - 20 req/min per IP (existing)
   - 10 req/user/day per Clerk user ID (Phase 8)

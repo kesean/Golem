@@ -99,7 +99,7 @@ Open [http://localhost:5173](http://localhost:5173).
 
 | Feature | Status |
 |---------|--------|
-| `/ask/stream` endpoint using `client.messages.stream()` | ✅ Done |
+| `/ask` endpoint with response streaming | ✅ Done |
 | XML-tagged section format for incremental rendering | ✅ Done |
 | Per-section streaming: text fades in chunk by chunk | ✅ Done |
 | Response card fades in on first content arrival | ✅ Done |
@@ -114,7 +114,7 @@ Open [http://localhost:5173](http://localhost:5173).
 |---------|--------|
 | Vite frontend setup (migrate from raw JS) | ✅ Done |
 | Clerk auth — sign-in/sign-up gate | ✅ Done |
-| Flask JWT verification on /ask/stream | ✅ Done |
+| Flask JWT verification on /ask | ✅ Done |
 | Convex schema + history table | ✅ Done |
 | Replace localStorage with Convex per-user history | ✅ Done |
 
@@ -127,7 +127,7 @@ Open [http://localhost:5173](http://localhost:5173).
 | Replace indefinite JWKS cache with 1-hour TTL | ✅ Done |
 | Question length limit (2000 chars) + Content-Type validation | ✅ Done |
 | Distinct JWT error logging (expired, malformed, JWKS failure) | ✅ Done |
-| Per-IP rate limiting on `/ask/stream` (20 req/min) | ✅ Done |
+| Per-IP rate limiting on `/ask` (20 req/min) | ✅ Done |
 
 ### Phase 6 — Polish & UX
 
