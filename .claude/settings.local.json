@@ -19,7 +19,10 @@
       "Bash(npm test:*)",
       "Bash(pytest tests/ -v)",
       "Bash(gh pr:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(python -m pytest tests/test_routes.py -v)",
+      "Bash(python -m pytest tests/test_routes.py --collect-only)",
+      "Bash(python -m pytest tests/ -v --tb=short)"
     ]
   }
 }
