@@ -1,7 +1,7 @@
 /**
  * app.js — Frontend logic for the Dev Support AI chatbot.
  *
- * Phase 3: Stream XML chunks from /ask/stream.
+ * Phase 3: Render XML response from /ask.
  * Phase 4: ES module — imported by main.js, functions exposed via window.*
  * US3: History stored in Convex (per-user, cloud-persisted).
  */
@@ -164,12 +164,12 @@ export function extractSection(text, tag) {
 
 // ─── Render full response ─────────────────────────────────────────────────────
 
-export function renderResponse(accumulated) {
-  const productTag = extractSection(accumulated, 'product_tag')
-  const summary    = extractSection(accumulated, 'summary')
-  const rootCause  = extractSection(accumulated, 'root_cause')
-  const debugSteps = extractSection(accumulated, 'debug_steps')
-  const docs       = extractSection(accumulated, 'docs')
+export function renderResponse(xmlText) {
+  const productTag = extractSection(xmlText, 'product_tag')
+  const summary    = extractSection(xmlText, 'summary')
+  const rootCause  = extractSection(xmlText, 'root_cause')
+  const debugSteps = extractSection(xmlText, 'debug_steps')
+  const docs       = extractSection(xmlText, 'docs')
 
   // Badge
   const badge = document.getElementById('product-tag-badge')
