@@ -4,12 +4,14 @@
 A developer support chatbot that uses the Claude API to answer technical questions
 in a structured, helpful way — similar to how a developer support engineer would respond.
 
-Built with: Python 3 · Flask · Anthropic Python SDK · Clerk · Convex · Vite · Vanilla JS
+**V1 stack:** Python 3 · Flask · Anthropic Python SDK · Clerk · Convex · Vite · Vanilla JS
+**V2 stack (planned):** + RAG pipeline · Vector DB · Eval system · React + TypeScript
 
 ## Goals
 - Learn Claude Code workflows
 - Practice prompt engineering with real API calls
 - Build a portfolio-ready AI project (relevant to developer support roles)
+- V2: demonstrate production AI system design (RAG, evals, observability)
 
 ## Project Structure
 ```
@@ -73,3 +75,31 @@ cd frontend && npx convex dev
 - Flask backend → Railway (with Redis add-on)
 - Convex → managed cloud (already handled by Convex platform)
 - Env vars set in Railway dashboard (never in code)
+
+## V2 Roadmap
+Planned after Phase 8 deployment. See `v2_core_upgrades.md` and `v2_system_design.md` for full specs.
+
+| Phase | Focus | Key additions |
+|-------|-------|---------------|
+| V2a | Observability | Log token usage + latency on every `/ask`; Convex eval table |
+| V2b | RAG pipeline | Embed Anthropic/Clerk docs; vector search (pgvector or Qdrant); inject top-k context into prompt |
+| V2c | Orchestration + Tools | Query classifier routes to domain-specific RAG context; real `retrieve_docs` + `api_lookup` tools |
+| V2d | Frontend upgrade | React + TypeScript; debug panel showing retrieved doc chunks |
+
+### V2 Architecture
+See `docs/assets/images/architecture.png` for the full system diagram.
+
+Key services added in V2:
+- **Retrieval Service** — embedding pipeline + vector search
+- **Eval Service** — stores queries, responses, latency, user feedback
+- **Chat Service** — LLM orchestration with query classification
+
+Storage additions:
+- Vector DB for doc chunks (pgvector / Qdrant)
+- Metrics table in Convex for evals and token tracking
+
+### V2 Development Guidelines
+- Keep Chat Service, Retrieval Service, and Eval Service in separate modules (extend the thin-routes pattern)
+- No simulated tools — only build tools backed by real data sources
+- Async processing (queues, workers) only if embedding latency becomes a measured bottleneck
+- Extend Convex schema incrementally as features land; do not redesign upfront

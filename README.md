@@ -2,7 +2,7 @@
 
 A developer support chatbot that answers technical questions the way a developer support engineer would — structured, specific, and actionable. Built as a portfolio project to practice Claude API integration, prompt engineering, and modern web tooling.
 
-![Dev Support AI screenshot](docs/assets/images/chatbot.png)
+![Dev Support AI — V2 Architecture](docs/assets/images/architecture.png)
 
 ## What it does
 
@@ -157,3 +157,39 @@ Open [http://localhost:5173](http://localhost:5173).
 | Flask backend deployed to Railway (with Redis add-on) | 🔲 Planned |
 | Frontend deployed to Vercel (Vite static build) | 🔲 Planned |
 | Production environment variables configured (no secrets in code) | 🔲 Planned |
+
+---
+
+## V2 — AI system upgrades
+
+### V2a — Observability
+
+| Feature | Status |
+|---------|--------|
+| Log token usage + latency on every `/ask` request | 🔲 Planned |
+| Convex eval table (query, response, latency, user feedback) | 🔲 Planned |
+
+### V2b — Retrieval-Augmented Generation (RAG)
+
+| Feature | Status |
+|---------|--------|
+| Embed Anthropic + Clerk documentation chunks | 🔲 Planned |
+| Vector store (pgvector or Qdrant) | 🔲 Planned |
+| Top-k retrieval injected into system prompt | 🔲 Planned |
+| Orchestration layer with query classifier + routing logic | 🔲 Planned |
+
+### V2c — Tool use
+
+| Feature | Status |
+|---------|--------|
+| `retrieve_docs()` tool backed by vector search | 🔲 Planned |
+| `api_lookup()` tool for live status / reference data | 🔲 Planned |
+| LLM decides which tools to call per query | 🔲 Planned |
+
+### V2d — Frontend upgrade
+
+| Feature | Status |
+|---------|--------|
+| Migrate to React + TypeScript | 🔲 Planned |
+| Restore streaming responses | 🔲 Planned |
+| Debug panel showing retrieved doc chunks | 🔲 Planned |
