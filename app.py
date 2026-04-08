@@ -19,7 +19,14 @@ from prompt import SYSTEM_PROMPT, build_messages
 load_dotenv()
 
 app = Flask(__name__)
-limiter = Limiter(get_remote_address, app=app, default_limits=[])
+
+_redis_url = os.getenv("REDIS_URL")
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri=_redis_url if _redis_url else "memory://",
+)
 client = Anthropic()  # Reads ANTHROPIC_API_KEY from environment automatically
 
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
