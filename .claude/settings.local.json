@@ -21,7 +21,8 @@
       "Bash(gh pr:*)",
       "Bash(git pull:*)",
       "Bash(uv --version)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(git branch:*)"
     ]
   }
 }
