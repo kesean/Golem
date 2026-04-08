@@ -65,6 +65,25 @@ def verify_clerk_token(token: str) -> dict:
     return jwt.decode(token, public_key, algorithms=["RS256"], options={"verify_aud": False})
 
 
+def _user_key() -> str:
+    """Return Clerk user ID for per-user rate limiting, falls back to IP.
+
+    Decodes the JWT without verification — auth is enforced separately by
+    require_auth. We only need the sub claim as a stable per-user key.
+    """
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return get_remote_address()
+    try:
+        payload = jwt.decode(
+            auth.split(" ", 1)[1],
+            options={"verify_signature": False},
+        )
+        return payload.get("sub") or get_remote_address()
+    except Exception:
+        return get_remote_address()
+
+
 def require_auth(f):
     """Decorator that enforces Clerk JWT auth on a route."""
     @wraps(f)
@@ -94,6 +113,7 @@ def require_auth(f):
 @app.route("/ask", methods=["POST"])
 @require_auth
 @limiter.limit("20 per minute")
+@limiter.limit("10 per day", key_func=_user_key, error_message="Daily limit reached")
 def ask():
     """
     Accepts a JSON body: { "question": "...", "history": [...] }
