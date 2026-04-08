@@ -57,6 +57,18 @@ def client():
 
 
 @pytest.fixture
+def rate_limited_client():
+    """Flask test client with rate limiting enabled and memory storage."""
+    from app import app, limiter
+    app.config["TESTING"] = True
+    app.config["RATELIMIT_ENABLED"] = True
+    with app.test_client() as c:
+        limiter.reset()
+        yield c
+        limiter.reset()
+
+
+@pytest.fixture
 def valid_token():
     return _make_token()
 
