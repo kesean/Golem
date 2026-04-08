@@ -9,6 +9,7 @@ import logging
 import urllib.request
 from functools import wraps
 from flask import Flask, request, jsonify, g
+from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from anthropic import Anthropic
@@ -19,6 +20,14 @@ from prompt import SYSTEM_PROMPT, build_messages
 load_dotenv()
 
 app = Flask(__name__)
+
+_frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
+CORS(
+    app,
+    origins=[_frontend_origin] if _frontend_origin else [],
+    allow_headers=["Authorization", "Content-Type"],
+    methods=["POST", "OPTIONS"],
+)
 
 _redis_url = os.getenv("REDIS_URL")
 limiter = Limiter(
