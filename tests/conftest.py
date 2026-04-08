@@ -31,11 +31,11 @@ _PUBLIC_JWK.update({"kid": "test-kid", "use": "sig", "alg": "RS256"})
 FAKE_JWKS = {"keys": [_PUBLIC_JWK]}
 
 
-def _make_token(*, expired: bool = False, wrong_kid: bool = False) -> str:
+def _make_token(*, expired: bool = False, wrong_kid: bool = False, sub: str = "user_test123") -> str:
     """Sign a JWT with the test RSA key."""
     now = int(time.time())
     payload = {
-        "sub": "user_test123",
+        "sub": sub,
         "iss": "https://test.clerk.dev",
         "iat": now,
         "exp": now - 10 if expired else now + 3600,
@@ -62,9 +62,11 @@ def rate_limited_client():
     from app import app, limiter
     app.config["TESTING"] = True
     app.config["RATELIMIT_ENABLED"] = True
-    with app.test_client() as c:
+    with app.app_context():
         limiter.reset()
+    with app.test_client() as c:
         yield c
+    with app.app_context():
         limiter.reset()
 
 
@@ -76,6 +78,13 @@ def valid_token():
 @pytest.fixture
 def expired_token():
     return _make_token(expired=True)
+
+
+@pytest.fixture
+def conftest_tokens():
+    """71 tokens with unique sub values — one per user — to hit the global cap
+    without triggering the per-user (10/day) limit first."""
+    return [_make_token(sub=f"user_{i}") for i in range(71)]
 
 
 @pytest.fixture

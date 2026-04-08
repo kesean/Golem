@@ -114,6 +114,7 @@ def require_auth(f):
 @require_auth
 @limiter.limit("20 per minute")
 @limiter.limit("10 per day", key_func=_user_key, error_message="Daily limit reached")
+@limiter.limit("70 per day", key_func=lambda: "global", error_message="Service limit reached")
 def ask():
     """
     Accepts a JSON body: { "question": "...", "history": [...] }
