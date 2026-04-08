@@ -22,7 +22,11 @@
       "Bash(git pull:*)",
       "Bash(uv --version)",
       "Bash(uv run:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git reset:*)",
+      "Bash(git stash:*)",
+      "Bash(python -m pytest tests/test_rate_limits.py -v)"
     ]
   }
 }
