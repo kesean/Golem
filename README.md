@@ -151,9 +151,10 @@ Open [http://localhost:5173](http://localhost:5173).
 
 | Feature | Status |
 |---------|--------|
-| Redis-backed rate limiting (replaces in-process limiter) | 🔲 Planned |
-| Per-user daily limit: 10 requests/day (keyed to Clerk user ID) | 🔲 Planned |
-| Global daily cap: 70 requests/day across all users | 🔲 Planned |
+| Redis-backed rate limiting (replaces in-process limiter) | ✅ Done |
+| Per-user daily limit: 10 requests/day (keyed to Clerk user ID) | ✅ Done |
+| Global daily cap: 70 requests/day across all users | ✅ Done |
+| CORS scoped to Vercel frontend origin | ✅ Done |
 | Flask backend deployed to Railway (with Redis add-on) | 🔲 Planned |
 | Frontend deployed to Vercel (Vite static build) | 🔲 Planned |
 | Production environment variables configured (no secrets in code) | 🔲 Planned |
