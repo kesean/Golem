@@ -260,7 +260,7 @@ export async function askQuestion() {
       if (token) headers['Authorization'] = `Bearer ${token}`
     }
 
-    const res = await fetch('/ask', {
+    const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/ask`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ question, history: _conversationHistory }),
