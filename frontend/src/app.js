@@ -17,6 +17,7 @@ let _convex = null
 let _getToken = null
 let activeHistoryId = null
 let _conversationHistory = []  // [{role, content}, ...] sent to Claude each turn
+let _currentEvalId = null
 
 // ─── History (Convex) ─────────────────────────────────────────────────────────
 
@@ -32,6 +33,32 @@ async function loadHistory() {
 async function saveToHistory(question, rawXml) {
   if (!_convex) return null
   return await _convex.mutation(api.history.add, { question, rawXml })
+}
+
+// ─── Feedback helpers ─────────────────────────────────────────────────────────
+
+function _resetFeedback() {
+  const up   = document.getElementById('thumb-up-btn')
+  const down = document.getElementById('thumb-down-btn')
+  if (!up || !down) return
+  up.classList.remove('active-up')
+  down.classList.remove('active-down')
+}
+
+function _enableFeedback() {
+  const up   = document.getElementById('thumb-up-btn')
+  const down = document.getElementById('thumb-down-btn')
+  if (!up || !down) return
+  up.disabled   = false
+  down.disabled = false
+}
+
+function _disableFeedback() {
+  const up   = document.getElementById('thumb-up-btn')
+  const down = document.getElementById('thumb-down-btn')
+  if (!up || !down) return
+  up.disabled   = true
+  down.disabled = true
 }
 
 export function shareResponse() {
@@ -69,6 +96,9 @@ export function copyResponse() {
 export function newConversation() {
   _conversationHistory = []
   activeHistoryId = null
+  _currentEvalId = null
+  _resetFeedback()
+  _disableFeedback()
   document.getElementById('question').value = ''
   document.getElementById('response-area').classList.add('hidden')
   document.getElementById('error-area').classList.add('hidden')
@@ -143,6 +173,9 @@ async function renderHistorySidebar() {
 function loadHistoryEntry(entry) {
   activeHistoryId = entry._id
   _conversationHistory = []  // history entries start a fresh context
+  _currentEvalId = null
+  _resetFeedback()
+  _disableFeedback()
   renderHistorySidebar()
   document.getElementById('question').value = entry.question
   document.getElementById('error-area').classList.add('hidden')
@@ -232,6 +265,27 @@ export function renderResponse(xmlText) {
   responseArea.classList.add('sections-ready')
 }
 
+export async function thumbFeedback(type) {
+  if (!_currentEvalId || !_convex) return
+  const up   = document.getElementById('thumb-up-btn')
+  const down = document.getElementById('thumb-down-btn')
+  if (!up || !down) return
+
+  const isAlreadyActive =
+    (type === 'up'   && up.classList.contains('active-up')) ||
+    (type === 'down' && down.classList.contains('active-down'))
+
+  _resetFeedback()
+  const newFeedback = isAlreadyActive ? undefined : type
+  if (newFeedback === 'up')   up.classList.add('active-up')
+  if (newFeedback === 'down') down.classList.add('active-down')
+
+  await _convex.mutation(api.evals.setFeedback, {
+    evalId: _currentEvalId,
+    feedback: newFeedback,
+  })
+}
+
 // ─── Main ask handler ────────────────────────────────────────────────────────
 
 export async function askQuestion() {
@@ -271,7 +325,7 @@ export async function askQuestion() {
       throw new Error(data.error || 'Something went wrong.')
     }
 
-    const { response } = await res.json()
+    const { response, input_tokens, output_tokens, latency_ms } = await res.json()
 
     skeleton.classList.add('hidden')
     renderResponse(response)
@@ -282,6 +336,15 @@ export async function askQuestion() {
     if (_conversationHistory.length > 20) _conversationHistory.splice(0, 2)
 
     activeHistoryId = await saveToHistory(question, response)
+    _currentEvalId = await _convex.mutation(api.evals.createEval, {
+      question,
+      response,
+      latency_ms,
+      input_tokens,
+      output_tokens,
+    })
+    _resetFeedback()
+    _enableFeedback()
     renderHistorySidebar()
 
   } catch (err) {

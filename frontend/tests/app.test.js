@@ -15,6 +15,10 @@ vi.mock('../convex/_generated/api.js', () => ({
       clear: 'history:clear',
       getById: 'history:getById',
     },
+    evals: {
+      createEval: 'evals:createEval',
+      setFeedback: 'evals:setFeedback',
+    },
   },
 }))
 
@@ -24,6 +28,9 @@ import {
   newConversation,
   copyResponse,
   shareResponse,
+  thumbFeedback,
+  askQuestion,
+  initApp,
 } from '../src/app.js'
 
 // ── Full DOM fixture used by all tests ────────────────────────────────────────
@@ -37,11 +44,18 @@ const DOM_HTML = `
     <ul   id="docs"></ul>
   </div>
   <div    id="response-area" class="hidden"></div>
-  <div    id="error-area"    class="hidden"></div>
+  <div    id="error-area"    class="hidden">
+    <span id="error-message"></span>
+  </div>
+  <div    id="skeleton" class="hidden"></div>
   <button id="share-btn">Share</button>
   <button id="copy-btn">Copy</button>
+  <button id="ask-btn">Ask</button>
+  <button id="thumb-up-btn" class="feedback-btn" disabled></button>
+  <button id="thumb-down-btn" class="feedback-btn" disabled></button>
   <textarea id="question"></textarea>
   <ul     id="history-list"></ul>
+  <span   id="shortcut-hint"></span>
 `
 
 beforeEach(() => {
@@ -217,5 +231,77 @@ describe('shareResponse', () => {
     // activeHistoryId is null by default in a fresh module import
     shareResponse()
     expect(navigator.clipboard.writeText).not.toHaveBeenCalled()
+  })
+})
+
+// ── thumbFeedback ─────────────────────────────────────────────────────────────
+
+const SAMPLE_XML_FULL = `<product_tag>Authentication</product_tag><summary>Test summary.</summary><root_cause>Test cause.</root_cause><debug_steps>Step 1: Check logs.</debug_steps><docs></docs>`
+
+describe('thumbFeedback', () => {
+  let mockConvex
+
+  beforeEach(async () => {
+    document.body.innerHTML = DOM_HTML
+    mockConvex = {
+      query: vi.fn().mockResolvedValue([]),
+      mutation: vi.fn()
+        .mockResolvedValueOnce('hist-id')  // history.add
+        .mockResolvedValueOnce('eval-id'), // evals.createEval
+      setAuth: vi.fn(),
+    }
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        response: SAMPLE_XML_FULL,
+        input_tokens: 50,
+        output_tokens: 100,
+        latency_ms: 500,
+      }),
+    })
+    await initApp({ convex: mockConvex, getToken: async () => 'token' })
+    document.getElementById('question').value = 'test question'
+    await askQuestion()
+    // Reset mutation mock for setFeedback calls
+    mockConvex.mutation.mockResolvedValue(undefined)
+  })
+
+  it('enables thumb buttons after a response is received', () => {
+    expect(document.getElementById('thumb-up-btn').disabled).toBe(false)
+    expect(document.getElementById('thumb-down-btn').disabled).toBe(false)
+  })
+
+  it('adds active-up class when thumbFeedback("up") is called', async () => {
+    await thumbFeedback('up')
+    expect(document.getElementById('thumb-up-btn').classList.contains('active-up')).toBe(true)
+    expect(document.getElementById('thumb-down-btn').classList.contains('active-down')).toBe(false)
+  })
+
+  it('removes active-up class when thumbFeedback("up") is called again (toggle off)', async () => {
+    await thumbFeedback('up')
+    await thumbFeedback('up')
+    expect(document.getElementById('thumb-up-btn').classList.contains('active-up')).toBe(false)
+  })
+
+  it('switches to active-down and clears active-up when thumbFeedback("down") after "up"', async () => {
+    await thumbFeedback('up')
+    await thumbFeedback('down')
+    expect(document.getElementById('thumb-down-btn').classList.contains('active-down')).toBe(true)
+    expect(document.getElementById('thumb-up-btn').classList.contains('active-up')).toBe(false)
+  })
+
+  it('calls setFeedback mutation with correct evalId and feedback', async () => {
+    await thumbFeedback('up')
+    expect(mockConvex.mutation).toHaveBeenCalledWith('evals:setFeedback', {
+      evalId: 'eval-id',
+      feedback: 'up',
+    })
+  })
+
+  it('disables thumb buttons and clears active state after newConversation', async () => {
+    await thumbFeedback('up')
+    newConversation()
+    expect(document.getElementById('thumb-up-btn').disabled).toBe(true)
+    expect(document.getElementById('thumb-up-btn').classList.contains('active-up')).toBe(false)
   })
 })
