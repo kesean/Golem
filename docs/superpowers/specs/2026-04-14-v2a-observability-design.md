@@ -130,7 +130,21 @@ evals: defineTable({
 
 ## Testing
 
-- Manual: submit a question, verify eval record appears in Convex dashboard with correct tokens/latency
-- Manual: click thumbs up, verify `feedback: "up"` is patched; toggle off, verify `null`; switch to thumbs down, verify `feedback: "down"`
-- Manual: verify buttons are disabled during loading, enabled after response
-- Existing tests in `tests/` should pass unchanged (no Flask route signature changes)
+All tests are automated with Playwright. Convex record verification uses the Convex HTTP query API within the test.
+
+**Eval record creation:**
+- Submit a question via the UI
+- After response renders, query Convex HTTP API for the latest eval record by user
+- Assert `input_tokens`, `output_tokens`, and `latency_ms` are present and > 0
+
+**Feedback toggle:**
+- Click thumbs up → assert `.active-up` class on button; query Convex, assert `feedback === "up"`
+- Click thumbs up again → assert `.active-up` removed; query Convex, assert `feedback` is absent/null
+- Click thumbs down → assert `.active-down` set, `.active-up` absent; query Convex, assert `feedback === "down"`
+
+**Disabled state:**
+- Assert both thumbs buttons have `disabled` attribute while skeleton is visible
+- Assert both buttons are enabled once response card is rendered
+
+**Regression:**
+- Existing Flask tests in `tests/` pass unchanged (no route signature changes)
