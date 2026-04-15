@@ -13,8 +13,11 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'jsdom',
+    environmentMatchGlobs: [
+      ['convex/**/*.test.ts', 'edge-runtime'],
+      ['tests/**/*.test.js', 'jsdom'],
+    ],
     setupFiles: ['./tests/setup.js'],
-    include: ['tests/**/*.test.js'],
+    include: ['tests/**/*.test.js', 'convex/**/*.test.ts'],
   },
 })

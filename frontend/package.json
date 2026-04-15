@@ -14,6 +14,8 @@
     "marked": "^17.0.5"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "convex-test": "^0.0.48",
     "jsdom": "^27.0.1",
     "vite": "^8.0.1",
     "vitest": "^3.2.4"
