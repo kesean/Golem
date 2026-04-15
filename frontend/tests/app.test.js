@@ -298,6 +298,16 @@ describe('thumbFeedback', () => {
     })
   })
 
+  it('calls setFeedback mutation with undefined feedback on toggle off', async () => {
+    await thumbFeedback('up')
+    mockConvex.mutation.mockClear()
+    await thumbFeedback('up')
+    expect(mockConvex.mutation).toHaveBeenCalledWith('evals:setFeedback', {
+      evalId: 'eval-id',
+      feedback: undefined,
+    })
+  })
+
   it('disables thumb buttons and clears active state after newConversation', async () => {
     await thumbFeedback('up')
     newConversation()

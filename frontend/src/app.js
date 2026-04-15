@@ -336,13 +336,15 @@ export async function askQuestion() {
     if (_conversationHistory.length > 20) _conversationHistory.splice(0, 2)
 
     activeHistoryId = await saveToHistory(question, response)
-    _currentEvalId = await _convex.mutation(api.evals.createEval, {
-      question,
-      response,
-      latency_ms,
-      input_tokens,
-      output_tokens,
-    })
+    if (_convex) {
+      _currentEvalId = await _convex.mutation(api.evals.createEval, {
+        question,
+        response,
+        latency_ms,
+        input_tokens,
+        output_tokens,
+      })
+    }
     _resetFeedback()
     _enableFeedback()
     renderHistorySidebar()
