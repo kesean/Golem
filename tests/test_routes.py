@@ -7,10 +7,12 @@ def _auth_headers(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-def _fake_message(text):
+def _fake_message(text, input_tokens=10, output_tokens=20):
     """Return a mock object matching the shape of anthropic.types.Message."""
     msg = MagicMock()
     msg.content = [MagicMock(text=text)]
+    msg.usage.input_tokens = input_tokens
+    msg.usage.output_tokens = output_tokens
     return msg
 
 
@@ -88,3 +90,19 @@ def test_history_is_forwarded_to_anthropic(client, mock_jwks, valid_token):
     assert messages[0] == {"role": "user", "content": "Previous question"}
     assert messages[-1] == {"role": "user", "content": "Follow-up?"}
     assert len(messages) == 3
+
+
+def test_response_includes_token_usage_and_latency(client, mock_jwks, valid_token):
+    xml = "<product_tag>Authentication</product_tag><summary>Test</summary>"
+    with patch("app.client.messages.create", return_value=_fake_message(xml, input_tokens=50, output_tokens=100)):
+        resp = client.post(
+            "/ask",
+            json={"question": "Why am I getting a 401?"},
+            headers=_auth_headers(valid_token),
+        )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["input_tokens"] == 50
+    assert data["output_tokens"] == 100
+    assert isinstance(data["latency_ms"], int)
+    assert data["latency_ms"] >= 0

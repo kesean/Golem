@@ -145,16 +145,23 @@ def ask():
     if not isinstance(history, list):
         return jsonify({"error": "Invalid history format"}), 400
 
+    start = time.time()
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=2048,
         system=SYSTEM_PROMPT,
         messages=build_messages(question, history),
     )
+    latency_ms = round((time.time() - start) * 1000)
 
     if not message.content:
         return jsonify({"error": "No response from model"}), 502
-    return jsonify({"response": message.content[0].text})
+    return jsonify({
+        "response": message.content[0].text,
+        "input_tokens": message.usage.input_tokens,
+        "output_tokens": message.usage.output_tokens,
+        "latency_ms": latency_ms,
+    })
 
 
 if __name__ == "__main__":

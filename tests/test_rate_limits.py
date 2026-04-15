@@ -7,9 +7,11 @@ def _auth_headers(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-def _fake_message(text="<summary>ok</summary>"):
+def _fake_message(text="<summary>ok</summary>", input_tokens=10, output_tokens=20):
     msg = MagicMock()
     msg.content = [MagicMock(text=text)]
+    msg.usage.input_tokens = input_tokens
+    msg.usage.output_tokens = output_tokens
     return msg
 
 
