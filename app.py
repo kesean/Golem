@@ -127,7 +127,7 @@ def require_auth(f):
 def ask():
     """
     Accepts a JSON body: { "question": "...", "history": [...] }
-    Returns a JSON response: { "response": "<xml>..." }
+    Returns a JSON response: { "response": "<xml>...", "input_tokens": int, "output_tokens": int, "latency_ms": int }
     """
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
