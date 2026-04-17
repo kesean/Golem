@@ -6,7 +6,6 @@ No real network calls, Voyage API, or Qdrant API are made.
 
 import sys
 import os
-import hashlib
 import uuid
 
 import pytest
