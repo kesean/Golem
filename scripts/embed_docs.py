@@ -16,6 +16,7 @@ Optional:
 
 import os
 import sys
+import uuid
 import base64
 import hashlib
 import logging
@@ -41,6 +42,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 COLLECTION = "dev_support_docs"
 CHUNK_SIZE = 500
+CHUNK_TOKENS = CHUNK_SIZE   # alias used by tests and external callers
 OVERLAP = 50
 VOYAGE_BATCH = 128
 VECTOR_DIM = 512     # voyage-3.5-lite default
@@ -103,7 +105,9 @@ def fetch_file(owner: str, repo: str, path: str) -> str:
     return base64.b64decode(data["content"]).decode("utf-8", errors="replace")
 
 
-def chunk_text(text: str, enc: tiktoken.Encoding) -> list[str]:
+def chunk_text(text: str, enc: tiktoken.Encoding | None = None) -> list[str]:
+    if enc is None:
+        enc = tiktoken.get_encoding("cl100k_base")
     tokens = enc.encode(text)
     chunks = []
     start = 0
@@ -117,8 +121,13 @@ def chunk_text(text: str, enc: tiktoken.Encoding) -> list[str]:
 
 
 def chunk_id(repo_path: str, chunk_index: int) -> str:
-    """Deterministic SHA-256 ID — re-runs upsert rather than duplicate."""
-    return hashlib.sha256(f"{repo_path}:{chunk_index}".encode()).hexdigest()
+    """Deterministic UUID ID — re-runs upsert rather than duplicate.
+
+    Qdrant requires point IDs to be unsigned 64-bit integers or UUID strings.
+    We derive a stable UUID from the first 32 hex chars of the SHA-256 digest.
+    """
+    digest = hashlib.sha256(f"{repo_path}:{chunk_index}".encode()).hexdigest()
+    return str(uuid.UUID(digest[:32]))
 
 
 def embed_in_batches(texts: list[str], voyage: voyageai.Client) -> list[list[float]]:
@@ -165,8 +174,8 @@ def main() -> None:
             try:
                 content = fetch_file(owner, repo, path)
             except Exception as e:
-                logging.error("  SKIP %s — fetch failed: %s", path, e)
-                continue
+                logging.error("  FAILED %s — fetch error: %s", path, e)
+                raise
 
             chunks = chunk_text(content, enc)
             github_url = f"https://github.com/{owner}/{repo}/blob/main/{path}"
