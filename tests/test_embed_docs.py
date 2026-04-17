@@ -8,8 +8,6 @@ import sys
 import os
 import uuid
 
-import pytest
-
 # Allow importing from scripts/ which is not a package
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
