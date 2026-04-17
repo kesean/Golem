@@ -7,23 +7,24 @@
 
 ## Overview
 
-Add a retrieval-augmented generation (RAG) pipeline to the dev support chatbot. When a user submits a question, the backend retrieves the most relevant documentation chunks from a vector database and injects them into the prompt as grounding context. This improves response accuracy for questions about Clerk, MDN web APIs, and Vercel.
+Add a retrieval-augmented generation (RAG) pipeline to the dev support chatbot. When a user submits a question, the backend retrieves the most relevant documentation chunks from a vector database and injects them into the prompt as grounding context. This improves response accuracy for questions about Clerk and MDN web APIs.
 
 ---
 
 ## Goals
 
-- Embed targeted sections of Clerk, MDN, and Vercel documentation into a Qdrant Cloud vector collection
+- Embed targeted sections of Clerk and MDN documentation into a Qdrant Cloud vector collection
 - On every `/ask` request, retrieve the top-5 most relevant chunks and prepend them to the user's question
 - Degrade gracefully — if retrieval fails for any reason, the request continues without RAG rather than erroring out
 
 ## Non-Goals
 
-- No query classifier (that's V2c)
+- No Vercel docs (no public GitHub source confirmed — deferred to V2c)
+- No Anthropic docs
+- No query classifier (V2c)
 - No per-source retrieval routing
-- No in-app display of retrieved chunks (that's V2d)
+- No in-app display of retrieved chunks (V2d)
 - No streaming changes
-- No Anthropic docs (narrowed to Clerk, MDN, Vercel)
 
 ---
 
@@ -34,7 +35,7 @@ Add a retrieval-augmented generation (RAG) pipeline to the dev support chatbot. 
 | File | Purpose |
 |------|---------|
 | `retrieval.py` | Qdrant + Voyage clients; `retrieve_context()` function |
-| `scripts/embed_docs.py` | One-off ingestion script: fetch → chunk → embed → upsert |
+| `scripts/embed_docs.py` | One-off ingestion script: fetch then chunk then embed then upsert |
 | `tests/test_retrieval.py` | Unit tests for `retrieval.py` |
 | `tests/test_prompt.py` | Unit tests for updated `build_messages()` |
 
@@ -43,8 +44,8 @@ Add a retrieval-augmented generation (RAG) pipeline to the dev support chatbot. 
 | File | Change |
 |------|--------|
 | `prompt.py` | `build_messages()` gains optional `context: str` parameter |
-| `app.py` | `/ask` calls `retrieve_context(question)` and passes result to `build_messages()` |
-| `requirements.txt` | Add `qdrant-client`, `voyageai` |
+| `app.py` | `/ask` calls `retrieve_context(question)` before the LLM call; timer moved to before `retrieve_context()` |
+| `requirements.txt` | Add `qdrant-client`, `voyageai`, `tiktoken`, `httpx` |
 
 ### New Environment Variables
 
@@ -61,18 +62,24 @@ Add a retrieval-augmented generation (RAG) pipeline to the dev support chatbot. 
 
 ```
 User question
-     │
-     ▼
+     |
+     v
+start = time.time()                   <- timer starts here (includes retrieval)
+     |
+     v
 retrieve_context(question)
-  ├── Embed question via Voyage AI voyage-3-lite
-  └── Query Qdrant dev_support_docs (top-5, cosine similarity)
-     │
-     ▼
+  +-- Embed question via Voyage AI voyage-3.5-lite (input_type="query")
+  +-- Query Qdrant dev_support_docs (top-5, cosine similarity)
+     |
+     v
 build_messages(question, history, context)
-  └── Prepends <context>...</context> block to user turn
-     │
-     ▼
-client.messages.create(...)  ← unchanged
+  +-- Prepends retrieved docs block to user turn
+     |
+     v
+client.messages.create(...)
+     |
+     v
+latency_ms = round((time.time() - start) * 1000)   <- includes retrieval + LLM
 ```
 
 ---
@@ -81,28 +88,28 @@ client.messages.create(...)  ← unchanged
 
 ### Sources and Target Paths
 
-**Clerk** (`clerkinc/clerk-docs`, `/docs`)
-- `authentication/` — sessions, tokens, JWT templates
-- `backend-requests/` — verifying sessions, middleware
-- `errors/` — error codes and troubleshooting
+All paths are **explicit file lists** hardcoded as constants at the top of `embed_docs.py`. No directory scanning — the GitHub contents API is called per-file, not per-directory. This avoids pagination complexity and keeps the corpus intentional.
 
-**MDN** (`mdn/content`, `/files/en-us/web`)
-- `api/fetch/` — Fetch API reference
-- `api/headers/` — Headers interface
-- `api/request/` — Request interface
-- `api/response/` — Response interface
-- `http/status/` — HTTP status codes
-- `http/cors/` — CORS reference
+**Clerk** (`clerk/clerk-docs`, branch `main`)
 
-**Vercel** (repo TBD — confirm during implementation; likely `vercel/vercel-docs`)
-- `deployments/` — build and deploy pipeline
-- `environment-variables/` — env var configuration
-- `errors/` — deployment error reference
-- `frameworks/` — framework-specific guides
+File list constants target:
+- `docs/authentication/` — sessions, tokens, JWT templates
+- `docs/backend-requests/` — verifying sessions, middleware
+- `docs/errors/` — error codes and troubleshooting
+
+**MDN** (`mdn/content`, branch `main`)
+
+File list constants target:
+- `files/en-us/web/api/fetch_api/` — Fetch API reference
+- `files/en-us/web/api/headers/` — Headers interface
+- `files/en-us/web/api/request/` — Request interface
+- `files/en-us/web/api/response/` — Response interface
+- `files/en-us/web/http/status/` — HTTP status codes
+- `files/en-us/web/http/cors/` — CORS reference
 
 ### Chunking
 
-- Chunk size: ~500 tokens
+- Chunk size: ~500 tokens (measured with `tiktoken`, model `cl100k_base`)
 - Overlap: 50 tokens
 - Split on paragraph/heading boundaries where possible
 - Chunk ID: deterministic hash of `repo_path + chunk_index` (ensures idempotent upserts)
@@ -111,8 +118,9 @@ client.messages.create(...)  ← unchanged
 
 - Name: `dev_support_docs`
 - Similarity: cosine
-- Vector dimension: 512 (voyage-3-lite)
+- Vector dimension: 512 (voyage-3.5-lite default)
 - Payload metadata per chunk: `{ source, repo_path, github_url, chunk_index }`
+- Collection created by `embed_docs.py` on first run; subsequent runs upsert by chunk ID
 
 ---
 
@@ -123,22 +131,22 @@ client.messages.create(...)  ← unchanged
 def retrieve_context(question: str, top_k: int = 5) -> str
 ```
 
-- Module-level Qdrant and Voyage clients initialized once on import
-- Embeds question with `voyage-3-lite`
+- Module-level Qdrant and Voyage clients initialized once on import (same pattern as `client = Anthropic()` in `app.py`)
+- Embeds question with `voyage-3.5-lite`, `input_type="query"`
 - Queries `dev_support_docs` for top-k chunks
-- Returns formatted string:
+- Returns formatted string using plain-text delimiters (not XML, to avoid conflict with the system prompt's XML output format):
 
 ```
-<context>
-[Clerk – authentication/sessions.mdx]
+--- RETRIEVED DOCS ---
+[Clerk - docs/authentication/sessions.mdx]
 ...chunk text...
 
-[MDN – web/api/fetch/index.md]
+[MDN - files/en-us/web/api/fetch_api/index.md]
 ...chunk text...
-</context>
+--- END DOCS ---
 ```
 
-- Returns `""` on any failure (missing env vars, network error, empty results) — logs a warning but does not raise
+- Returns `""` on any failure (missing env vars, network error, empty results) — logs a warning, does not raise
 
 ---
 
@@ -156,18 +164,39 @@ def build_messages(
     return messages
 ```
 
-Backward compatible — existing callers with no `context` argument are unaffected.
+Backward compatible — existing callers with no `context` argument continue to work.
+
+---
+
+## `app.py` Changes
+
+```python
+start = time.time()                                        # moved: now before retrieval
+context = retrieve_context(question)
+message = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=2048,
+    system=SYSTEM_PROMPT,
+    messages=build_messages(question, history, context),   # context added
+)
+latency_ms = round((time.time() - start) * 1000)
+```
+
+`latency_ms` now includes retrieval time, keeping the V2a observability data accurate.
 
 ---
 
 ## `scripts/embed_docs.py`
 
-- Reads target file lists per source from hardcoded constants at the top of the file
-- Fetches raw markdown via the GitHub contents API
-- Chunks, embeds (batched, up to 128 texts per Voyage request), upserts to Qdrant
-- Idempotent — re-running overwrites via deterministic chunk IDs
+- Source file paths defined as explicit constants at the top of the file (one list per source)
+- Fetches each file's raw content via the GitHub contents API (`https://api.github.com/repos/{owner}/{repo}/contents/{path}`)
+- Decodes base64 content from the API response
+- Tokenizes with `tiktoken` (`cl100k_base`) and splits into ~500-token chunks with 50-token overlap
+- Embeds chunks in batches of up to 128 via Voyage AI `voyage-3.5-lite` with `input_type="document"`
+- Creates the `dev_support_docs` Qdrant collection if it does not exist (cosine, 512 dims)
+- Upserts all chunks using deterministic IDs
 - Prints progress per source: `Clerk: 12 files, 148 chunks`
-- Fails fast on errors with a non-zero exit code
+- Fails fast on any error with a non-zero exit code
 
 ```bash
 python scripts/embed_docs.py
@@ -192,21 +221,32 @@ The `/ask` route never returns an error due to retrieval failure.
 
 ### `tests/test_retrieval.py` (new)
 
-- Returns formatted context string when Qdrant returns results (mock Voyage + Qdrant)
+Mock both the Voyage and Qdrant clients at the module level.
+
+- Returns formatted doc block when Qdrant returns results
 - Returns `""` when Qdrant returns no results
-- Returns `""` when env vars are missing
-- Returns `""` when Voyage call raises an exception
+- Returns `""` when `QDRANT_URL` env var is missing
+- Returns `""` when `VOYAGE_API_KEY` env var is missing
+- Returns `""` when the Voyage embed call raises an exception
+- Returns `""` when the Qdrant query call raises an exception
 
 ### `tests/test_prompt.py` (new)
 
-- `build_messages` with `context=""` produces same output as today (no regression)
-- `build_messages` with context prepends the context block to the user turn
+- `build_messages(question, history)` with no context produces identical output to today (no regression)
+- `build_messages(question, history, context)` with a non-empty context prepends the doc block to the user turn
 
 ### `tests/test_routes.py` (modified)
 
-- Existing tests unchanged (`retrieve_context` mocked to return `""`)
-- New test: mock `retrieve_context` returning non-empty context, assert it appears in messages passed to `client.messages.create`
+All existing tests get an `autouse` fixture in `conftest.py` that mocks `app.retrieve_context` to return `""`:
+
+```python
+@pytest.fixture(autouse=True)
+def mock_retrieval(monkeypatch):
+    monkeypatch.setattr("app.retrieve_context", lambda q: "")
+```
+
+New test: mock `retrieve_context` to return a non-empty doc block, assert the doc block appears in the `messages` argument passed to `client.messages.create`.
 
 ### E2E
 
-No Playwright changes — retrieval quality is validated manually via Convex eval records.
+No Playwright changes — retrieval quality is validated manually via the Convex evaluations table.
