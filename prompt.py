@@ -35,11 +35,17 @@ Rules:
 """
 
 
-def build_messages(user_question: str, history: list[dict] | None = None) -> list[dict]:
+def build_messages(
+    question: str,
+    history: list | None = None,
+    context: str = "",
+) -> list:
     """Build the messages array for the Claude API call.
 
     history is a list of prior {role, content} turns (user + assistant alternating).
+    context is an optional retrieved-docs block prepended to the user's question.
     """
+    user_content = f"{context}\n\n{question}".strip() if context else question
     messages = list(history or [])
-    messages.append({"role": "user", "content": user_question})
+    messages.append({"role": "user", "content": user_content})
     return messages
