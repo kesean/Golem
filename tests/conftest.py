@@ -92,3 +92,14 @@ def mock_jwks(monkeypatch):
     """Patch _fetch_jwks so auth succeeds without a real Clerk endpoint."""
     import app as app_module
     monkeypatch.setattr(app_module, "_fetch_jwks", lambda: FAKE_JWKS)
+
+
+@pytest.fixture(autouse=True)
+def mock_retrieval(monkeypatch):
+    """Mock retrieve_context to return "" in all route tests.
+
+    Prevents tests from requiring real Qdrant/Voyage credentials.
+    Override in individual tests via patch("app.retrieve_context", ...) when needed.
+    """
+    import app as app_module
+    monkeypatch.setattr(app_module, "retrieve_context", lambda q: "", raising=False)

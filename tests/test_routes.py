@@ -106,3 +106,22 @@ def test_response_includes_token_usage_and_latency(client, mock_jwks, valid_toke
     assert data["output_tokens"] == 100
     assert isinstance(data["latency_ms"], int)
     assert data["latency_ms"] >= 0
+
+
+# ── Context injection ─────────────────────────────────────────────────────────
+
+def test_retrieved_context_is_prepended_to_user_message(client, mock_jwks, valid_token):
+    """When retrieve_context returns a doc block, it appears in messages sent to Claude."""
+    xml = "<product_tag>Authentication</product_tag><summary>Test</summary>"
+    doc_block = "--- RETRIEVED DOCS ---\n[Clerk - docs/auth.md]\nSome info.\n--- END DOCS ---"
+    with patch("app.client.messages.create", return_value=_fake_message(xml)) as mock_create, \
+         patch("app.retrieve_context", return_value=doc_block):
+        client.post(
+            "/ask",
+            json={"question": "How do I verify a session?"},
+            headers=_auth_headers(valid_token),
+        )
+    messages = mock_create.call_args.kwargs["messages"]
+    user_content = messages[-1]["content"]
+    assert "--- RETRIEVED DOCS ---" in user_content
+    assert "How do I verify a session?" in user_content

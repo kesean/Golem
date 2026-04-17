@@ -16,6 +16,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 import jwt
 from prompt import SYSTEM_PROMPT, build_messages
+from retrieval import retrieve_context
 
 load_dotenv()
 
@@ -146,11 +147,12 @@ def ask():
         return jsonify({"error": "Invalid history format"}), 400
 
     start = time.time()
+    context = retrieve_context(question)
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=2048,
         system=SYSTEM_PROMPT,
-        messages=build_messages(question, history),
+        messages=build_messages(question, history, context),
     )
     latency_ms = round((time.time() - start) * 1000)
 
