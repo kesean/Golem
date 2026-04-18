@@ -39,7 +39,7 @@ dev-support-chatbot/
 - Use `python-dotenv` to load `.env` — never hardcode API keys
 - Prefer readable code over clever code — this is a learning project
 - Keep commit messages short and direct
-- Break each step down into a User story. Review the user story with the User. Then create Git commit and push to GitHub only after getting user approval
+- Break each step down into a User story. Review the user story with the User.
 
 ## Important Commands
 ```bash
