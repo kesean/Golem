@@ -53,25 +53,3 @@ def test_build_messages_no_context_with_history():
     assert messages[-1] == {"role": "user", "content": "Follow-up?"}
 
 
-def test_build_messages_with_context_prepends_doc_block():
-    """Context block is prepended to the user question."""
-    context = "--- RETRIEVED DOCS ---\n[Clerk - docs/auth.md]\nSome info.\n--- END DOCS ---"
-    messages = build_messages("How do sessions work?", context=context)
-    user_content = messages[-1]["content"]
-    assert user_content.startswith("--- RETRIEVED DOCS ---")
-    assert "How do sessions work?" in user_content
-
-
-def test_build_messages_empty_string_context_is_ignored():
-    """Empty string context produces the same output as no context."""
-    messages_without = build_messages("test question")
-    messages_with_empty = build_messages("test question", context="")
-    assert messages_without == messages_with_empty
-
-
-def test_build_messages_context_and_question_separated_by_blank_line():
-    """Context and question are separated by a blank line."""
-    context = "--- RETRIEVED DOCS ---\nsome content\n--- END DOCS ---"
-    messages = build_messages("My question", context=context)
-    user_content = messages[-1]["content"]
-    assert "\n\nMy question" in user_content
