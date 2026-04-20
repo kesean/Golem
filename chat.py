@@ -96,11 +96,12 @@ def run(question: str, history: list) -> dict:
         output_tokens += message.usage.output_tokens
 
         if message.stop_reason == "end_turn":
-            if not message.content:
-                raise RuntimeError("No response from model")
+            text_block = next((b for b in message.content if b.type == "text"), None)
+            if not text_block:
+                raise RuntimeError("No text in model response")
             latency_ms = round((time.time() - start) * 1000)
             return {
-                "response": message.content[0].text,
+                "response": text_block.text,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "latency_ms": latency_ms,
