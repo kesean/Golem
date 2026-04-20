@@ -73,6 +73,8 @@ def _fetch_clerk(endpoint: str, params: dict | None) -> str:
         clerk_domain = os.getenv("CLERK_DOMAIN")
         if not clerk_domain:
             return "Error: missing CLERK_DOMAIN environment variable (required for JWKS URL)."
+        if "/" in clerk_domain or "?" in clerk_domain:
+            return "Error: CLERK_DOMAIN must be a bare hostname (e.g. myapp.clerk.accounts.dev)."
         url = url.replace("{clerk_domain}", clerk_domain)
 
     return _do_get(url, headers={"Authorization": f"Bearer {secret_key}"}, params=params)

@@ -9,6 +9,17 @@ import api_lookup
 
 
 # ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def mock_httpx_get():
+    """Patch httpx.get for tests that need to assert it was not called."""
+    with patch("httpx.get") as mock_get:
+        yield mock_get
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -36,7 +47,6 @@ def _mock_response(status_code: int, json_data: dict) -> MagicMock:
 def test_clerk_errors_returns_string_with_data(monkeypatch):
     """Happy path: Clerk errors endpoint returns formatted string with response data."""
     monkeypatch.setenv("CLERK_SECRET_KEY", "sk_test_abc123")
-    monkeypatch.setenv("CLERK_DOMAIN", "test.clerk.dev")
 
     mock_resp = _mock_response(200, {"errors": [{"code": "E001", "message": "test error"}]})
 
@@ -103,7 +113,7 @@ def test_unknown_endpoint_returns_error_no_http_call(monkeypatch):
         result = api_lookup.fetch("clerk", "not_a_real_endpoint")
 
     assert isinstance(result, str)
-    assert "error" in result.lower() or "unknown" in result.lower() or "not" in result.lower()
+    assert "unknown" in result.lower()
     mock_get.assert_not_called()
 
 
@@ -157,3 +167,26 @@ def test_missing_clerk_secret_key_returns_error_no_http_call(monkeypatch):
     assert isinstance(result, str)
     assert "error" in result.lower() or "missing" in result.lower() or "key" in result.lower()
     mock_get.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test 8: Missing ANTHROPIC_API_KEY for Anthropic call returns error string (no HTTP call)
+# ---------------------------------------------------------------------------
+
+def test_missing_anthropic_api_key_returns_error_no_http_call(monkeypatch, mock_httpx_get):
+    """Missing ANTHROPIC_API_KEY returns error string without making an HTTP call."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    result = api_lookup.fetch("anthropic", "models")
+    assert "error" in result.lower()
+    mock_httpx_get.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Unknown service argument returns error string (no HTTP call)
+# ---------------------------------------------------------------------------
+
+def test_unknown_service_returns_error_string(mock_httpx_get):
+    """Unknown service argument returns error string without making any HTTP call."""
+    result = api_lookup.fetch("openai", "models")
+    assert "error" in result.lower()
+    mock_httpx_get.assert_not_called()
