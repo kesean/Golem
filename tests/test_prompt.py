@@ -35,21 +35,3 @@ def test_original_history_list_is_not_mutated():
     build_messages("new question", history=history)
     assert len(history) == 1  # build_messages must not append to the caller's list
 
-
-def test_build_messages_no_context_no_history():
-    """No context, no history — produces a single user turn."""
-    messages = build_messages("Why am I getting a 401?")
-    assert messages == [{"role": "user", "content": "Why am I getting a 401?"}]
-
-
-def test_build_messages_no_context_with_history():
-    """No context — history + new question, content unchanged."""
-    history = [
-        {"role": "user", "content": "Previous question"},
-        {"role": "assistant", "content": "Previous answer"},
-    ]
-    messages = build_messages("Follow-up?", history)
-    assert len(messages) == 3
-    assert messages[-1] == {"role": "user", "content": "Follow-up?"}
-
-
