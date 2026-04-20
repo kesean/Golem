@@ -13,3 +13,5 @@ venv/
 frontend/node_modules/
 frontend/dist/
 
+.superpowers/
+.worktrees/

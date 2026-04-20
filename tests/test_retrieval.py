@@ -79,3 +79,40 @@ def test_returns_empty_string_when_qdrant_raises(monkeypatch):
     monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
 
     assert retrieval.retrieve_context("some question") == ""
+
+
+def test_source_filter_passed_to_qdrant_when_provided(monkeypatch):
+    """When source='clerk' is passed, query_points is called with a filter on source == 'clerk'."""
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = []
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    retrieval.retrieve_context("How do I verify a session?", source="clerk")
+
+    call_kwargs = mock_qdrant.query_points.call_args.kwargs
+    query_filter = call_kwargs.get("query_filter")
+    assert query_filter is not None
+    expected_filter = Filter(
+        must=[FieldCondition(key="source", match=MatchValue(value="clerk"))]
+    )
+    assert query_filter == expected_filter
+
+
+def test_no_filter_when_source_is_none(monkeypatch):
+    """When source=None (default), query_points is called with query_filter=None."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = []
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    retrieval.retrieve_context("some question", source=None)
+
+    call_kwargs = mock_qdrant.query_points.call_args.kwargs
+    assert call_kwargs.get("query_filter") is None

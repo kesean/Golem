@@ -1,19 +1,20 @@
 """test_routes.py — Integration tests for the /ask route."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 def _auth_headers(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-def _fake_message(text, input_tokens=10, output_tokens=20):
-    """Return a mock object matching the shape of anthropic.types.Message."""
-    msg = MagicMock()
-    msg.content = [MagicMock(text=text)]
-    msg.usage.input_tokens = input_tokens
-    msg.usage.output_tokens = output_tokens
-    return msg
+def _fake_chat_result(text, input_tokens=10, output_tokens=20, latency_ms=42):
+    """Return a dict matching the shape of chat.run()'s return value."""
+    return {
+        "response": text,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "latency_ms": latency_ms,
+    }
 
 
 # ── Input validation ──────────────────────────────────────────────────────────
@@ -60,7 +61,7 @@ def test_invalid_history_format_returns_400(client, mock_jwks, valid_token):
 
 def test_valid_request_returns_json_response(client, mock_jwks, valid_token):
     xml = "<product_tag>Authentication</product_tag><summary>Test</summary>"
-    with patch("app.client.messages.create", return_value=_fake_message(xml)):
+    with patch("app.chat_run", return_value=_fake_chat_result(xml)):
         resp = client.post(
             "/ask",
             json={"question": "Why am I getting a 401?"},
@@ -74,27 +75,27 @@ def test_valid_request_returns_json_response(client, mock_jwks, valid_token):
     assert "Test" in data["response"]
 
 
-def test_history_is_forwarded_to_anthropic(client, mock_jwks, valid_token):
+def test_history_is_forwarded_to_chat_run(client, mock_jwks, valid_token):
     history = [
         {"role": "user", "content": "Previous question"},
         {"role": "assistant", "content": "Previous answer"},
     ]
     xml = "<product_tag>Other</product_tag><summary>ok</summary>"
-    with patch("app.client.messages.create", return_value=_fake_message(xml)) as mock_create:
+    with patch("app.chat_run", return_value=_fake_chat_result(xml)) as mock_run:
         client.post(
             "/ask",
             json={"question": "Follow-up?", "history": history},
             headers=_auth_headers(valid_token),
         )
-    messages = mock_create.call_args.kwargs["messages"]
-    assert messages[0] == {"role": "user", "content": "Previous question"}
-    assert messages[-1] == {"role": "user", "content": "Follow-up?"}
-    assert len(messages) == 3
+    _, call_history = mock_run.call_args.args
+    assert call_history[0] == {"role": "user", "content": "Previous question"}
+    assert call_history[1] == {"role": "assistant", "content": "Previous answer"}
+    assert len(call_history) == 2
 
 
 def test_response_includes_token_usage_and_latency(client, mock_jwks, valid_token):
     xml = "<product_tag>Authentication</product_tag><summary>Test</summary>"
-    with patch("app.client.messages.create", return_value=_fake_message(xml, input_tokens=50, output_tokens=100)):
+    with patch("app.chat_run", return_value=_fake_chat_result(xml, input_tokens=50, output_tokens=100, latency_ms=77)):
         resp = client.post(
             "/ask",
             json={"question": "Why am I getting a 401?"},
@@ -108,20 +109,14 @@ def test_response_includes_token_usage_and_latency(client, mock_jwks, valid_toke
     assert data["latency_ms"] >= 0
 
 
-# ── Context injection ─────────────────────────────────────────────────────────
-
-def test_retrieved_context_is_prepended_to_user_message(client, mock_jwks, valid_token):
-    """When retrieve_context returns a doc block, it appears in messages sent to Claude."""
-    xml = "<product_tag>Authentication</product_tag><summary>Test</summary>"
-    doc_block = "--- RETRIEVED DOCS ---\n[Clerk - docs/auth.md]\nSome info.\n--- END DOCS ---"
-    with patch("app.client.messages.create", return_value=_fake_message(xml)) as mock_create, \
-         patch("app.retrieve_context", return_value=doc_block):
-        client.post(
+def test_chat_run_runtime_error_returns_502(client, mock_jwks, valid_token):
+    """RuntimeError from chat.run() produces a 502 with the error message."""
+    with patch("app.chat_run", side_effect=RuntimeError("No response from model")):
+        resp = client.post(
             "/ask",
-            json={"question": "How do I verify a session?"},
+            json={"question": "Why am I getting a 401?"},
             headers=_auth_headers(valid_token),
         )
-    messages = mock_create.call_args.kwargs["messages"]
-    user_content = messages[-1]["content"]
-    assert "--- RETRIEVED DOCS ---" in user_content
-    assert "How do I verify a session?" in user_content
+    assert resp.status_code == 502
+    data = resp.get_json()
+    assert data["error"] == "No response from model"

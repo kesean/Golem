@@ -1,7 +1,7 @@
 """
 retrieval.py — Qdrant + Voyage AI context lookup.
 
-Exposes retrieve_context(question) -> str.
+Exposes retrieve_context(question, top_k, source) -> str.
 Returns a formatted doc block on success, "" on any failure.
 Clients initialized once at import time; None when env vars are absent.
 """
@@ -33,27 +33,36 @@ if _voyage_api_key:
 COLLECTION = "dev_support_docs"
 
 
-def retrieve_context(question: str, top_k: int = 5) -> str:
-    """Embed question, query Qdrant, return formatted doc block or "" on failure."""
+def retrieve_context(question: str, top_k: int = 5, source: str | None = None) -> str:
+    """Embed question, query Qdrant, return formatted doc block or "" on failure.
+
+    source: 'clerk' | 'mdn' | None (search all).
+    """
     if _qdrant is None or _voyage is None:
         logging.warning("retrieve_context: client(s) not initialized — skipping")
         return ""
     try:
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+
         result = _voyage.embed([question], model="voyage-3.5-lite", input_type="query")
         vector = result.embeddings[0]
+        query_filter = Filter(
+            must=[FieldCondition(key="source", match=MatchValue(value=source))]
+        ) if source else None
         hits = _qdrant.query_points(
             collection_name=COLLECTION,
             query=vector,
             limit=top_k,
+            query_filter=query_filter,
         ).points
         if not hits:
             return ""
         lines = ["--- RETRIEVED DOCS ---"]
         for hit in hits:
-            source = hit.payload.get("source", "")
+            hit_source = hit.payload.get("source", "")
             path = hit.payload.get("repo_path", "")
             text = hit.payload.get("text", "")
-            lines.append(f"[{source} - {path}]")
+            lines.append(f"[{hit_source} - {path}]")
             lines.append(text)
             lines.append("")
         lines.append("--- END DOCS ---")
