@@ -1,7 +1,7 @@
 """
 retrieval.py — Qdrant + Voyage AI context lookup.
 
-Exposes retrieve_context(question) -> str.
+Exposes retrieve_context(question, top_k, source) -> str.
 Returns a formatted doc block on success, "" on any failure.
 Clients initialized once at import time; None when env vars are absent.
 """
@@ -59,10 +59,10 @@ def retrieve_context(question: str, top_k: int = 5, source: str | None = None) -
             return ""
         lines = ["--- RETRIEVED DOCS ---"]
         for hit in hits:
-            source = hit.payload.get("source", "")
+            hit_source = hit.payload.get("source", "")
             path = hit.payload.get("repo_path", "")
             text = hit.payload.get("text", "")
-            lines.append(f"[{source} - {path}]")
+            lines.append(f"[{hit_source} - {path}]")
             lines.append(text)
             lines.append("")
         lines.append("--- END DOCS ---")
