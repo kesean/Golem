@@ -129,8 +129,7 @@ def run(question: str, history: list) -> dict:
             round_count += 1
             if round_count >= MAX_TOOL_ROUNDS:
                 raise RuntimeError("tool loop exceeded MAX_TOOL_ROUNDS")
-
-            continue
+            continue  # loop back; skip the fallthrough raise below
 
         # Unexpected stop_reason — treat as no content
         raise RuntimeError("No response from model")
