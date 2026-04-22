@@ -74,6 +74,38 @@ cd frontend && npm run dev
 
 Open [http://localhost:5173](http://localhost:5173).
 
+## Deploying
+
+The frontend deploys to Vercel. All deployment operations are managed from the repo root via `make`.
+
+**One-time setup** (after cloning, requires [Vercel CLI](https://vercel.com/docs/cli)):
+
+```bash
+npm i -g vercel
+vercel link    # when prompted, set Root Directory → frontend
+```
+
+This creates `.vercel/project.json` at the repo root (gitignored). All `make` targets depend on it.
+
+**Deploy commands:**
+
+| Command | What it does |
+|---------|-------------|
+| `make deploy-dev` | Deploy preview from `dev` branch |
+| `make deploy-pre` | Deploy preview from `preview` branch |
+| `make deploy-prod` | Deploy to production (from `main`) |
+| `make status` | List recent deployments across all environments |
+| `make logs URL=<deployment-url>` | Tail logs for a specific deployment |
+| `make open` | Open the project dashboard on vercel.com |
+
+Branch → environment mapping:
+
+| Branch | Vercel environment |
+|--------|--------------------|
+| `dev` | Preview |
+| `preview` | Preview |
+| `main` | Production |
+
 ## Project phases
 
 ### Phase 1 — Basic app
