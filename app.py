@@ -12,10 +12,9 @@ from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from anthropic import Anthropic
 from dotenv import load_dotenv
 import jwt
-from prompt import SYSTEM_PROMPT, build_messages
+from chat import run as chat_run
 
 load_dotenv()
 
@@ -36,8 +35,6 @@ limiter = Limiter(
     default_limits=[],
     storage_uri=_redis_url if _redis_url else "memory://",
 )
-client = Anthropic()  # Reads ANTHROPIC_API_KEY from environment automatically
-
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
 
 
@@ -127,7 +124,7 @@ def require_auth(f):
 def ask():
     """
     Accepts a JSON body: { "question": "...", "history": [...] }
-    Returns a JSON response: { "response": "<xml>..." }
+    Returns a JSON response: { "response": "<xml>...", "input_tokens": int, "output_tokens": int, "latency_ms": int }
     """
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
@@ -145,16 +142,11 @@ def ask():
     if not isinstance(history, list):
         return jsonify({"error": "Invalid history format"}), 400
 
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        messages=build_messages(question, history),
-    )
-
-    if not message.content:
-        return jsonify({"error": "No response from model"}), 502
-    return jsonify({"response": message.content[0].text})
+    try:
+        result = chat_run(question, history)
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 502
+    return jsonify(result)
 
 
 if __name__ == "__main__":

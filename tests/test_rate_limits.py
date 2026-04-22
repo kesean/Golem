@@ -1,21 +1,19 @@
 """test_rate_limits.py — Tests for per-user and global rate limits on /ask."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 def _auth_headers(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-def _fake_message(text="<summary>ok</summary>"):
-    msg = MagicMock()
-    msg.content = [MagicMock(text=text)]
-    return msg
+def _fake_chat_result(text="<summary>ok</summary>"):
+    return {"response": text, "input_tokens": 10, "output_tokens": 20, "latency_ms": 42}
 
 
 def test_per_user_limit_returns_429_after_10_requests(rate_limited_client, mock_jwks, valid_token):
     """The 11th request from the same user in a day should return 429."""
-    with patch("app.client.messages.create", return_value=_fake_message()):
+    with patch("app.chat_run", return_value=_fake_chat_result()):
         for _ in range(10):
             resp = rate_limited_client.post(
                 "/ask",
@@ -39,7 +37,7 @@ def test_global_limit_returns_429_after_70_requests(rate_limited_client, mock_jw
     Each request uses a unique IP and a unique user sub so that neither the
     per-IP (20/min) nor per-user (10/day) limits fire before the global cap.
     """
-    with patch("app.client.messages.create", return_value=_fake_message()):
+    with patch("app.chat_run", return_value=_fake_chat_result()):
         for i, token in enumerate(conftest_tokens[:70]):
             resp = rate_limited_client.post(
                 "/ask",

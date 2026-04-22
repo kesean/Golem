@@ -92,3 +92,5 @@ def mock_jwks(monkeypatch):
     """Patch _fetch_jwks so auth succeeds without a real Clerk endpoint."""
     import app as app_module
     monkeypatch.setattr(app_module, "_fetch_jwks", lambda: FAKE_JWKS)
+
+

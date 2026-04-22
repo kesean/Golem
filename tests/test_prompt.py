@@ -34,3 +34,4 @@ def test_original_history_list_is_not_mutated():
     history = [{"role": "user", "content": "q"}]
     build_messages("new question", history=history)
     assert len(history) == 1  # build_messages must not append to the caller's list
+

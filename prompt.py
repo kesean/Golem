@@ -35,11 +35,11 @@ Rules:
 """
 
 
-def build_messages(user_question: str, history: list[dict] | None = None) -> list[dict]:
+def build_messages(question: str, history: list | None = None) -> list:
     """Build the messages array for the Claude API call.
 
     history is a list of prior {role, content} turns (user + assistant alternating).
     """
     messages = list(history or [])
-    messages.append({"role": "user", "content": user_question})
+    messages.append({"role": "user", "content": question})
     return messages

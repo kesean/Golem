@@ -26,7 +26,11 @@
       "Bash(git fetch:*)",
       "Bash(git reset:*)",
       "Bash(git stash:*)",
-      "Bash(python -m pytest tests/test_rate_limits.py -v)"
+      "Bash(python -m pytest tests/test_rate_limits.py -v)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pip3 install *)",
+      "Bash(npx vitest *)"
     ]
   }
 }
