@@ -1,24 +1,19 @@
-VERCEL = vercel --cwd frontend --yes
-
 .PHONY: deploy-dev deploy-pre deploy-prod status logs open
 
 deploy-dev:
-	$(VERCEL) pull --environment=preview
-	$(VERCEL) deploy
+	vercel deploy
 
 deploy-pre:
-	$(VERCEL) pull --environment=preview
-	$(VERCEL) deploy
+	vercel deploy
 
 deploy-prod:
-	$(VERCEL) pull --environment=production
-	$(VERCEL) deploy --prod
+	vercel deploy --prod
 
 status:
-	cd frontend && vercel ls
+	vercel ls
 
 logs:
-	cd frontend && vercel logs $(URL)
+	vercel logs $(URL)
 
 open:
-	cd frontend && vercel open
+	vercel open
