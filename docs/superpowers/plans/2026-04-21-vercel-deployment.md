@@ -53,25 +53,28 @@ git commit -m "chore: ignore .vercel/ directory"
 ### Task 2: Link the project to Vercel
 
 **Files:**
-- Creates: `frontend/.vercel/project.json` (gitignored)
+- Creates: `.vercel/project.json` at repo root (gitignored)
 
-- [ ] **Step 1: Run `vercel link` inside `frontend/`**
+- [ ] **Step 1: Run `vercel link` from the repo root**
 
 ```bash
-cd frontend && vercel link
+vercel link
 ```
 
 Follow the prompts:
-- Link to existing project or create new → **Create new project**
+- Link to existing project or create new → **Create new project** (or link existing)
 - Project name → accept default or set to `dev-support-chatbot`
 - Which scope → your personal account or team
+- Root Directory → enter `frontend`
 
-Expected: `.vercel/project.json` created inside `frontend/`
+Expected: `.vercel/project.json` created at the repo root
 
-- [ ] **Step 2: Confirm `project.json` exists and contains org + project IDs**
+> **Important:** Run from the repo root, not from inside `frontend/`. The Makefile runs `vercel` commands from the repo root, so `project.json` must be there. If you run `vercel link` from `frontend/`, commands will fail.
+
+- [ ] **Step 2: Confirm `project.json` exists at repo root and contains org + project IDs**
 
 ```bash
-cat frontend/.vercel/project.json
+cat .vercel/project.json
 ```
 
 Expected output (values will differ):
@@ -85,7 +88,7 @@ Expected output (values will differ):
 - [ ] **Step 3: Verify `.vercel/` is gitignored**
 
 ```bash
-git status frontend/.vercel
+git status .vercel
 ```
 
 Expected: nothing listed (directory is ignored)

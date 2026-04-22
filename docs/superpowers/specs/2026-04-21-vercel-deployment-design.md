@@ -43,30 +43,25 @@ Branch → environment mapping is handled by Vercel's Git integration configured
 ### `Makefile` (repo root)
 
 ```makefile
-VERCEL = vercel --cwd frontend --yes
-
 .PHONY: deploy-dev deploy-pre deploy-prod status logs open
 
 deploy-dev:
-	$(VERCEL) pull --environment=preview
-	$(VERCEL) deploy
+	vercel deploy
 
 deploy-pre:
-	$(VERCEL) pull --environment=preview
-	$(VERCEL) deploy
+	vercel deploy
 
 deploy-prod:
-	$(VERCEL) pull --environment=production
-	$(VERCEL) deploy --prod
+	vercel deploy --prod
 
 status:
-	$(VERCEL) ls
+	vercel ls
 
 logs:
-	$(VERCEL) logs $(URL)
+	vercel logs $(URL)
 
 open:
-	$(VERCEL) open
+	vercel open
 ```
 
 Usage:
@@ -79,7 +74,7 @@ make logs URL=https://dev-<project>.vercel.app
 make open
 ```
 
-`vercel pull` runs before each deploy to sync the correct environment variables locally before the build.
+All `vercel` commands run from the repo root using `.vercel/project.json` at the repo root (see One-Time Setup).
 
 `deploy-dev` and `deploy-pre` issue identical CLI commands. Vercel resolves which named Preview environment to target from the current git branch — running `make deploy-dev` from the `dev` branch targets the "dev" environment automatically.
 
@@ -89,17 +84,18 @@ make open
 
 1. **Install Vercel CLI** — `npm i -g vercel` ✓
 2. **Set token** — `VERCEL_TOKEN` added to `.bashrc` ✓
-3. **Link project** — run `vercel link` inside `frontend/` to create `.vercel/project.json`
-   - This file contains `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` — needed by the CLI
-   - `.vercel/` is gitignored; each developer runs `vercel link` once locally
+3. **Link project** — run `vercel link` from the **repo root** (not from `frontend/`)
+   - Creates `.vercel/project.json` at the repo root with `orgId` and `projectId`
+   - When prompted for Root Directory, enter `frontend`
+   - `.vercel/` is gitignored; each developer runs this once after cloning
+
+> **Why repo root?** The Makefile runs `vercel` commands from the repo root. Vercel looks for `.vercel/project.json` in the current directory to identify the project. Running `vercel link` inside `frontend/` creates the file in the wrong location.
 
 ---
 
 ## Environment Variables
 
 Frontend env vars (`VITE_CLERK_PUBLISHABLE_KEY`, `VITE_CONVEX_URL`) must be set per environment in the Vercel dashboard or via `vercel env add`. Each environment (Development, Preview, Production) gets its own values.
-
-`vercel pull` syncs these to a local `.env.vercel` file before each build.
 
 ---
 
