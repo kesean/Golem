@@ -30,7 +30,11 @@
       "Bash(python *)",
       "Bash(python3 *)",
       "Bash(pip3 install *)",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "Bash(git -C /home/kesean/Workspace/dev-support-chatbot stash pop)",
+      "Bash(git -C /home/kesean/Workspace/dev-support-chatbot rebase origin/main --)",
+      "Bash(git -C /home/kesean/Workspace/dev-support-chatbot merge origin/main --no-edit)",
+      "Bash(git -C /home/kesean/Workspace/dev-support-chatbot show origin/main:tests/test_chat.py)"
     ]
   }
 }
