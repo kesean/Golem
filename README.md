@@ -188,7 +188,8 @@ Branch → environment mapping:
 | Global daily cap: 70 requests/day across all users | ✅ Done |
 | CORS scoped to Vercel frontend origin | ✅ Done |
 | Flask backend deployed to Railway (with Redis add-on) | ✅ Done |
-| Frontend deployed to Vercel (Vite static build) | ✅ Done |
+| Frontend deployed to Vercel — Dev / Pre / Prod environments | ✅ Done |
+| Makefile targets for terminal-driven deployments (`deploy-dev`, `deploy-pre`, `deploy-prod`, `status`, `logs`, `open`) | ✅ Done |
 | Production environment variables configured (no secrets in code) | ✅ Done |
 
 ---
@@ -199,25 +200,24 @@ Branch → environment mapping:
 
 | Feature | Status |
 |---------|--------|
-| Log token usage + latency on every `/ask` request | 🔲 Planned |
-| Convex eval table (query, response, latency, user feedback) | 🔲 Planned |
+| Log token usage + latency on every `/ask` request | ✅ Done |
+| Convex eval table (query, response, latency, user feedback) | ✅ Done |
 
 ### V2b — Retrieval-Augmented Generation (RAG)
 
 | Feature | Status |
 |---------|--------|
-| Embed Anthropic + Clerk documentation chunks | 🔲 Planned |
-| Vector store (pgvector or Qdrant) | 🔲 Planned |
-| Top-k retrieval injected into system prompt | 🔲 Planned |
-| Orchestration layer with query classifier + routing logic | 🔲 Planned |
+| Embed Clerk documentation chunks into Qdrant vector store | ✅ Done |
+| Voyage AI embeddings + Qdrant Cloud vector search | ✅ Done |
+| Top-k retrieval via `retrieve_docs` tool | ✅ Done |
 
 ### V2c — Tool use
 
 | Feature | Status |
 |---------|--------|
-| `retrieve_docs()` tool backed by vector search | 🔲 Planned |
-| `api_lookup()` tool for live status / reference data | 🔲 Planned |
-| LLM decides which tools to call per query | 🔲 Planned |
+| `retrieve_docs()` tool backed by Qdrant vector search | ✅ Done |
+| `api_lookup()` tool for live Clerk + Anthropic API data | ✅ Done |
+| `chat.py` tool loop — LLM decides which tools to call | ✅ Done |
 
 ### V2d — Frontend upgrade
 
