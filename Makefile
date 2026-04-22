@@ -15,10 +15,10 @@ deploy-prod:
 	$(VERCEL) deploy --prod
 
 status:
-	$(VERCEL) ls
+	cd frontend && vercel ls
 
 logs:
-	$(VERCEL) logs $(URL)
+	cd frontend && vercel logs $(URL)
 
 open:
-	$(VERCEL) open
+	cd frontend && vercel open
