@@ -55,7 +55,17 @@ jobs:
       - name: Promote to production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: team_S5nJhqlEvCz547mFiouIbLA0
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           PREVIEW_URL: ${{ github.event.deployment_status.target_url }}
-        run: npx vercel promote "$PREVIEW_URL" --token="$VERCEL_TOKEN" --yes
+        run: |
+          TEAM_ID="team_S5nJhqlEvCz547mFiouIbLA0"
+          # Strip https:// for the URL query param
+          URL_PARAM="${PREVIEW_URL#https://}"
+          DEPLOY_ID=$(curl -sf \
+            "https://api.vercel.com/v13/deployments?url=$URL_PARAM&teamId=$TEAM_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['deployments'][0]['uid'])")
+          echo "Promoting deployment $DEPLOY_ID to production..."
+          curl -sf -X POST \
+            "https://api.vercel.com/v10/deployments/$DEPLOY_ID/promote?teamId=$TEAM_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json"
