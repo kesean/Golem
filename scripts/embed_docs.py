@@ -45,7 +45,7 @@ CHUNK_SIZE = 500
 CHUNK_TOKENS = CHUNK_SIZE   # alias used by tests and external callers
 OVERLAP = 50
 VOYAGE_BATCH = 128
-VECTOR_DIM = 512     # voyage-3.5-lite default
+VECTOR_DIM = 1024    # voyage-3.5-lite actual output dimension
 
 # ── Clerk file list ───────────────────────────────────────────────────────────
 
@@ -168,14 +168,20 @@ def embed_in_batches(texts: list[str], voyage: voyageai.Client) -> list[list[flo
 
 def ensure_collection(qdrant: QdrantClient) -> None:
     existing = [c.name for c in qdrant.get_collections().collections]
-    if COLLECTION not in existing:
-        qdrant.create_collection(
-            collection_name=COLLECTION,
-            vectors_config=VectorParams(size=VECTOR_DIM, distance=Distance.COSINE),
-        )
-        logging.info("Created collection '%s'", COLLECTION)
-    else:
-        logging.info("Collection '%s' already exists — upserting", COLLECTION)
+    if COLLECTION in existing:
+        info = qdrant.get_collection(COLLECTION)
+        actual_dim = info.config.params.vectors.size
+        if actual_dim != VECTOR_DIM:
+            logging.info("Collection '%s' has wrong dimension (%d vs %d) — recreating", COLLECTION, actual_dim, VECTOR_DIM)
+            qdrant.delete_collection(COLLECTION)
+        else:
+            logging.info("Collection '%s' already exists — upserting", COLLECTION)
+            return
+    qdrant.create_collection(
+        collection_name=COLLECTION,
+        vectors_config=VectorParams(size=VECTOR_DIM, distance=Distance.COSINE),
+    )
+    logging.info("Created collection '%s'", COLLECTION)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
