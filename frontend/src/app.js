@@ -337,12 +337,14 @@ export async function askQuestion() {
 
     activeHistoryId = await saveToHistory(question, response)
     if (_convex) {
-      _currentEvalId = await _convex.mutation(api.evals.createEval, {
+      _convex.mutation(api.evals.createEval, {
         question,
         response,
         latency_ms,
         input_tokens,
         output_tokens,
+      }).then(id => { _currentEvalId = id }).catch(err => {
+        console.error('[eval] createEval failed:', err)
       })
     }
     _resetFeedback()
