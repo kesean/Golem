@@ -4,11 +4,31 @@ on:
   deployment_status:
 
 jobs:
-  e2e-and-promote:
+  check-branch:
     if: >
       github.event.deployment_status.state == 'success' &&
-      github.event.deployment.environment == 'Preview' &&
-      github.event.deployment.ref == 'main'
+      github.event.deployment.environment == 'Preview'
+    runs-on: ubuntu-latest
+    outputs:
+      is_main: ${{ steps.check.outputs.is_main }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - id: check
+        env:
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+        run: |
+          if [ "$(git rev-parse HEAD)" = "$DEPLOY_SHA" ]; then
+            echo "is_main=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_main=false" >> $GITHUB_OUTPUT
+          fi
+
+  e2e-and-promote:
+    needs: check-branch
+    if: needs.check-branch.outputs.is_main == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +52,8 @@ jobs:
           BASE_URL: ${{ github.event.deployment_status.target_url }}
 
       - name: Promote to production
-        run: npx vercel promote ${{ github.event.deployment_status.target_url }} --token=${{ secrets.VERCEL_TOKEN }} --yes
         env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          PREVIEW_URL: ${{ github.event.deployment_status.target_url }}
+        run: npx vercel promote "$PREVIEW_URL" --token="$VERCEL_TOKEN" --yes
