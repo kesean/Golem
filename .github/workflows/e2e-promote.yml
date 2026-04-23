@@ -1,0 +1,37 @@
+name: E2E → promote
+
+on:
+  deployment_status:
+
+jobs:
+  e2e-and-promote:
+    if: >
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment.environment == 'Preview' &&
+      github.event.deployment.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e tests against preview
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          BASE_URL: ${{ github.event.deployment_status.target_url }}
+
+      - name: Promote to production
+        run: npx vercel promote ${{ github.event.deployment_status.target_url }} --token=${{ secrets.VERCEL_TOKEN }} --yes
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

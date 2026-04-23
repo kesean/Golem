@@ -18,3 +18,12 @@ frontend/dist/
 .vercel/
 .superpowers/
 .worktrees/
+
+# Claude Code
+.claude/worktrees/
+.claude/settings.local.json
+
+# Artifacts
+.coverage
+=*
+frontend/test-results/

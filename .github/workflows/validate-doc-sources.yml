@@ -1,0 +1,25 @@
+name: Validate doc sources
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Every Monday at 9am UTC
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Check source file paths
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install httpx python-dotenv
+
+      - name: Validate source paths
+        run: python scripts/embed_docs.py --validate-only
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

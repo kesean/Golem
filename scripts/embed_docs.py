@@ -33,9 +33,9 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # ── Required env vars ─────────────────────────────────────────────────────────
 
-QDRANT_URL = os.environ["QDRANT_URL"]
-QDRANT_API_KEY = os.environ["QDRANT_API_KEY"]
-VOYAGE_API_KEY = os.environ["VOYAGE_API_KEY"]
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -50,12 +50,12 @@ VECTOR_DIM = 512     # voyage-3.5-lite default
 # ── Clerk file list ───────────────────────────────────────────────────────────
 
 CLERK_FILES = [
-    "docs/authentication/overview.mdx",
-    "docs/authentication/session-tokens.mdx",
-    "docs/authentication/jwt-templates.mdx",
-    "docs/backend-requests/overview.mdx",
-    "docs/backend-requests/handling.mdx",
-    "docs/errors/overview.mdx",
+    "docs/guides/how-clerk-works/overview.mdx",
+    "docs/guides/sessions/session-tokens.mdx",
+    "docs/guides/sessions/jwt-templates.mdx",
+    "docs/reference/backend/overview.mdx",
+    "docs/reference/backend/authenticate-request.mdx",
+    "docs/reference/backend/verify-token.mdx",
 ]
 
 # ── MDN file list ─────────────────────────────────────────────────────────────
@@ -66,16 +66,16 @@ MDN_FILES = [
     "files/en-us/web/api/headers/index.md",
     "files/en-us/web/api/request/index.md",
     "files/en-us/web/api/response/index.md",
-    "files/en-us/web/http/status/index.md",
-    "files/en-us/web/http/status/200/index.md",
-    "files/en-us/web/http/status/201/index.md",
-    "files/en-us/web/http/status/400/index.md",
-    "files/en-us/web/http/status/401/index.md",
-    "files/en-us/web/http/status/403/index.md",
-    "files/en-us/web/http/status/404/index.md",
-    "files/en-us/web/http/status/429/index.md",
-    "files/en-us/web/http/status/500/index.md",
-    "files/en-us/web/http/cors/index.md",
+    "files/en-us/web/http/reference/status/index.md",
+    "files/en-us/web/http/reference/status/200/index.md",
+    "files/en-us/web/http/reference/status/201/index.md",
+    "files/en-us/web/http/reference/status/400/index.md",
+    "files/en-us/web/http/reference/status/401/index.md",
+    "files/en-us/web/http/reference/status/403/index.md",
+    "files/en-us/web/http/reference/status/404/index.md",
+    "files/en-us/web/http/reference/status/429/index.md",
+    "files/en-us/web/http/reference/status/500/index.md",
+    "files/en-us/web/http/guides/cors/index.md",
 ]
 
 # ── Source registry ───────────────────────────────────────────────────────────
@@ -130,6 +130,33 @@ def chunk_id(repo_path: str, chunk_index: int) -> str:
     return str(uuid.UUID(digest[:32]))
 
 
+def check_file_exists(owner: str, repo: str, path: str) -> bool:
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+    resp = httpx.get(url, headers=github_headers(), timeout=15)
+    if resp.status_code == 200:
+        return True
+    if resp.status_code == 404:
+        return False
+    raise RuntimeError(f"GitHub API returned {resp.status_code} for {path} — set GITHUB_TOKEN to avoid rate limits")
+
+
+def validate_sources() -> None:
+    if not GITHUB_TOKEN:
+        logging.warning("GITHUB_TOKEN not set — validation limited to 60 req/hr; set it to avoid rate limit errors")
+    failed = []
+    for source in SOURCES:
+        for path in source["files"]:
+            if not check_file_exists(source["owner"], source["repo"], path):
+                failed.append(f"{source['name']}: {path}")
+    if failed:
+        logging.error("Path validation failed — %d file(s) not found:", len(failed))
+        for f in failed:
+            logging.error("  404 %s", f)
+        sys.exit(1)
+    total = sum(len(s["files"]) for s in SOURCES)
+    logging.info("All %d source paths validated OK", total)
+
+
 def embed_in_batches(texts: list[str], voyage: voyageai.Client) -> list[list[float]]:
     vectors = []
     for i in range(0, len(texts), VOYAGE_BATCH):
@@ -154,7 +181,16 @@ def ensure_collection(qdrant: QdrantClient) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
-def main() -> None:
+def main(validate_only: bool = False) -> None:
+    validate_sources()
+    if validate_only:
+        return
+
+    missing = [k for k, v in {"QDRANT_URL": QDRANT_URL, "QDRANT_API_KEY": QDRANT_API_KEY, "VOYAGE_API_KEY": VOYAGE_API_KEY}.items() if not v]
+    if missing:
+        logging.error("Missing required env vars: %s", ", ".join(missing))
+        sys.exit(1)
+
     enc = tiktoken.get_encoding("cl100k_base")
     voyage_client = voyageai.Client(api_key=VOYAGE_API_KEY)
     qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
@@ -211,8 +247,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--validate-only", action="store_true", help="Check source paths exist without embedding")
+    args = parser.parse_args()
     try:
-        main()
+        main(validate_only=args.validate_only)
     except KeyboardInterrupt:
         sys.exit(0)
     except Exception as e:
