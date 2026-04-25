@@ -1,0 +1,75 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap');
+
+@layer base {
+  :root {
+    /* shadcn hsl tokens */
+    --background: 42 17% 95%;
+    --foreground: 40 5% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 40 5% 7%;
+    --primary: 155 59% 26%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 42 15% 94%;
+    --secondary-foreground: 40 5% 7%;
+    --muted: 42 15% 94%;
+    --muted-foreground: 40 5% 42%;
+    --border: 40 14% 88%;
+    --input: 40 14% 88%;
+    --ring: 155 59% 26%;
+    --radius: 0.75rem;
+
+    /* Design tokens (from design-preview.html) */
+    --bg: #f7f4ef;
+    --bg-card: #ffffff;
+    --text-primary: #111110;
+    --text-secondary: #6b6860;
+    --text-muted: #72706b;
+    --accent: #1b6b47;
+    --accent-hover: #155937;
+    --accent-subtle: #eaf3ee;
+    --btn-text: #ffffff;
+    --col-root: #8b5e2a;
+    --col-steps: #1b6b47;
+    --col-docs: #8b9eb0;
+    --border-color: #e4e0d9;
+    --border-subtle: #ede9e2;
+  }
+
+  .dark {
+    /* shadcn hsl tokens */
+    --background: 220 22% 7%;
+    --foreground: 42 17% 94%;
+    --card: 222 22% 12%;
+    --card-foreground: 42 17% 94%;
+    --primary: 151 62% 44%;
+    --primary-foreground: 220 22% 7%;
+    --muted: 222 22% 12%;
+    --muted-foreground: 220 14% 58%;
+    --border: 221 24% 19%;
+    --input: 221 24% 19%;
+    --ring: 151 62% 44%;
+
+    /* Design tokens */
+    --bg: #0d1117;
+    --bg-card: #161c27;
+    --text-primary: #f0ede6;
+    --text-muted: #8b94a5;
+    --accent: #2fa870;
+    --btn-text: #0d1117;
+    --col-root: #c17d3c;
+    --col-steps: #2fa870;
+    --border-color: #252d3d;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    margin: 0;
+  }
+}
