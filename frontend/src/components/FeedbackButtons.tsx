@@ -12,13 +12,15 @@ export function FeedbackButtons({ evalId }: FeedbackButtonsProps) {
   const setFeedback = useMutation(api.evals.setFeedback)
 
   async function handleFeedback(direction: 'up' | 'down') {
-    if (!evalId) return
     const next = active === direction ? null : direction
     setActive(next)
-    await setFeedback({
-      evalId: evalId as Id<'evals'>,
-      feedback: next ?? undefined,
-    })
+    if (!evalId) return
+    try {
+      await setFeedback({
+        evalId: evalId as Id<'evals'>,
+        feedback: next ?? undefined,
+      })
+    } catch {}
   }
 
   const btnBase: React.CSSProperties = {
@@ -26,7 +28,7 @@ export function FeedbackButtons({ evalId }: FeedbackButtonsProps) {
     borderRadius: '6px',
     padding: '4px 10px',
     fontSize: '14px',
-    cursor: evalId ? 'pointer' : 'not-allowed',
+    cursor: 'pointer',
     background: 'none',
   }
 
@@ -43,8 +45,8 @@ export function FeedbackButtons({ evalId }: FeedbackButtonsProps) {
       </span>
       <button
         id="thumb-up-btn"
+        className={active === 'up' ? 'active-up' : ''}
         onClick={() => handleFeedback('up')}
-        disabled={!evalId}
         aria-pressed={active === 'up'}
         aria-label="Helpful"
         style={{
@@ -56,8 +58,8 @@ export function FeedbackButtons({ evalId }: FeedbackButtonsProps) {
       </button>
       <button
         id="thumb-down-btn"
+        className={active === 'down' ? 'active-down' : ''}
         onClick={() => handleFeedback('down')}
-        disabled={!evalId}
         aria-pressed={active === 'down'}
         aria-label="Not helpful"
         style={{

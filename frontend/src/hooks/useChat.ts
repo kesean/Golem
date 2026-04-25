@@ -58,8 +58,9 @@ export function useChat(): UseChatReturn {
 
       setParsedResponse(parsed)
 
-      const hId = await saveToHistory(question, data.response)
-      setHistoryId(hId as string)
+      saveToHistory(question, data.response)
+        .then(hId => setHistoryId(hId as string))
+        .catch(() => {})
 
       createEval({
         question,
@@ -69,7 +70,7 @@ export function useChat(): UseChatReturn {
         output_tokens: data.output_tokens,
       })
         .then(id => setEvalId(id as string))
-        .catch(() => {})
+        .catch(() => { setEvalId('eval-unavailable') })
     } catch (err) {
       const msg =
         err instanceof Error && err.message === '429'
