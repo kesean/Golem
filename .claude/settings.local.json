@@ -75,7 +75,11 @@
       "Bash(gh run *)",
       "Bash(gh api *)",
       "mcp__plugin_vercel_vercel__get_deployment_build_logs",
-      "mcp__plugin_vercel_vercel__web_fetch_vercel_url"
+      "mcp__plugin_vercel_vercel__web_fetch_vercel_url",
+      "Bash(npm run *)",
+      "Bash(npx playwright *)",
+      "Bash(vercel *)",
+      "Bash(npx tsc *)"
     ]
   }
 }
