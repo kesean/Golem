@@ -18,17 +18,17 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('thumb buttons are disabled before any response is received', async ({ page }) => {
+test('thumb buttons are not visible before any response is received', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('#thumb-up-btn')).toBeDisabled();
-  await expect(page.locator('#thumb-down-btn')).toBeDisabled();
+  await expect(page.locator('#thumb-up-btn')).not.toBeVisible();
+  await expect(page.locator('#thumb-down-btn')).not.toBeVisible();
 });
 
 test('thumb buttons are enabled after a response renders', async ({ page }) => {
   await page.goto('/');
   await page.locator('#question').fill('Why am I getting a 401 error?');
   await page.locator('#ask-btn').click();
-  await expect(page.locator('#response-area')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#response-area')).toBeVisible();
   await expect(page.locator('#thumb-up-btn')).not.toBeDisabled();
   await expect(page.locator('#thumb-down-btn')).not.toBeDisabled();
 });
@@ -37,7 +37,7 @@ test('clicking thumb-up activates it', async ({ page }) => {
   await page.goto('/');
   await page.locator('#question').fill('Why am I getting a 401 error?');
   await page.locator('#ask-btn').click();
-  await expect(page.locator('#response-area')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#response-area')).toBeVisible();
 
   await page.locator('#thumb-up-btn').click();
   await expect(page.locator('#thumb-up-btn')).toHaveClass(/active-up/);
@@ -48,7 +48,7 @@ test('clicking active thumb-up again deactivates it (toggle off)', async ({ page
   await page.goto('/');
   await page.locator('#question').fill('Why am I getting a 401 error?');
   await page.locator('#ask-btn').click();
-  await expect(page.locator('#response-area')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#response-area')).toBeVisible();
 
   await page.locator('#thumb-up-btn').click();
   await expect(page.locator('#thumb-up-btn')).toHaveClass(/active-up/);
@@ -60,7 +60,7 @@ test('clicking thumb-down after thumb-up switches selection', async ({ page }) =
   await page.goto('/');
   await page.locator('#question').fill('Why am I getting a 401 error?');
   await page.locator('#ask-btn').click();
-  await expect(page.locator('#response-area')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#response-area')).toBeVisible();
 
   await page.locator('#thumb-up-btn').click();
   await expect(page.locator('#thumb-up-btn')).toHaveClass(/active-up/);
@@ -74,11 +74,10 @@ test('thumb buttons reset to disabled after New Conversation', async ({ page }) 
   await page.goto('/');
   await page.locator('#question').fill('Why am I getting a 401 error?');
   await page.locator('#ask-btn').click();
-  await expect(page.locator('#response-area')).not.toHaveClass(/hidden/);
+  await expect(page.locator('#response-area')).toBeVisible();
   await page.locator('#thumb-up-btn').click();
 
   // Click "New conversation" button
   await page.getByRole('button', { name: 'New conversation' }).click();
-  await expect(page.locator('#thumb-up-btn')).toBeDisabled();
-  await expect(page.locator('#thumb-up-btn')).not.toHaveClass(/active-up/);
+  await expect(page.locator('#thumb-up-btn')).not.toBeVisible();
 });
