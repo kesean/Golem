@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap');
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   :root {
@@ -54,6 +55,7 @@
     --bg: #0d1117;
     --bg-card: #161c27;
     --text-primary: #f0ede6;
+    --text-secondary: #8b94a5;
     --text-muted: #8b94a5;
     --accent: #2fa870;
     --btn-text: #0d1117;
