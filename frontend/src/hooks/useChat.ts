@@ -32,7 +32,7 @@ export function useChat(): UseChatReturn {
 
     try {
       const token = await getToken()
-      const res = await fetch('/ask', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/ask`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
