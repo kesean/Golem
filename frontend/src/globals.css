@@ -64,6 +64,13 @@
     --border-color: #252d3d;
   }
 
+  /* ::placeholder won't repaint on CSS variable inheritance change in some browsers;
+     concrete color value forces a real rule activation when .dark class toggles */
+  .dark textarea::placeholder,
+  .dark input::placeholder {
+    color: hsl(220 14% 58%);
+  }
+
   * {
     box-sizing: border-box;
   }
