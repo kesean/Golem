@@ -34,6 +34,8 @@ limiter = Limiter(
     app=app,
     default_limits=[],
     storage_uri=_redis_url if _redis_url else "memory://",
+    storage_options={"socket_connect_timeout": 2, "socket_timeout": 2} if _redis_url else {},
+    swallow_errors=True,
 )
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
 
