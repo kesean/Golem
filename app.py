@@ -3,6 +3,7 @@ app.py — Flask app and API routes.
 """
 
 import os
+import re
 import json
 import time
 import logging
@@ -21,9 +22,17 @@ load_dotenv()
 app = Flask(__name__)
 
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
+_preview_regex = os.getenv("PREVIEW_ORIGIN_REGEX", "")
+
+_cors_origins: list = []
+if _frontend_origin:
+    _cors_origins.append(_frontend_origin)
+if _preview_regex:
+    _cors_origins.append(re.compile(_preview_regex))
+
 CORS(
     app,
-    origins=[_frontend_origin] if _frontend_origin else [],
+    origins=_cors_origins if _cors_origins else [],
     allow_headers=["Authorization", "Content-Type"],
     methods=["POST", "OPTIONS"],
 )
