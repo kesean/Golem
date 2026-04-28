@@ -75,3 +75,14 @@
     margin: 0;
   }
 }
+
+/* Unlayered — beats @layer utilities (Tailwind). Concrete values force ::placeholder
+   repaint on class toggle; browsers skip repaint when only a CSS variable value changes. */
+textarea::placeholder,
+input::placeholder {
+  color: hsl(40 5% 42%);
+}
+.dark textarea::placeholder,
+.dark input::placeholder {
+  color: hsl(220 14% 58%);
+}
