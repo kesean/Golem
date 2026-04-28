@@ -60,21 +60,23 @@ def test_no_tool_call_returns_answer_directly():
     assert result["latency_ms"] >= 0
 
 
-def test_retrieve_docs_tool_call_dispatched():
-    """retrieve_docs tool_use followed by end_turn — retrieve_context called with correct args."""
+def test_pre_retrieval_context_injected():
+    """retrieve_context called with the full question before Claude when clients are available."""
     import chat
+    import retrieval as retrieval_module
 
-    tool_msg = _make_tool_use_msg([
-        {"id": "tool_001", "name": "retrieve_docs", "input": {"query": "JWT auth", "source": "clerk"}},
-    ])
-    end_msg = _make_end_turn_msg(text="<summary>Final answer</summary>")
+    end_msg = _make_end_turn_msg(text="<summary>Answer with context</summary>")
 
-    with patch.object(chat._client.messages, "create", side_effect=[tool_msg, end_msg]):
-        with patch("chat.retrieval.retrieve_context", return_value="clerk docs context") as mock_rc:
-            result = chat.run("How does JWT auth work?", [])
+    with patch.object(chat._client.messages, "create", return_value=end_msg) as mock_create:
+        with patch.object(retrieval_module, "_qdrant", MagicMock()):
+            with patch.object(retrieval_module, "_voyage", MagicMock()):
+                with patch.object(retrieval_module, "retrieve_context", return_value="clerk docs") as mock_rc:
+                    result = chat.run("How does JWT auth work?", [])
 
-    mock_rc.assert_called_once_with("JWT auth", source="clerk")
-    assert result["response"] == "<summary>Final answer</summary>"
+    mock_rc.assert_called_once_with("How does JWT auth work?")
+    user_content = mock_create.call_args[1]["messages"][-1]["content"]
+    assert "clerk docs" in user_content
+    assert result["response"] == "<summary>Answer with context</summary>"
 
 
 def test_api_lookup_tool_call_dispatched():
@@ -94,22 +96,24 @@ def test_api_lookup_tool_call_dispatched():
     assert result["response"] == "<summary>Models answer</summary>"
 
 
-def test_both_tools_called_in_same_turn():
-    """Single response with two tool_use blocks — both dispatched."""
+def test_api_lookup_dispatched_with_pre_retrieved_context():
+    """api_lookup tool dispatches correctly alongside pre-retrieval."""
     import chat
+    import retrieval as retrieval_module
 
     tool_msg = _make_tool_use_msg([
-        {"id": "tool_003", "name": "retrieve_docs", "input": {"query": "CORS headers"}},
-        {"id": "tool_004", "name": "api_lookup", "input": {"service": "clerk", "endpoint": "errors"}},
+        {"id": "tool_003", "name": "api_lookup", "input": {"service": "clerk", "endpoint": "errors", "params": None}},
     ])
     end_msg = _make_end_turn_msg(text="<summary>Combined answer</summary>")
 
     with patch.object(chat._client.messages, "create", side_effect=[tool_msg, end_msg]):
-        with patch("chat.retrieval.retrieve_context", return_value="docs") as mock_rc:
-            with patch("chat.api_lookup.fetch", return_value="errors data") as mock_fetch:
-                result = chat.run("CORS and Clerk errors", [])
+        with patch.object(retrieval_module, "_qdrant", MagicMock()):
+            with patch.object(retrieval_module, "_voyage", MagicMock()):
+                with patch.object(retrieval_module, "retrieve_context", return_value="docs") as mock_rc:
+                    with patch("chat.api_lookup.fetch", return_value="errors data") as mock_fetch:
+                        result = chat.run("CORS and Clerk errors", [])
 
-    mock_rc.assert_called_once_with("CORS headers", source=None)
+    mock_rc.assert_called_once_with("CORS and Clerk errors")
     mock_fetch.assert_called_once_with("clerk", "errors", None)
     assert result["response"] == "<summary>Combined answer</summary>"
 

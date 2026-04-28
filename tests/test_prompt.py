@@ -35,3 +35,14 @@ def test_original_history_list_is_not_mutated():
     build_messages("new question", history=history)
     assert len(history) == 1  # build_messages must not append to the caller's list
 
+
+def test_context_appended_to_user_message():
+    context = "--- RETRIEVED DOCS ---\nsome doc\n--- END DOCS ---"
+    result = build_messages("Why a 401?", context=context)
+    assert result == [{"role": "user", "content": "Why a 401?\n\n" + context}]
+
+
+def test_empty_context_leaves_message_unchanged():
+    result = build_messages("Hello", context="")
+    assert result == [{"role": "user", "content": "Hello"}]
+
