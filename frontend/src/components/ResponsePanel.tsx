@@ -5,6 +5,21 @@ import { FeedbackButtons } from './FeedbackButtons'
 import { ResponseActions } from './ResponseActions'
 import type { ParsedResponse } from '../types'
 
+function ThinkingIndicator() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+        {[0, 1, 2].map(i => (
+          <span key={i} className="thinking-dot" style={{ animationDelay: `${i * 0.16}s` }} />
+        ))}
+      </div>
+      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '13px', color: 'var(--text-secondary)' }}>
+        Analyzing your question…
+      </span>
+    </div>
+  )
+}
+
 type ResponsePanelProps = {
   isLoading: boolean
   parsedResponse: ParsedResponse | null
@@ -29,8 +44,9 @@ export function ResponsePanel({
         role="status"
         aria-live="polite"
         aria-label="Loading response"
-        style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}
+        style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}
       >
+        <ThinkingIndicator />
         <Skeleton style={{ height: '20px', width: '30%' }} />
         <Skeleton style={{ height: '80px' }} />
         <Skeleton style={{ height: '60px' }} />
