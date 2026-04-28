@@ -24,24 +24,7 @@ _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 # Tool schemas
 # ---------------------------------------------------------------------------
 
-_API_LOOKUP_TOOL = {
-    "name": "api_lookup",
-    "description": (
-        "Fetch live data from the Clerk or Anthropic API. "
-        "Use for error codes, JWKS keys, or current model information."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "service": {"type": "string", "enum": ["clerk", "anthropic"]},
-            "endpoint": {"type": "string", "description": "Endpoint key from the allowlist"},
-            "params": {"type": ["object", "null"], "description": "Optional query params"},
-        },
-        "required": ["service", "endpoint"],
-    },
-}
-
-TOOLS = [_API_LOOKUP_TOOL]
+TOOLS: list = []
 
 MAX_TOOL_ROUNDS = 3
 
