@@ -90,13 +90,19 @@ def run(question: str, history: list) -> dict:
     round_count = 0
 
     while True:
-        message = _client.messages.create(
+        # Only offer tools on the first call. Claude can call any/all tools
+        # it needs in one round (parallel tool use). Subsequent calls have no
+        # tools so stop_reason is always end_turn — guarantees 2 API calls max.
+        kwargs: dict = dict(
             model="claude-sonnet-4-6",
             max_tokens=2048,
             system=SYSTEM_PROMPT,
             messages=msgs,
-            tools=TOOLS,
         )
+        if round_count == 0 and TOOLS:
+            kwargs["tools"] = TOOLS
+
+        message = _client.messages.create(**kwargs)
 
         input_tokens += message.usage.input_tokens
         output_tokens += message.usage.output_tokens
