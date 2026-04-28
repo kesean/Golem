@@ -24,27 +24,6 @@ _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 # Tool schemas
 # ---------------------------------------------------------------------------
 
-_RETRIEVE_DOCS_TOOL = {
-    "name": "retrieve_docs",
-    "description": (
-        "Search embedded documentation for relevant context. "
-        "Use when the question is about Clerk auth, JWT, MDN web APIs, "
-        "or general developer concepts."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "query": {"type": "string", "description": "Search query"},
-            "source": {
-                "type": ["string", "null"],
-                "enum": ["clerk", "mdn", None],
-                "description": "Filter to a specific doc source, or null to search all.",
-            },
-        },
-        "required": ["query"],
-    },
-}
-
 _API_LOOKUP_TOOL = {
     "name": "api_lookup",
     "description": (
@@ -62,12 +41,7 @@ _API_LOOKUP_TOOL = {
     },
 }
 
-# Only advertise retrieve_docs when RAG backends are actually available.
-# Without this guard Claude makes a pointless tool-call round trip on every
-# request, doubling latency (~12 s → ~6 s) for zero benefit.
 TOOLS = [_API_LOOKUP_TOOL]
-if retrieval._qdrant is not None and retrieval._voyage is not None:
-    TOOLS.insert(0, _RETRIEVE_DOCS_TOOL)
 
 MAX_TOOL_ROUNDS = 3
 
@@ -83,7 +57,18 @@ def run(question: str, history: list) -> dict:
     Raises RuntimeError if MAX_TOOL_ROUNDS is exceeded or no content is returned.
     """
     start = time.time()
-    msgs = build_messages(question, history)
+
+    # Pre-retrieve docs before calling Claude — eliminates a tool-use round trip.
+    # retrieve_docs was a tool; now we embed the question and search Qdrant directly,
+    # injecting context into the user message instead of making a second Claude call.
+    context = ""
+    if retrieval._qdrant is not None and retrieval._voyage is not None:
+        try:
+            context = retrieval.retrieve_context(question)
+        except Exception as exc:
+            logging.warning("pre-retrieval failed: %s", exc)
+
+    msgs = build_messages(question, history, context=context)
 
     input_tokens = 0
     output_tokens = 0
@@ -157,14 +142,6 @@ def _dispatch_tool(name: str, inputs: dict) -> str:
 
     Returns string result. Never raises.
     """
-    if name == "retrieve_docs":
-        try:
-            result = retrieval.retrieve_context(inputs["query"], source=inputs.get("source"))
-            return result if result else "No docs found."
-        except Exception as exc:
-            logging.warning("_dispatch_tool: retrieve_docs failed: %s", exc)
-            return "No docs found."
-
     if name == "api_lookup":
         try:
             return api_lookup.fetch(inputs["service"], inputs["endpoint"], inputs.get("params"))

@@ -35,11 +35,13 @@ Rules:
 """
 
 
-def build_messages(question: str, history: list | None = None) -> list:
+def build_messages(question: str, history: list | None = None, context: str = "") -> list:
     """Build the messages array for the Claude API call.
 
     history is a list of prior {role, content} turns (user + assistant alternating).
+    context is pre-retrieved doc text injected directly so Claude answers in one call.
     """
     messages = list(history or [])
-    messages.append({"role": "user", "content": question})
+    content = f"{question}\n\n{context}" if context else question
+    messages.append({"role": "user", "content": content})
     return messages
