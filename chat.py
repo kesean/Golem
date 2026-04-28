@@ -24,44 +24,50 @@ _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 # Tool schemas
 # ---------------------------------------------------------------------------
 
-TOOLS = [
-    {
-        "name": "retrieve_docs",
-        "description": (
-            "Search embedded documentation for relevant context. "
-            "Use when the question is about Clerk auth, JWT, MDN web APIs, "
-            "or general developer concepts."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"},
-                "source": {
-                    "type": ["string", "null"],
-                    "enum": ["clerk", "mdn", None],
-                    "description": "Filter to a specific doc source, or null to search all.",
-                },
+_RETRIEVE_DOCS_TOOL = {
+    "name": "retrieve_docs",
+    "description": (
+        "Search embedded documentation for relevant context. "
+        "Use when the question is about Clerk auth, JWT, MDN web APIs, "
+        "or general developer concepts."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query"},
+            "source": {
+                "type": ["string", "null"],
+                "enum": ["clerk", "mdn", None],
+                "description": "Filter to a specific doc source, or null to search all.",
             },
-            "required": ["query"],
         },
+        "required": ["query"],
     },
-    {
-        "name": "api_lookup",
-        "description": (
-            "Fetch live data from the Clerk or Anthropic API. "
-            "Use for error codes, JWKS keys, or current model information."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "service": {"type": "string", "enum": ["clerk", "anthropic"]},
-                "endpoint": {"type": "string", "description": "Endpoint key from the allowlist"},
-                "params": {"type": ["object", "null"], "description": "Optional query params"},
-            },
-            "required": ["service", "endpoint"],
+}
+
+_API_LOOKUP_TOOL = {
+    "name": "api_lookup",
+    "description": (
+        "Fetch live data from the Clerk or Anthropic API. "
+        "Use for error codes, JWKS keys, or current model information."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "service": {"type": "string", "enum": ["clerk", "anthropic"]},
+            "endpoint": {"type": "string", "description": "Endpoint key from the allowlist"},
+            "params": {"type": ["object", "null"], "description": "Optional query params"},
         },
+        "required": ["service", "endpoint"],
     },
-]
+}
+
+# Only advertise retrieve_docs when RAG backends are actually available.
+# Without this guard Claude makes a pointless tool-call round trip on every
+# request, doubling latency (~12 s → ~6 s) for zero benefit.
+TOOLS = [_API_LOOKUP_TOOL]
+if retrieval._qdrant is not None and retrieval._voyage is not None:
+    TOOLS.insert(0, _RETRIEVE_DOCS_TOOL)
 
 MAX_TOOL_ROUNDS = 3
 
