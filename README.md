@@ -22,7 +22,7 @@ Each response is also tagged with a product area (e.g. Authentication, Rate Limi
 | API | Python · Flask · Anthropic SDK |
 | Auth | Clerk (sign-in gate + JWT verification) |
 | Database | Convex (per-user history) |
-| Frontend | Vite · Vanilla JS |
+| Frontend | Vite · React · TypeScript · Tailwind · shadcn/ui |
 
 ## Running locally
 
@@ -187,10 +187,13 @@ Branch → environment mapping:
 | Per-user daily limit: 10 requests/day (keyed to Clerk user ID) | ✅ Done |
 | Global daily cap: 70 requests/day across all users | ✅ Done |
 | CORS scoped to Vercel frontend origin | ✅ Done |
+| CORS allowed for Vercel preview deployments via `PREVIEW_ORIGIN_REGEX` | ✅ Done |
 | Flask backend deployed to Railway (with Redis add-on) | ✅ Done |
 | Frontend deployed to Vercel — Dev / Pre / Prod environments | ✅ Done |
 | Makefile targets for terminal-driven deployments (`deploy-dev`, `deploy-pre`, `deploy-prod`, `status`, `logs`, `open`) | ✅ Done |
 | Production environment variables configured (no secrets in code) | ✅ Done |
+| GitHub Actions: unit tests, e2e (Playwright), doc-source validation | ✅ Done |
+| E2E tests gate PRs — run against Vercel Preview on every deployment | ✅ Done |
 
 ---
 
@@ -218,11 +221,22 @@ Branch → environment mapping:
 | `retrieve_docs()` tool backed by Qdrant vector search | ✅ Done |
 | `api_lookup()` tool for live Clerk + Anthropic API data | ✅ Done |
 | `chat.py` tool loop — LLM decides which tools to call | ✅ Done |
+| Pre-retrieve docs before Claude call — eliminates tool-use round trip | ✅ Done |
+| Cap tool loop to 2 Claude API calls max | ✅ Done |
+| Remove `api_lookup` tool — guarantees single Claude API call | ✅ Done |
+| Skip `retrieve_docs` when RAG backends are not configured | ✅ Done |
 
 ### V2d — Frontend upgrade
 
 | Feature | Status |
 |---------|--------|
-| Migrate to React + TypeScript | 🔲 Planned |
+| Migrate to React + TypeScript | ✅ Done |
+| Tailwind CSS + shadcn/ui component library | ✅ Done |
+| Component architecture (Header, QuestionInput, ResponsePanel, SectionCard, ProductBadge, ResponseActions, FeedbackButtons, HistoryPalette) | ✅ Done |
+| Hooks: `useChat`, `useHistory`, `useTheme` | ✅ Done |
+| History palette with Ctrl+K (CommandDialog) | ✅ Done |
+| Dark mode toggle with localStorage persistence | ✅ Done |
+| DOMPurify-sanitized markdown rendering in React | ✅ Done |
+| Animated thinking indicator during response loading | ✅ Done |
 | Restore streaming responses | 🔲 Planned |
 | Debug panel showing retrieved doc chunks | 🔲 Planned |
