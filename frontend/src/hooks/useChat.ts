@@ -32,6 +32,9 @@ export function useChat(isGuest = false): UseChatReturn {
 
     try {
       const token = await getToken()
+      if (isGuest && token === null) {
+        throw new Error('GUEST_UNAVAILABLE')
+      }
       const res = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/ask`, {
         method: 'POST',
         headers: {
@@ -77,6 +80,8 @@ export function useChat(isGuest = false): UseChatReturn {
       const msg =
         err instanceof Error && err.message === '429'
           ? "You've reached the daily limit — try again tomorrow."
+          : err instanceof Error && err.message === 'GUEST_UNAVAILABLE'
+          ? 'Guest access is temporarily unavailable. Please sign in to continue.'
           : 'Something went wrong. Please try again.'
       setError(msg)
       if (import.meta.env.DEV) {
