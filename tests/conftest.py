@@ -54,9 +54,10 @@ def client():
     """Flask test client with testing mode and rate limiter disabled."""
     from app import app, limiter  # imported here so env vars are set first
     app.config["TESTING"] = True
-    app.config["RATELIMIT_ENABLED"] = False
+    limiter.enabled = False
     with app.test_client() as c:
         yield c
+    limiter.enabled = True
 
 
 @pytest.fixture
@@ -64,7 +65,7 @@ def rate_limited_client():
     """Flask test client with rate limiting enabled and memory storage."""
     from app import app, limiter
     app.config["TESTING"] = True
-    app.config["RATELIMIT_ENABLED"] = True
+    limiter.enabled = True
     with app.app_context():
         limiter.reset()
     with app.test_client() as c:
