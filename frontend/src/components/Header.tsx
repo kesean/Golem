@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Theme } from '../hooks/useTheme'
 
 type HeaderProps = {
@@ -6,6 +7,7 @@ type HeaderProps = {
   onOpenHistory: () => void
   onNewConversation: () => void
   userName?: string
+  onSignOut?: () => void
 }
 
 export function Header({
@@ -14,7 +16,9 @@ export function Header({
   onOpenHistory,
   onNewConversation,
   userName,
+  onSignOut,
 }: HeaderProps) {
+  const [signOutHovered, setSignOutHovered] = useState(false)
   return (
     <header
       style={{
@@ -99,6 +103,67 @@ export function Header({
           >
             {userName}
           </span>
+        )}
+
+        {onSignOut && (
+          <button
+            onClick={onSignOut}
+            onMouseEnter={() => setSignOutHovered(true)}
+            onMouseLeave={() => setSignOutHovered(false)}
+            aria-label="Sign out"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: '13px',
+              color: signOutHovered ? '#a85238' : 'var(--text-secondary)',
+              background: 'none',
+              border: `1px solid ${signOutHovered ? '#a85238' : 'var(--border-color)'}`,
+              borderRadius: '6px',
+              cursor: 'pointer',
+              padding: '5px 10px',
+              transition: 'color 0.15s ease, border-color 0.15s ease',
+              marginLeft: '4px',
+            }}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 13 13"
+              fill="none"
+              aria-hidden="true"
+              style={{
+                transform: signOutHovered ? 'translateX(1px)' : 'translateX(0)',
+                transition: 'transform 0.15s ease',
+                flexShrink: 0,
+              }}
+            >
+              <path
+                d="M5 2H2.5C2.22 2 2 2.22 2 2.5v8c0 .28.22.5.5.5H5"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M8.5 9L11 6.5 8.5 4"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <line
+                x1="4.5"
+                y1="6.5"
+                x2="11"
+                y2="6.5"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
+            </svg>
+            Sign out
+          </button>
         )}
       </div>
     </header>
