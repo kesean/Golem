@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { Skeleton } from './ui/skeleton'
 import { ProductBadge } from './ProductBadge'
 import { SectionCard, MarkdownContent, StepList, DocList } from './SectionCard'
@@ -35,6 +36,17 @@ export function ResponsePanel({
   evalId,
   historyId,
 }: ResponsePanelProps) {
+  const [showWarmup, setShowWarmup] = useState(false)
+
+  useEffect(() => {
+    if (!isLoading) {
+      setShowWarmup(false)
+      return
+    }
+    const timer = setTimeout(() => setShowWarmup(true), 2000)
+    return () => clearTimeout(timer)
+  }, [isLoading])
+
   if (!isLoading && !parsedResponse && !error) return null
 
   if (isLoading) {
@@ -47,6 +59,17 @@ export function ResponsePanel({
         style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}
       >
         <ThinkingIndicator />
+        {showWarmup && (
+          <span
+            style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            This may take a few seconds — the server is warming up.
+          </span>
+        )}
         <Skeleton style={{ height: '20px', width: '30%' }} />
         <Skeleton style={{ height: '80px' }} />
         <Skeleton style={{ height: '60px' }} />

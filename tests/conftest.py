@@ -18,6 +18,9 @@ import jwt
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-placeholder")
 os.environ.setdefault("CLERK_JWKS_URL", "https://test.clerk.dev/.well-known/jwks.json")
 
+TEST_GUEST_SECRET = "test-guest-secret-placeholder"
+os.environ.setdefault("GUEST_JWT_SECRET", TEST_GUEST_SECRET)
+
 # ── Generate a test RSA key pair once per session ────────────────────────────
 _RSA_PRIVATE = rsa.generate_private_key(
     public_exponent=65537,
@@ -51,9 +54,10 @@ def client():
     """Flask test client with testing mode and rate limiter disabled."""
     from app import app, limiter  # imported here so env vars are set first
     app.config["TESTING"] = True
-    app.config["RATELIMIT_ENABLED"] = False
+    limiter.enabled = False
     with app.test_client() as c:
         yield c
+    limiter.enabled = True
 
 
 @pytest.fixture
@@ -61,7 +65,7 @@ def rate_limited_client():
     """Flask test client with rate limiting enabled and memory storage."""
     from app import app, limiter
     app.config["TESTING"] = True
-    app.config["RATELIMIT_ENABLED"] = True
+    limiter.enabled = True
     with app.app_context():
         limiter.reset()
     with app.test_client() as c:
@@ -83,7 +87,7 @@ def expired_token():
 @pytest.fixture
 def conftest_tokens():
     """71 tokens with unique sub values — one per user — to hit the global cap
-    without triggering the per-user (10/day) limit first."""
+    without triggering the per-user (5/day) limit first."""
     return [_make_token(sub=f"user_{i}") for i in range(71)]
 
 

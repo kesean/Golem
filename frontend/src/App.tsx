@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useUser, RedirectToSignIn } from '@clerk/clerk-react'
+import { useUser } from '@clerk/clerk-react'
 import { useTheme } from './hooks/useTheme'
 import { useChat } from './hooks/useChat'
 import { Header } from './components/Header'
@@ -8,9 +8,9 @@ import { ResponsePanel } from './components/ResponsePanel'
 import { HistoryPalette } from './components/HistoryPalette'
 import type { HistoryEntry } from './hooks/useHistory'
 
-function Layout({ userName }: { userName?: string }) {
+function Layout({ userName, isGuest = false }: { userName?: string; isGuest?: boolean }) {
   const { theme, toggle: toggleTheme } = useTheme()
-  const chat = useChat()
+  const chat = useChat(isGuest)
   const [question, setQuestion] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
 
@@ -77,6 +77,7 @@ function Layout({ userName }: { userName?: string }) {
         open={historyOpen}
         onOpenChange={setHistoryOpen}
         onSelect={handleHistorySelect}
+        isGuest={isGuest}
       />
     </div>
   )
@@ -85,8 +86,12 @@ function Layout({ userName }: { userName?: string }) {
 function AuthenticatedApp() {
   const { isSignedIn, isLoaded, user } = useUser()
   if (!isLoaded) return null
-  if (!isSignedIn) return <RedirectToSignIn />
-  return <Layout userName={user?.firstName ?? undefined} />
+  return (
+    <Layout
+      isGuest={!isSignedIn}
+      userName={isSignedIn ? (user?.firstName ?? undefined) : undefined}
+    />
+  )
 }
 
 export default function App() {
