@@ -1,4 +1,4 @@
-# Dev Support AI Chatbot
+# Golem
 
 ## Project Overview
 A developer support chatbot that uses the Claude API to answer technical questions
@@ -15,7 +15,7 @@ in a structured, helpful way — similar to how a developer support engineer wou
 
 ## Project Structure
 ```
-dev-support-chatbot/
+golem/
 ├── app.py              # Flask app + API routes (JWT auth, rate limiting)
 ├── prompt.py           # System prompt and message-building logic
 ├── requirements.txt    # Python dependencies

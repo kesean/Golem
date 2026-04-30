@@ -38,7 +38,7 @@ export function Header({
           color: 'var(--accent)',
         }}
       >
-        Dev Support AI
+        Golem
       </span>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

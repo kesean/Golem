@@ -1,8 +1,8 @@
-# Dev Support AI
+# Golem
 
 A developer support chatbot that answers technical questions the way a developer support engineer would — structured, specific, and actionable. Built as a portfolio project to practice Claude API integration, prompt engineering, and modern web tooling.
 
-![Dev Support AI — V2 Architecture](docs/assets/images/architecture.png)
+![Golem — V2 Architecture](docs/assets/images/architecture.png)
 
 ## What it does
 
@@ -33,8 +33,8 @@ Visitors can try the chatbot without creating an account — a signed guest JWT 
 **1. Clone and install**
 
 ```bash
-git clone https://github.com/kesean/dev-support-chatbot.git
-cd dev-support-chatbot
+git clone https://github.com/kesean/golem.git
+cd golem
 ```
 
 ```bash
