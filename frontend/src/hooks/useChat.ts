@@ -60,7 +60,7 @@ export function useChat(isGuest = false): UseChatReturn {
 
       if (!isGuest) {
         saveToHistory(question, data.response)
-          .then(hId => setHistoryId(hId as string))
+          .then(hId => setHistoryId(hId))
           .catch(() => {})
 
         createEval({
@@ -70,7 +70,7 @@ export function useChat(isGuest = false): UseChatReturn {
           input_tokens: data.input_tokens,
           output_tokens: data.output_tokens,
         })
-          .then(id => setEvalId(id as string))
+          .then(id => setEvalId(id))
           .catch(() => { setEvalId('eval-unavailable') })
       }
     } catch (err) {
