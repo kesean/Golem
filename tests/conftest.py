@@ -18,6 +18,9 @@ import jwt
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-placeholder")
 os.environ.setdefault("CLERK_JWKS_URL", "https://test.clerk.dev/.well-known/jwks.json")
 
+TEST_GUEST_SECRET = "test-guest-secret-placeholder"
+os.environ.setdefault("GUEST_JWT_SECRET", TEST_GUEST_SECRET)
+
 # ── Generate a test RSA key pair once per session ────────────────────────────
 _RSA_PRIVATE = rsa.generate_private_key(
     public_exponent=65537,

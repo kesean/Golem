@@ -6,6 +6,7 @@ import os
 import re
 import json
 import time
+import uuid
 import logging
 import urllib.request
 from functools import wraps
@@ -47,6 +48,7 @@ limiter = Limiter(
     swallow_errors=True,
 )
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
+GUEST_JWT_SECRET = os.getenv("GUEST_JWT_SECRET", "")
 
 
 _jwks_cache: dict | None = None
@@ -82,6 +84,25 @@ def verify_clerk_token(token: str) -> dict:
     return jwt.decode(token, public_key, algorithms=["RS256"], options={"verify_aud": False})
 
 
+def verify_guest_token(token: str) -> dict:
+    """Verify a guest JWT signed with GUEST_JWT_SECRET (HS256)."""
+    if not GUEST_JWT_SECRET:
+        raise RuntimeError("GUEST_JWT_SECRET is not configured")
+    payload = jwt.decode(token, GUEST_JWT_SECRET, algorithms=["HS256"])
+    if payload.get("role") != "guest":
+        raise ValueError("Token is not a guest token")
+    return payload
+
+
+def _is_guest_token(token: str) -> bool:
+    """Peek at the token's role claim without verification to route to the right verifier."""
+    try:
+        payload = jwt.decode(token, options={"verify_signature": False})
+        return payload.get("role") == "guest"
+    except Exception:
+        return False
+
+
 def _user_key() -> str:
     """Return Clerk user ID for per-user rate limiting, falls back to IP.
 
@@ -102,29 +123,57 @@ def _user_key() -> str:
 
 
 def require_auth(f):
-    """Decorator that enforces Clerk JWT auth on a route."""
+    """Decorator that enforces Clerk JWT auth or guest JWT auth on a route."""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return jsonify({"error": "Unauthorized"}), 401
         token = auth_header.split(" ", 1)[1]
-        try:
-            g.clerk_payload = verify_clerk_token(token)
-        except urllib.error.URLError as e:
-            logging.error("JWKS fetch failed: %s", e)
-            return jsonify({"error": "Auth service unavailable"}), 503
-        except jwt.ExpiredSignatureError:
-            logging.warning("Rejected expired JWT")
-            return jsonify({"error": "Token expired"}), 401
-        except jwt.DecodeError as e:
-            logging.warning("Malformed JWT: %s", e)
-            return jsonify({"error": "Invalid token"}), 401
-        except Exception as e:
-            logging.error("Unexpected auth error: %s", e)
-            return jsonify({"error": "Invalid or expired token"}), 401
+
+        if _is_guest_token(token):
+            try:
+                g.clerk_payload = verify_guest_token(token)
+            except jwt.ExpiredSignatureError:
+                logging.warning("Rejected expired guest JWT")
+                return jsonify({"error": "Token expired"}), 401
+            except Exception as e:
+                logging.warning("Invalid guest token: %s", e)
+                return jsonify({"error": "Invalid or expired token"}), 401
+        else:
+            try:
+                g.clerk_payload = verify_clerk_token(token)
+            except urllib.error.URLError as e:
+                logging.error("JWKS fetch failed: %s", e)
+                return jsonify({"error": "Auth service unavailable"}), 503
+            except jwt.ExpiredSignatureError:
+                logging.warning("Rejected expired JWT")
+                return jsonify({"error": "Token expired"}), 401
+            except jwt.DecodeError as e:
+                logging.warning("Malformed JWT: %s", e)
+                return jsonify({"error": "Invalid token"}), 401
+            except Exception as e:
+                logging.error("Unexpected auth error: %s", e)
+                return jsonify({"error": "Invalid or expired token"}), 401
+
         return f(*args, **kwargs)
     return decorated
+
+
+@app.route("/guest-token", methods=["GET"])
+@limiter.limit("10 per hour")
+def guest_token():
+    if not GUEST_JWT_SECRET:
+        return jsonify({"error": "Guest access not configured"}), 503
+    now = int(time.time())
+    payload = {
+        "sub": str(uuid.uuid4()),
+        "role": "guest",
+        "iat": now,
+        "exp": now + 86400,
+    }
+    token = jwt.encode(payload, GUEST_JWT_SECRET, algorithm="HS256")
+    return jsonify({"token": token})
 
 
 @app.route("/ask", methods=["POST"])
