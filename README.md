@@ -15,6 +15,8 @@ You type a technical question. The app streams back a response broken into four 
 
 Each response is also tagged with a product area (e.g. Authentication, Rate Limits, SDK) so answers are easy to scan at a glance. History is saved per-user in the cloud and visible in a sidebar.
 
+Visitors can try the chatbot without creating an account — a signed guest JWT is issued automatically on first load, giving up to 5 questions before prompting to sign in.
+
 ## Stack
 
 | Layer | Tech |
@@ -51,6 +53,7 @@ Copy `.env.example` to `.env` in the project root and fill in your keys:
 ANTHROPIC_API_KEY=...
 CLERK_SECRET_KEY=...
 CLERK_JWKS_URL=...
+GUEST_JWT_SECRET=...   # generate with: openssl rand -hex 32
 ```
 
 Copy `.env.example` to `frontend/.env` and fill in the frontend keys:
@@ -184,7 +187,7 @@ Branch → environment mapping:
 | Feature | Status |
 |---------|--------|
 | Redis-backed rate limiting (replaces in-process limiter) | ✅ Done |
-| Per-user daily limit: 10 requests/day (keyed to Clerk user ID) | ✅ Done |
+| Per-user daily limit: 5 requests/day (keyed to Clerk user ID) | ✅ Done |
 | Global daily cap: 70 requests/day across all users | ✅ Done |
 | CORS scoped to Vercel frontend origin | ✅ Done |
 | CORS allowed for Vercel preview deployments via `PREVIEW_ORIGIN_REGEX` | ✅ Done |
@@ -240,3 +243,14 @@ Branch → environment mapping:
 | Animated thinking indicator during response loading | ✅ Done |
 | Restore streaming responses | 🔲 Planned |
 | Debug panel showing retrieved doc chunks | 🔲 Planned |
+
+### Portfolio hardening
+
+| Feature | Status |
+|---------|--------|
+| Guest JWT access — try chatbot without Clerk sign-in | ✅ Done |
+| Animated loading screen during guest token fetch | ✅ Done |
+| History palette shows sign-in prompt for guest users | ✅ Done |
+| Per-user daily cap reduced to 5 requests | ✅ Done |
+| Prompt injection defense — `<user_input>` XML delimiters + system prompt reinforcement | ✅ Done |
+| Cold-start warm-up disclaimer after 2 s of loading | ✅ Done |
