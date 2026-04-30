@@ -1,4 +1,4 @@
-const GUEST_TOKEN_KEY = 'dev_support_guest_token'
+const GUEST_TOKEN_KEY = 'golem_guest_token'
 const API_URL = import.meta.env.VITE_API_URL ?? ''
 
 function isTokenExpired(token: string): boolean {

@@ -1,5 +1,5 @@
 {
-  "name": "dev-support-chatbot-frontend",
+  "name": "golem-frontend",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
