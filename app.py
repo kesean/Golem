@@ -97,7 +97,7 @@ def verify_guest_token(token: str) -> dict:
 def _is_guest_token(token: str) -> bool:
     """Peek at the token's role claim without verification to route to the right verifier."""
     try:
-        payload = jwt.decode(token, options={"verify_signature": False})
+        payload = jwt.decode(token, options={"verify_signature": False}, algorithms=["HS256", "RS256"])
         return payload.get("role") == "guest"
     except Exception:
         return False
