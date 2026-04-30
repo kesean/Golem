@@ -30,7 +30,35 @@ function GuestTokenProvider({ children }: { children: React.ReactNode }) {
       .catch(() => setReady(true))
   }, [])
 
-  if (!ready) return null
+  if (!ready) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          backgroundColor: 'var(--bg)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '10px',
+        }}
+      >
+        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+          {[0, 1, 2].map(i => (
+            <span key={i} className="thinking-dot" style={{ animationDelay: `${i * 0.16}s` }} />
+          ))}
+        </div>
+        <span
+          style={{
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: '13px',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          Loading…
+        </span>
+      </div>
+    )
+  }
 
   return (
     <TokenContext.Provider value={{ getToken: async () => token }}>
