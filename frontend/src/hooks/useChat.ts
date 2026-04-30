@@ -8,7 +8,7 @@ import type { ParsedResponse, ChatMessage, UseChatReturn } from '../types'
 
 const MAX_HISTORY = 20
 
-export function useChat(): UseChatReturn {
+export function useChat(isGuest = false): UseChatReturn {
   const [parsedResponse, setParsedResponse] = useState<ParsedResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -17,7 +17,7 @@ export function useChat(): UseChatReturn {
   const conversationHistory = useRef<ChatMessage[]>([])
 
   const { getToken } = useToken()
-  const { save: saveToHistory } = useHistory()
+  const { save: saveToHistory } = useHistory(isGuest)
   const createEval = useMutation(api.evals.createEval)
 
   async function ask(question: string): Promise<void> {
@@ -58,19 +58,21 @@ export function useChat(): UseChatReturn {
 
       setParsedResponse(parsed)
 
-      saveToHistory(question, data.response)
-        .then(hId => setHistoryId(hId as string))
-        .catch(() => {})
+      if (!isGuest) {
+        saveToHistory(question, data.response)
+          .then(hId => setHistoryId(hId as string))
+          .catch(() => {})
 
-      createEval({
-        question,
-        response: data.response,
-        latency_ms: data.latency_ms,
-        input_tokens: data.input_tokens,
-        output_tokens: data.output_tokens,
-      })
-        .then(id => setEvalId(id as string))
-        .catch(() => { setEvalId('eval-unavailable') })
+        createEval({
+          question,
+          response: data.response,
+          latency_ms: data.latency_ms,
+          input_tokens: data.input_tokens,
+          output_tokens: data.output_tokens,
+        })
+          .then(id => setEvalId(id as string))
+          .catch(() => { setEvalId('eval-unavailable') })
+      }
     } catch (err) {
       const msg =
         err instanceof Error && err.message === '429'
@@ -79,7 +81,6 @@ export function useChat(): UseChatReturn {
       setError(msg)
       if (import.meta.env.DEV) {
         console.error('[useChat] ask error:', err)
-        // TODO: send to error logging middleware
       }
     } finally {
       setIsLoading(false)
