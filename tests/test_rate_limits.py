@@ -11,10 +11,10 @@ def _fake_chat_result(text="<summary>ok</summary>"):
     return {"response": text, "input_tokens": 10, "output_tokens": 20, "latency_ms": 42}
 
 
-def test_per_user_limit_returns_429_after_10_requests(rate_limited_client, mock_jwks, valid_token):
-    """The 11th request from the same user in a day should return 429."""
+def test_per_user_limit_returns_429_after_5_requests(rate_limited_client, mock_jwks, valid_token):
+    """The 6th request from the same user in a day should return 429."""
     with patch("app.chat_run", return_value=_fake_chat_result()):
-        for _ in range(10):
+        for _ in range(5):
             resp = rate_limited_client.post(
                 "/ask",
                 json={"question": "test?"},
@@ -35,7 +35,7 @@ def test_global_limit_returns_429_after_70_requests(rate_limited_client, mock_jw
     """The 71st request globally in a day should return 429.
 
     Each request uses a unique IP and a unique user sub so that neither the
-    per-IP (20/min) nor per-user (10/day) limits fire before the global cap.
+    per-IP (20/min) nor per-user (5/day) limits fire before the global cap.
     """
     with patch("app.chat_run", return_value=_fake_chat_result()):
         for i, token in enumerate(conftest_tokens[:70]):
@@ -47,7 +47,6 @@ def test_global_limit_returns_429_after_70_requests(rate_limited_client, mock_jw
             )
             assert resp.status_code == 200
 
-        # 71st request — global cap should fire
         resp = rate_limited_client.post(
             "/ask",
             json={"question": "over the global cap"},
