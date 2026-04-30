@@ -79,7 +79,11 @@
       "Bash(npm run *)",
       "Bash(npx playwright *)",
       "Bash(vercel *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(venv/bin/pytest *)",
+      "Bash(venv/bin/pip show *)",
+      "Bash(venv/bin/python -c \"from limits.storage import MemoryStorage; help\\(MemoryStorage.reset\\)\")",
+      "Bash(venv/bin/python -c ' *)"
     ]
   }
 }
