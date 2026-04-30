@@ -83,7 +83,7 @@ def expired_token():
 @pytest.fixture
 def conftest_tokens():
     """71 tokens with unique sub values — one per user — to hit the global cap
-    without triggering the per-user (10/day) limit first."""
+    without triggering the per-user (5/day) limit first."""
     return [_make_token(sub=f"user_{i}") for i in range(71)]
 
 
