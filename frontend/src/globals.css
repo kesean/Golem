@@ -2,6 +2,24 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+}
+
 @layer base {
   :root {
     /* shadcn hsl tokens */
@@ -9,6 +27,8 @@
     --foreground: 40 5% 7%;
     --card: 0 0% 100%;
     --card-foreground: 40 5% 7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 40 5% 7%;
     --primary: 155 59% 26%;
     --primary-foreground: 0 0% 100%;
     --secondary: 42 15% 94%;
@@ -43,6 +63,8 @@
     --foreground: 42 17% 94%;
     --card: 222 22% 12%;
     --card-foreground: 42 17% 94%;
+    --popover: 222 22% 12%;
+    --popover-foreground: 42 17% 94%;
     --primary: 151 62% 44%;
     --primary-foreground: 220 22% 7%;
     --muted: 222 22% 12%;
