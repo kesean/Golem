@@ -104,6 +104,7 @@ def fetch_file(owner: str, repo: str, path: str) -> str:
 
 
 def chunk_text(text: str, enc: tiktoken.Encoding | None = None) -> list[str]:
+    import tiktoken
     if enc is None:
         enc = tiktoken.get_encoding("cl100k_base")
     tokens = enc.encode(text)
@@ -190,7 +191,6 @@ def main(validate_only: bool = False) -> None:
     if validate_only:
         return
 
-    import tiktoken
     import voyageai
     from qdrant_client import QdrantClient
     from qdrant_client.models import Distance, VectorParams, PointStruct
