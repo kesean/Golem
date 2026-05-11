@@ -14,6 +14,8 @@ Optional:
     GITHUB_TOKEN  — raises GitHub API rate limit from 60 to 5000 req/hr
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import uuid
@@ -22,11 +24,7 @@ import hashlib
 import logging
 
 import httpx
-import tiktoken
-import voyageai
 from dotenv import load_dotenv
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -191,6 +189,11 @@ def main(validate_only: bool = False) -> None:
     validate_sources()
     if validate_only:
         return
+
+    import tiktoken
+    import voyageai
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import Distance, VectorParams, PointStruct
 
     missing = [k for k, v in {"QDRANT_URL": QDRANT_URL, "QDRANT_API_KEY": QDRANT_API_KEY, "VOYAGE_API_KEY": VOYAGE_API_KEY}.items() if not v]
     if missing:
