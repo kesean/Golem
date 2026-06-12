@@ -1,34 +1,26 @@
 # Golem
 
-A developer support chatbot that answers technical questions the way a developer support engineer would — structured, specific, and actionable. Built as a portfolio project to practice Claude API integration, prompt engineering, and modern web tooling.
-
-![Golem — V2 Architecture](docs/assets/images/architecture.png)
-
-## What it does
-
-You type a technical question. The app streams back a response broken into four sections:
-
-- **Summary** — a concise answer
-- **Root Cause** — why the problem happens
-- **Debug Steps** — numbered steps to resolve it
-- **Docs** — relevant documentation links
-
-Each response is also tagged with a product area (e.g. Authentication, Rate Limits, SDK) so answers are easy to scan at a glance. History is saved per-user in the cloud and visible in a sidebar.
-
-Visitors can try the chatbot without creating an account — a signed guest JWT is issued automatically on first load, giving up to 5 questions before prompting to sign in.
+A chatbot integration project, built as hands-on practice.
 
 ## Stack
 
 | Layer | Tech |
 |-------|------|
 | API | Python · Flask · Anthropic SDK |
-| Auth | Clerk (sign-in gate + JWT verification) |
-| Database | Convex (per-user history) |
-| Frontend | Vite · React · TypeScript · Tailwind · shadcn/ui |
+| Frontend | React · TypeScript |
+| CI / Deploy | GitHub Actions · Railway · Vercel · Playwright |
+
+## What it does
+
+Golem is a chatbot that answers technical questions in a structured format: summary, root cause, debug steps, and relevant docs. Each response is tagged with a product area so answers are easy to scan at a glance.
+
+## Why I built it
+
+I built Golem as practice wiring a full application together across services: auth, a backend API, a deployed frontend, CI, and end-to-end tests. The goal was to stay current with modern tooling by shipping something real end to end.
 
 ## Running locally
 
-**Prerequisites:** Python 3, Node 18+, accounts on [Anthropic](https://console.anthropic.com), [Clerk](https://dashboard.clerk.com), and [Convex](https://dashboard.convex.dev).
+**Prerequisites:** Python 3, Node 18+, an [Anthropic API key](https://console.anthropic.com).
 
 **1. Clone and install**
 
@@ -63,8 +55,6 @@ VITE_CLERK_PUBLISHABLE_KEY=...
 VITE_CONVEX_URL=...
 ```
 
-To get your Convex URL, run `npx convex dev` from the `frontend/` directory once to initialize the project.
-
 **3. Start the servers**
 
 ```bash
@@ -88,8 +78,6 @@ npm i -g vercel
 vercel link    # when prompted, set Root Directory → frontend
 ```
 
-This creates `.vercel/project.json` at the repo root (gitignored). All `make` targets depend on it.
-
 **Deploy commands:**
 
 | Command | What it does |
@@ -97,9 +85,9 @@ This creates `.vercel/project.json` at the repo root (gitignored). All `make` ta
 | `make deploy-dev` | Deploy preview from `dev` branch |
 | `make deploy-pre` | Deploy preview from `preview` branch |
 | `make deploy-prod` | Deploy to production (from `main`) |
-| `make status` | List recent deployments across all environments |
-| `make logs URL=<deployment-url>` | Tail logs for a specific deployment |
-| `make open` | Open the project dashboard on vercel.com |
+| `make status` | List recent deployments |
+| `make logs URL=<url>` | Tail logs for a specific deployment |
+| `make open` | Open the Vercel project dashboard |
 
 Branch → environment mapping:
 
@@ -213,16 +201,15 @@ Branch → environment mapping:
 
 | Feature | Status |
 |---------|--------|
-| Embed Clerk documentation chunks into Qdrant vector store | ✅ Done |
-| Voyage AI embeddings + Qdrant Cloud vector search | ✅ Done |
+| Embed documentation chunks into vector store | ✅ Done |
 | Top-k retrieval via `retrieve_docs` tool | ✅ Done |
 
 ### V2c — Tool use
 
 | Feature | Status |
 |---------|--------|
-| `retrieve_docs()` tool backed by Qdrant vector search | ✅ Done |
-| `api_lookup()` tool for live Clerk + Anthropic API data | ✅ Done |
+| `retrieve_docs()` tool backed by vector search | ✅ Done |
+| `api_lookup()` tool for live API data | ✅ Done |
 | `chat.py` tool loop — LLM decides which tools to call | ✅ Done |
 | Pre-retrieve docs before Claude call — eliminates tool-use round trip | ✅ Done |
 | Cap tool loop to 2 Claude API calls max | ✅ Done |
@@ -244,11 +231,11 @@ Branch → environment mapping:
 | Restore streaming responses | 🔲 Planned |
 | Debug panel showing retrieved doc chunks | 🔲 Planned |
 
-### Portfolio hardening
+### Guest access
 
 | Feature | Status |
 |---------|--------|
-| Guest JWT access — try chatbot without Clerk sign-in | ✅ Done |
+| Guest JWT access — try chatbot without sign-in | ✅ Done |
 | Animated loading screen during guest token fetch | ✅ Done |
 | History palette shows sign-in prompt for guest users | ✅ Done |
 | Per-user daily cap reduced to 5 requests | ✅ Done |
