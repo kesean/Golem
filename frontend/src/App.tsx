@@ -6,6 +6,7 @@ import { Header } from './components/Header'
 import { QuestionInput } from './components/QuestionInput'
 import { ResponsePanel } from './components/ResponsePanel'
 import { HistoryPalette } from './components/HistoryPalette'
+import { SuggestedQuestions } from './components/SuggestedQuestions'
 import type { HistoryEntry } from './hooks/useHistory'
 
 function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; isGuest?: boolean; onSignOut?: () => void }) {
@@ -18,6 +19,11 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
     if (!question.trim() || chat.isLoading) return
     chat.ask(question)
     setQuestion('')
+  }
+
+  function handlePickSuggestion(q: string) {
+    if (chat.isLoading) return
+    chat.ask(q)
   }
 
   function handleHistorySelect(entry: HistoryEntry) {
@@ -65,6 +71,9 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
           onSubmit={handleSubmit}
           isLoading={chat.isLoading}
         />
+        {!chat.isLoading && !chat.parsedResponse && !chat.error && !question.trim() && (
+          <SuggestedQuestions onPick={handlePickSuggestion} />
+        )}
         <ResponsePanel
           isLoading={chat.isLoading}
           isStreaming={chat.isStreaming}
