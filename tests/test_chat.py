@@ -8,34 +8,52 @@ from unittest.mock import MagicMock, patch
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_end_turn_msg(text="<summary>Test</summary>", input_tokens=10, output_tokens=20):
-    """Build a mock end_turn response."""
-    msg = MagicMock()
-    msg.stop_reason = "end_turn"
-    msg.content = [MagicMock(text=text, type="text")]
-    msg.usage.input_tokens = input_tokens
-    msg.usage.output_tokens = output_tokens
-    return msg
+def _make_stream_cm(deltas, input_tokens=10, output_tokens=20, stop_reason="end_turn"):
+    """Build a mock for _client.messages.stream(...)'s context manager.
+
+    deltas: list of text chunks yielded by stream.text_stream.
+    """
+    final_message = MagicMock()
+    final_message.usage.input_tokens = input_tokens
+    final_message.usage.output_tokens = output_tokens
+    final_message.stop_reason = stop_reason
+
+    stream = MagicMock()
+    stream.text_stream = iter(deltas)
+    stream.get_final_message.return_value = final_message
+
+    cm = MagicMock()
+    cm.__enter__.return_value = stream
+    cm.__exit__.return_value = False
+    return cm
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_no_tool_call_returns_answer_directly():
-    """Single end_turn response returns correct dict shape."""
+def test_deltas_then_done_event():
+    """Text deltas stream first, followed by exactly one done event."""
     import chat
 
-    end_msg = _make_end_turn_msg(text="<summary>Direct answer</summary>", input_tokens=10, output_tokens=20)
+    cm = _make_stream_cm(["<summary>", "Test", "</summary>"], input_tokens=10, output_tokens=20)
 
-    with patch.object(chat._client.messages, "create", return_value=end_msg):
-        result = chat.run("What is JWT?", [])
+    with patch.object(chat._client.messages, "stream", return_value=cm):
+        events = list(chat.stream_run("What is JWT?", []))
 
-    assert result["response"] == "<summary>Direct answer</summary>"
-    assert result["input_tokens"] == 10
-    assert result["output_tokens"] == 20
-    assert isinstance(result["latency_ms"], (int, float))
-    assert result["latency_ms"] >= 0
+    assert events[:3] == [
+        {"type": "delta", "text": "<summary>"},
+        {"type": "delta", "text": "Test"},
+        {"type": "delta", "text": "</summary>"},
+    ]
+    assert len(events) == 4
+    done = events[3]
+    assert done["type"] == "done"
+    assert done["response"] == "<summary>Test</summary>"
+    assert done["input_tokens"] == 10
+    assert done["output_tokens"] == 20
+    assert isinstance(done["latency_ms"], (int, float))
+    assert done["latency_ms"] >= 0
 
 
 def test_pre_retrieval_context_injected():
@@ -43,18 +61,18 @@ def test_pre_retrieval_context_injected():
     import chat
     import retrieval as retrieval_module
 
-    end_msg = _make_end_turn_msg(text="<summary>Answer with context</summary>")
+    cm = _make_stream_cm(["<summary>Answer with context</summary>"])
 
-    with patch.object(chat._client.messages, "create", return_value=end_msg) as mock_create:
+    with patch.object(chat._client.messages, "stream", return_value=cm) as mock_stream:
         with patch.object(retrieval_module, "_qdrant", MagicMock()):
             with patch.object(retrieval_module, "_voyage", MagicMock()):
                 with patch.object(retrieval_module, "retrieve_context", return_value="clerk docs") as mock_rc:
-                    result = chat.run("How does JWT auth work?", [])
+                    events = list(chat.stream_run("How does JWT auth work?", []))
 
     mock_rc.assert_called_once_with("How does JWT auth work?")
-    user_content = mock_create.call_args[1]["messages"][-1]["content"]
+    user_content = mock_stream.call_args[1]["messages"][-1]["content"]
     assert "clerk docs" in user_content
-    assert result["response"] == "<summary>Answer with context</summary>"
+    assert events[-1]["response"] == "<summary>Answer with context</summary>"
 
 
 def test_pre_retrieval_failure_still_answers():
@@ -62,54 +80,56 @@ def test_pre_retrieval_failure_still_answers():
     import chat
     import retrieval as retrieval_module
 
-    end_msg = _make_end_turn_msg(text="<summary>Recovered answer</summary>")
+    cm = _make_stream_cm(["<summary>Recovered answer</summary>"])
 
-    with patch.object(chat._client.messages, "create", return_value=end_msg) as mock_create:
+    with patch.object(chat._client.messages, "stream", return_value=cm) as mock_stream:
         with patch.object(retrieval_module, "_qdrant", MagicMock()):
             with patch.object(retrieval_module, "_voyage", MagicMock()):
                 with patch.object(retrieval_module, "retrieve_context", side_effect=Exception("Qdrant down")):
-                    result = chat.run("Some question", [])
+                    events = list(chat.stream_run("Some question", []))
 
-    assert result["response"] == "<summary>Recovered answer</summary>"
-    assert "RETRIEVED DOCS" not in mock_create.call_args[1]["messages"][-1]["content"]
+    assert events[-1]["response"] == "<summary>Recovered answer</summary>"
+    assert "RETRIEVED DOCS" not in mock_stream.call_args[1]["messages"][-1]["content"]
 
 
-def test_uses_current_model_and_single_call():
-    """Exactly one Claude call, using chat.MODEL, with no tools."""
+def test_uses_current_model_and_no_tools():
+    """Exactly one Claude stream call, using chat.MODEL, with no tools."""
     import chat
 
-    end_msg = _make_end_turn_msg()
+    cm = _make_stream_cm(["ok"])
 
-    with patch.object(chat._client.messages, "create", return_value=end_msg) as mock_create:
-        chat.run("Question", [])
+    with patch.object(chat._client.messages, "stream", return_value=cm) as mock_stream:
+        list(chat.stream_run("Question", []))
 
-    mock_create.assert_called_once()
-    assert mock_create.call_args[1]["model"] == chat.MODEL == "claude-sonnet-5"
-    assert "tools" not in mock_create.call_args[1]
+    mock_stream.assert_called_once()
+    assert mock_stream.call_args[1]["model"] == chat.MODEL == "claude-sonnet-5"
+    assert "tools" not in mock_stream.call_args[1]
 
 
-def test_no_text_block_raises():
-    """end_turn response with no text block raises RuntimeError."""
+def test_no_text_raises():
+    """No deltas at all raises RuntimeError, and no done event is yielded."""
     import chat
 
-    msg = MagicMock()
-    msg.stop_reason = "end_turn"
-    msg.content = []
-    msg.usage.input_tokens = 1
-    msg.usage.output_tokens = 1
+    cm = _make_stream_cm([])
 
-    with patch.object(chat._client.messages, "create", return_value=msg):
+    with patch.object(chat._client.messages, "stream", return_value=cm):
         with pytest.raises(RuntimeError, match="No text in model response"):
-            chat.run("Question", [])
+            list(chat.stream_run("Question", []))
 
 
 def test_max_tokens_truncation_raises():
-    """stop_reason == 'max_tokens' raises instead of returning a truncated answer."""
+    """stop_reason == 'max_tokens' raises instead of yielding a done event for a
+    truncated response — even though deltas already streamed to the client,
+    app.py turns this into an 'error' SSE event instead of 'done'."""
     import chat
 
-    msg = _make_end_turn_msg(text="<summary>cut off halfway")
-    msg.stop_reason = "max_tokens"
+    cm = _make_stream_cm(["<summary>cut off halfway"], stop_reason="max_tokens")
 
-    with patch.object(chat._client.messages, "create", return_value=msg):
+    with patch.object(chat._client.messages, "stream", return_value=cm):
+        events = []
         with pytest.raises(RuntimeError, match="Unexpected stop_reason: max_tokens"):
-            chat.run("Question", [])
+            for event in chat.stream_run("Question", []):
+                events.append(event)
+
+    # The partial delta was already yielded before the truncation was detected
+    assert events == [{"type": "delta", "text": "<summary>cut off halfway"}]

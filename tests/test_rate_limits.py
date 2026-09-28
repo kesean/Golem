@@ -8,7 +8,11 @@ def _auth_headers(token):
 
 
 def _fake_chat_result(text="<summary>ok</summary>"):
-    return {"response": text, "input_tokens": 10, "output_tokens": 20, "latency_ms": 42}
+    """Events matching the shape chat.stream_run() yields."""
+    return [
+        {"type": "delta", "text": text},
+        {"type": "done", "response": text, "input_tokens": 10, "output_tokens": 20, "latency_ms": 42},
+    ]
 
 
 def test_per_user_limit_returns_429_after_5_requests(rate_limited_client, mock_jwks, valid_token):
@@ -21,6 +25,7 @@ def test_per_user_limit_returns_429_after_5_requests(rate_limited_client, mock_j
                 headers=_auth_headers(valid_token),
             )
             assert resp.status_code == 200
+            resp.get_data()  # fully consume the SSE stream so its request context is popped
 
         resp = rate_limited_client.post(
             "/ask",
@@ -46,6 +51,7 @@ def test_global_limit_returns_429_after_70_requests(rate_limited_client, mock_jw
                 environ_base={"REMOTE_ADDR": f"10.0.{i // 256}.{i % 256}"},
             )
             assert resp.status_code == 200
+            resp.get_data()  # fully consume the SSE stream so its request context is popped
 
         resp = rate_limited_client.post(
             "/ask",

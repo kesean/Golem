@@ -1,19 +1,21 @@
 import { test, expect } from '@playwright/test';
 
-const MOCK_RESPONSE = {
-  response: '<product_tag>Authentication</product_tag><summary>Test summary.</summary><root_cause>Test root cause.</root_cause><debug_steps>Step 1: Check your logs.</debug_steps><docs></docs>',
-  input_tokens: 50,
-  output_tokens: 100,
-  latency_ms: 500,
-};
+const MOCK_TEXT =
+  '<product_tag>Authentication</product_tag><summary>Test summary.</summary><root_cause>Test root cause.</root_cause><debug_steps>Step 1: Check your logs.</debug_steps><docs></docs>';
+
+// SSE body matching the shape /ask streams: one delta event with the full
+// text, then a done event with usage metrics.
+const MOCK_SSE_BODY =
+  `data: ${JSON.stringify({ type: 'delta', text: MOCK_TEXT })}\n\n` +
+  `data: ${JSON.stringify({ type: 'done', response: MOCK_TEXT, input_tokens: 50, output_tokens: 100, latency_ms: 500 })}\n\n`;
 
 test.beforeEach(async ({ page }) => {
   // Mock the /ask endpoint so no real Flask server is needed
   await page.route('**/ask', async (route) => {
     await route.fulfill({
       status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(MOCK_RESPONSE),
+      contentType: 'text/event-stream',
+      body: MOCK_SSE_BODY,
     });
   });
 });

@@ -230,7 +230,7 @@ Branch → environment mapping:
 | Dark mode toggle with localStorage persistence | ✅ Done |
 | DOMPurify-sanitized markdown rendering in React | ✅ Done |
 | Animated thinking indicator during response loading | ✅ Done |
-| Restore streaming responses | 🔲 Planned |
+| Restore streaming responses — `/ask` streams SSE, sections fade in as text arrives | ✅ Done |
 | Debug panel showing retrieved doc chunks | 🔲 Planned |
 
 ### Guest access
