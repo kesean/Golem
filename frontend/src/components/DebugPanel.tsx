@@ -13,7 +13,9 @@ type DebugPanelProps = {
 export function DebugPanel({ chunks }: DebugPanelProps) {
   const [open, setOpen] = useState(false)
 
-  if (chunks.length === 0) return null
+  // Defensive: also guards a backend serving an older /ask shape without
+  // "chunks" reaching this component some other way than via useChat.
+  if (!chunks || chunks.length === 0) return null
 
   return (
     <div

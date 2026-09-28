@@ -127,7 +127,9 @@ export function useChat(isGuest = false): UseChatReturn {
       ].slice(-MAX_HISTORY)
 
       setParsedResponse(parseResponse(done.response))
-      setChunks(done.chunks)
+      // Defensive: a backend serving an older /ask response shape (e.g. mid
+      // rolling-deploy) may omit "chunks" entirely from the done event.
+      setChunks(done.chunks ?? [])
 
       if (!isGuest) {
         saveToHistory(question, done.response)

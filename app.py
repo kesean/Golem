@@ -189,7 +189,7 @@ def ask():
     JSON-encoded event:
       {"type": "delta", "text": "..."}                 — zero or more
       {"type": "done", "response", "input_tokens",
-       "output_tokens", "latency_ms"}                  — exactly one, on success
+       "output_tokens", "latency_ms", "chunks"}         — exactly one, on success
       {"type": "error", "error": "..."}                 — instead of "done", on failure
 
     All validation happens before the stream opens, so a bad request still

@@ -1,8 +1,9 @@
 """
 retrieval.py — Qdrant + Voyage AI context lookup.
 
-Exposes retrieve_context(question, top_k, source) -> str.
-Returns a formatted doc block on success, "" on any failure.
+Exposes retrieve_chunks(question, top_k, source) -> list[dict] and
+retrieve_context_and_chunks(question, top_k, source) -> (str, list[dict]).
+Both return "empty" ([] or ("", [])) on any failure, never raise.
 Clients initialized once at import time; None when env vars are absent.
 """
 
@@ -83,11 +84,3 @@ def retrieve_context_and_chunks(question: str, top_k: int = 5, source: str | Non
         lines.append("")
     lines.append("--- END DOCS ---")
     return "\n".join(lines), chunks
-
-
-def retrieve_context(question: str, top_k: int = 5, source: str | None = None) -> str:
-    """Formatted-doc-block-only convenience wrapper around
-    retrieve_context_and_chunks, kept for scripts/tests that only need text.
-    """
-    context, _ = retrieve_context_and_chunks(question, top_k=top_k, source=source)
-    return context
