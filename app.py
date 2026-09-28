@@ -211,13 +211,22 @@ def ask():
     if not isinstance(history, list):
         return jsonify({"error": "Invalid history format"}), 400
 
+    def sse(event: dict) -> str:
+        return f"data: {json.dumps(event)}\n\n"
+
     def generate():
         try:
             for event in chat_run(question, history):
-                yield f"data: {json.dumps(event)}\n\n"
-        except RuntimeError as exc:
+                yield sse(event)
+        except Exception as exc:
+            # Broad on purpose: headers are already committed (200,
+            # text/event-stream) by the time this generator runs, so any
+            # failure — RuntimeError from stream_run's own checks, or an
+            # anthropic.APIError/APIConnectionError from the SDK — has to
+            # become a clean 'error' SSE event instead of an unhandled
+            # exception that just aborts the stream.
             logging.warning("stream_run failed: %s", exc)
-            yield f"data: {json.dumps({'type': 'error', 'error': str(exc)})}\n\n"
+            yield sse({"type": "error", "error": str(exc)})
 
     return Response(
         stream_with_context(generate()),

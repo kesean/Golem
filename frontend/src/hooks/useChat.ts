@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useToken } from '../contexts/TokenContext'
@@ -17,12 +17,23 @@ export function useChat(isGuest = false): UseChatReturn {
   const [evalId, setEvalId] = useState<string | null>(null)
   const [historyId, setHistoryId] = useState<string | null>(null)
   const conversationHistory = useRef<ChatMessage[]>([])
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const { getToken } = useToken()
   const { save: saveToHistory } = useHistory(isGuest)
   const createEval = useMutation(api.evals.createEval)
 
+  // Abort any in-flight stream when the component unmounts, so a stray
+  // fetch/reader loop doesn't keep calling setState after unmount.
+  useEffect(() => {
+    return () => abortControllerRef.current?.abort()
+  }, [])
+
   async function ask(question: string): Promise<void> {
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     setIsLoading(true)
     setIsStreaming(false)
     setError(null)
@@ -48,6 +59,7 @@ export function useChat(isGuest = false): UseChatReturn {
           question,
           history: conversationHistory.current.slice(0, -1),
         }),
+        signal: controller.signal,
       })
 
       if (!res.ok) {
@@ -63,25 +75,38 @@ export function useChat(isGuest = false): UseChatReturn {
       let fullText = ''
       let done: { response: string; input_tokens: number; output_tokens: number; latency_ms: number } | null = null
 
-      while (true) {
-        const { value, done: streamDone } = await reader.read()
-        if (streamDone) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const { events, rest } = parseSSEChunk(buffer)
+      function handleEvents(chunk: string): typeof done {
+        const { events, rest } = parseSSEChunk(chunk)
         buffer = rest
-
+        let result: typeof done = null
         for (const event of events) {
           if (event.type === 'delta') {
             fullText += event.text
             setIsStreaming(true)
             setParsedResponse(parseResponse(fullText))
           } else if (event.type === 'done') {
-            done = event
+            result = event
           } else if (event.type === 'error') {
             throw new Error(event.error || 'SERVER_ERROR')
           }
         }
+        return result
+      }
+
+      while (true) {
+        const { value, done: streamDone } = await reader.read()
+        if (streamDone) break
+
+        buffer += decoder.decode(value, { stream: true })
+        done = handleEvents(buffer) ?? done
+      }
+      // Flush any multi-byte UTF-8 sequence left buffered in the decoder
+      // (split across the last two network chunks) and re-parse once more —
+      // without this, a character split right at stream end is silently
+      // dropped instead of appearing in the final response text.
+      buffer += decoder.decode()
+      if (buffer.trim()) {
+        done = handleEvents(buffer + '\n\n') ?? done
       }
 
       if (!done) {
@@ -111,6 +136,11 @@ export function useChat(isGuest = false): UseChatReturn {
           .catch(() => { setEvalId('eval-unavailable') })
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        // Deliberate cancellation (reset() or unmount) — not a failure,
+        // so don't clobber whatever state reset() already set.
+        return
+      }
       const msg =
         err instanceof Error && err.message === '429'
           ? "You've reached the daily limit — try again tomorrow."
@@ -129,6 +159,7 @@ export function useChat(isGuest = false): UseChatReturn {
   }
 
   function loadFromHistory(rawXml: string): void {
+    abortControllerRef.current?.abort()
     setParsedResponse(parseResponse(rawXml))
     setEvalId(null)
     setHistoryId(null)
@@ -136,6 +167,7 @@ export function useChat(isGuest = false): UseChatReturn {
   }
 
   function reset(): void {
+    abortControllerRef.current?.abort()
     setParsedResponse(null)
     setError(null)
     setEvalId(null)

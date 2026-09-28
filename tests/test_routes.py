@@ -144,3 +144,22 @@ def test_chat_run_runtime_error_sends_error_event(client, mock_jwks, valid_token
     assert resp.status_code == 200
     events = _parse_sse(resp.data)
     assert events == [{"type": "error", "error": "No response from model"}]
+
+
+def test_chat_run_non_runtime_error_also_sends_error_event(client, mock_jwks, valid_token):
+    """A non-RuntimeError exception mid-stream (e.g. an Anthropic SDK error) is
+    also caught and converted to an 'error' SSE event, not left to abort the
+    stream — headers are already committed by the time this runs."""
+    def _raising_generator(question, history):
+        raise ConnectionError("upstream connection reset")
+        yield  # pragma: no cover - makes this a generator function
+
+    with patch("app.chat_run", side_effect=_raising_generator):
+        resp = client.post(
+            "/ask",
+            json={"question": "Why am I getting a 401?"},
+            headers=_auth_headers(valid_token),
+        )
+    assert resp.status_code == 200
+    events = _parse_sse(resp.data)
+    assert events == [{"type": "error", "error": "upstream connection reset"}]
