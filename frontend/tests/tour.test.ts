@@ -21,8 +21,11 @@ describe('tour', () => {
 
   it('does not throw when localStorage is unavailable', () => {
     const orig = Storage.prototype.getItem
-    Storage.prototype.getItem = () => { throw new Error('blocked') }
-    expect(hasSeenTour()).toBe(true) // fail closed: never nag if storage is broken
-    Storage.prototype.getItem = orig
+    try {
+      Storage.prototype.getItem = () => { throw new Error('blocked') }
+      expect(hasSeenTour()).toBe(true) // fail closed: never nag if storage is broken
+    } finally {
+      Storage.prototype.getItem = orig
+    }
   })
 })

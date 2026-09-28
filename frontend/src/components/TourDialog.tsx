@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { TOUR_STEPS } from '../lib/tour'
 import { Button } from './ui/button'
 import {
@@ -18,19 +18,14 @@ type TourDialogProps = {
 export function TourDialog({ open, onClose }: TourDialogProps) {
   const [step, setStep] = useState(0)
 
-  // Reset to step 0 whenever open becomes true
-  useEffect(() => {
-    if (open) {
-      setStep(0)
-    }
-  }, [open])
-
   const currentStep = TOUR_STEPS[step]
   const isLastStep = step === TOUR_STEPS.length - 1
 
   function handleNext() {
     if (step < TOUR_STEPS.length - 1) {
       setStep(step + 1)
+    } else {
+      handleClose()
     }
   }
 
@@ -40,8 +35,13 @@ export function TourDialog({ open, onClose }: TourDialogProps) {
     }
   }
 
+  function handleClose() {
+    setStep(0)
+    onClose()
+  }
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
       <DialogContent
         data-testid="tour-dialog"
         style={{
@@ -81,7 +81,7 @@ export function TourDialog({ open, onClose }: TourDialogProps) {
         >
           {!isLastStep && (
             <Button
-              onClick={onClose}
+              onClick={handleClose}
               variant="ghost"
               style={{
                 color: 'var(--text-secondary)',
@@ -104,29 +104,16 @@ export function TourDialog({ open, onClose }: TourDialogProps) {
             </Button>
           )}
 
-          {!isLastStep && (
-            <Button
-              onClick={handleNext}
-              style={{
-                backgroundColor: 'var(--accent)',
-                color: 'var(--btn-text)',
-              }}
-            >
-              Next
-            </Button>
-          )}
-
-          {isLastStep && (
-            <Button
-              onClick={onClose}
-              style={{
-                backgroundColor: 'var(--accent)',
-                color: 'var(--btn-text)',
-              }}
-            >
-              Done
-            </Button>
-          )}
+          <Button
+            key="primary-button"
+            onClick={handleNext}
+            style={{
+              backgroundColor: 'var(--accent)',
+              color: 'var(--btn-text)',
+            }}
+          >
+            {isLastStep ? 'Done' : 'Next'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

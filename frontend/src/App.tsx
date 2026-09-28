@@ -11,13 +11,14 @@ import { TourDialog } from './components/TourDialog'
 import { hasSeenTour, markTourSeen } from './lib/tour'
 import type { HistoryEntry } from './hooks/useHistory'
 
+const bypassAuth = import.meta.env.VITE_TEST_BYPASS_AUTH === 'true'
+
 function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; isGuest?: boolean; onSignOut?: () => void }) {
   const { theme, toggle: toggleTheme } = useTheme()
   const chat = useChat(isGuest)
   const [question, setQuestion] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  const bypassAuth = import.meta.env.VITE_TEST_BYPASS_AUTH === 'true'
   const [tourOpen, setTourOpen] = useState(() => !bypassAuth && !hasSeenTour())
 
   function closeTour() {
@@ -122,7 +123,7 @@ function AuthenticatedApp() {
 }
 
 export default function App() {
-  if (import.meta.env.VITE_TEST_BYPASS_AUTH === 'true') {
+  if (bypassAuth) {
     return <Layout />
   }
   return <AuthenticatedApp />

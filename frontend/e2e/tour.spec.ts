@@ -25,3 +25,24 @@ test('skip closes the tour and marks it seen', async ({ page }) => {
   await expect(page.getByTestId('tour-dialog')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('golem-tour-seen'))).toBe('1');
 });
+
+test('reopen tour from last step shows first step', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#tour-btn').click();
+  const dialog = page.getByTestId('tour-dialog');
+  // Navigate to last step
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await expect(dialog.getByText('History, feedback and live stats')).toBeVisible();
+  // Click Done (which closes the tour)
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByTestId('tour-dialog')).toHaveCount(0);
+  // Reopen tour via #tour-btn
+  await page.locator('#tour-btn').click();
+  // Immediately assert first step is visible
+  const reopenedDialog = page.getByTestId('tour-dialog');
+  await expect(reopenedDialog.getByText('Ask a technical question')).toBeVisible();
+  await expect(reopenedDialog.getByText('Step 1 of 3')).toBeVisible();
+  // Ensure Step 3 text is not visible
+  await expect(reopenedDialog.getByText('Step 3 of 3')).not.toBeVisible();
+});
