@@ -8,6 +8,7 @@ export function SuggestedQuestions({ onPick }: SuggestedQuestionsProps) {
   return (
     <div style={{ padding: '16px 24px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
       <span
+        id="suggested-questions-label"
         style={{
           fontFamily: "'DM Sans', sans-serif",
           fontSize: '12px',
@@ -16,7 +17,7 @@ export function SuggestedQuestions({ onPick }: SuggestedQuestionsProps) {
       >
         Try one of these
       </span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+      <div role="group" aria-labelledby="suggested-questions-label" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
         {DEMO_QUESTIONS.map(({ label, question }) => (
           <button
             key={label}

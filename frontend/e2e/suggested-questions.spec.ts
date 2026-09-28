@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { DEMO_QUESTIONS } from '../src/lib/demoQuestions';
 
 const MOCK_TEXT =
   '<product_tag>Authentication</product_tag><summary>Test summary.</summary><root_cause>Test root cause.</root_cause><debug_steps>Step 1: Check your logs.</debug_steps><docs></docs>';
@@ -19,7 +20,11 @@ test('shows 5 suggested questions on the empty state', async ({ page }) => {
 
 test('clicking a suggestion submits it and hides the suggestions', async ({ page }) => {
   await page.goto('/');
+  const requestPromise = page.waitForRequest('**/ask');
   await page.getByTestId('suggested-question').first().click();
+  const request = await requestPromise;
+  const body = await request.postDataJSON();
+  expect(body.question).toBe(DEMO_QUESTIONS[0].question);
   await expect(page.getByText('Test summary.')).toBeVisible();
   await expect(page.getByTestId('suggested-question')).toHaveCount(0);
 });
