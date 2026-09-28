@@ -122,7 +122,7 @@ Branch → environment mapping:
 
 | Feature | Status |
 |---------|--------|
-| `/ask` endpoint with response streaming | ✅ Done |
+| `/ask` endpoint with response streaming | ✅ Done (removed in the V2 rewrite — see V2d for current status) |
 | XML-tagged section format for incremental rendering | ✅ Done |
 | Per-section streaming: text fades in chunk by chunk | ✅ Done |
 | Response card fades in on first content arrival | ✅ Done |
@@ -210,11 +210,13 @@ Branch → environment mapping:
 |---------|--------|
 | `retrieve_docs()` tool backed by vector search | ✅ Done |
 | `api_lookup()` tool for live API data | ✅ Done |
-| `chat.py` tool loop — LLM decides which tools to call | ✅ Done |
+| `chat.py` tool loop — LLM decides which tools to call | ✅ Done (removed below) |
 | Pre-retrieve docs before Claude call — eliminates tool-use round trip | ✅ Done |
 | Cap tool loop to 2 Claude API calls max | ✅ Done |
 | Remove `api_lookup` tool — guarantees single Claude API call | ✅ Done |
 | Skip `retrieve_docs` when RAG backends are not configured | ✅ Done |
+| Delete dead tool-loop code and `api_lookup.py`; `chat.py` is a single Claude call | ✅ Done |
+| Upgrade model to `claude-sonnet-5` | ✅ Done |
 
 ### V2d — Frontend upgrade
 

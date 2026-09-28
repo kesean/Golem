@@ -20,6 +20,8 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       env: {
         VITE_TEST_BYPASS_AUTH: 'true',
+        // main.tsx constructs a Convex client at import time; any URL works since /ask is mocked
+        VITE_CONVEX_URL: process.env.VITE_CONVEX_URL ?? 'https://placeholder.convex.cloud',
       },
     },
   }),
