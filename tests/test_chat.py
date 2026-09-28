@@ -1,4 +1,4 @@
-"""test_chat.py — Unit tests for chat.py tool loop orchestrator."""
+"""test_chat.py — Unit tests for chat.py."""
 
 import pytest
 from unittest.mock import MagicMock, patch
@@ -13,28 +13,6 @@ def _make_end_turn_msg(text="<summary>Test</summary>", input_tokens=10, output_t
     msg = MagicMock()
     msg.stop_reason = "end_turn"
     msg.content = [MagicMock(text=text, type="text")]
-    msg.usage.input_tokens = input_tokens
-    msg.usage.output_tokens = output_tokens
-    return msg
-
-
-def _make_tool_use_msg(tool_calls, input_tokens=10, output_tokens=5):
-    """Build a mock tool_use response with one or more tool_call blocks.
-
-    tool_calls: list of dicts with keys: name, id, input
-    """
-    blocks = []
-    for tc in tool_calls:
-        block = MagicMock()
-        block.type = "tool_use"
-        block.id = tc["id"]
-        block.name = tc["name"]
-        block.input = tc["input"]
-        blocks.append(block)
-
-    msg = MagicMock()
-    msg.stop_reason = "tool_use"
-    msg.content = blocks
     msg.usage.input_tokens = input_tokens
     msg.usage.output_tokens = output_tokens
     return msg
@@ -79,86 +57,46 @@ def test_pre_retrieval_context_injected():
     assert result["response"] == "<summary>Answer with context</summary>"
 
 
-def test_api_lookup_tool_call_dispatched():
-    """api_lookup tool_use followed by end_turn — api_lookup.fetch called with correct args."""
-    import chat
-
-    tool_msg = _make_tool_use_msg([
-        {"id": "tool_002", "name": "api_lookup", "input": {"service": "anthropic", "endpoint": "models", "params": None}},
-    ])
-    end_msg = _make_end_turn_msg(text="<summary>Models answer</summary>")
-
-    with patch.object(chat._client.messages, "create", side_effect=[tool_msg, end_msg]):
-        with patch("chat.api_lookup.fetch", return_value='{"models": []}') as mock_fetch:
-            result = chat.run("What models are available?", [])
-
-    mock_fetch.assert_called_once_with("anthropic", "models", None)
-    assert result["response"] == "<summary>Models answer</summary>"
-
-
-def test_api_lookup_dispatched_with_pre_retrieved_context():
-    """api_lookup tool dispatches correctly alongside pre-retrieval."""
+def test_pre_retrieval_failure_still_answers():
+    """retrieve_context raises — Claude is still called, without context."""
     import chat
     import retrieval as retrieval_module
 
-    tool_msg = _make_tool_use_msg([
-        {"id": "tool_003", "name": "api_lookup", "input": {"service": "clerk", "endpoint": "errors", "params": None}},
-    ])
-    end_msg = _make_end_turn_msg(text="<summary>Combined answer</summary>")
-
-    with patch.object(chat._client.messages, "create", side_effect=[tool_msg, end_msg]):
-        with patch.object(retrieval_module, "_qdrant", MagicMock()):
-            with patch.object(retrieval_module, "_voyage", MagicMock()):
-                with patch.object(retrieval_module, "retrieve_context", return_value="docs") as mock_rc:
-                    with patch("chat.api_lookup.fetch", return_value="errors data") as mock_fetch:
-                        result = chat.run("CORS and Clerk errors", [])
-
-    mock_rc.assert_called_once_with("CORS and Clerk errors")
-    mock_fetch.assert_called_once_with("clerk", "errors", None)
-    assert result["response"] == "<summary>Combined answer</summary>"
-
-
-def test_tool_failure_returns_error_string_loop_continues():
-    """retrieve_context raises — loop continues and returns final answer without raising."""
-    import chat
-
-    tool_msg = _make_tool_use_msg([
-        {"id": "tool_005", "name": "retrieve_docs", "input": {"query": "broken query"}},
-    ])
     end_msg = _make_end_turn_msg(text="<summary>Recovered answer</summary>")
 
-    with patch.object(chat._client.messages, "create", side_effect=[tool_msg, end_msg]):
-        with patch("chat.retrieval.retrieve_context", side_effect=Exception("Qdrant down")):
-            result = chat.run("Some question", [])
+    with patch.object(chat._client.messages, "create", return_value=end_msg) as mock_create:
+        with patch.object(retrieval_module, "_qdrant", MagicMock()):
+            with patch.object(retrieval_module, "_voyage", MagicMock()):
+                with patch.object(retrieval_module, "retrieve_context", side_effect=Exception("Qdrant down")):
+                    result = chat.run("Some question", [])
 
-    # Should not raise; the loop should send an error string as tool result and continue
     assert result["response"] == "<summary>Recovered answer</summary>"
+    assert "RETRIEVED DOCS" not in mock_create.call_args[1]["messages"][-1]["content"]
 
 
-def test_max_tool_rounds_exceeded_raises():
-    """Always returns tool_use — RuntimeError after MAX_TOOL_ROUNDS."""
+def test_uses_current_model_and_single_call():
+    """Exactly one Claude call, using chat.MODEL, with no tools."""
     import chat
 
-    tool_msg = _make_tool_use_msg([
-        {"id": "tool_006", "name": "retrieve_docs", "input": {"query": "infinite loop query"}},
-    ])
+    end_msg = _make_end_turn_msg()
 
-    with patch.object(chat._client.messages, "create", return_value=tool_msg):
-        with patch("chat.retrieval.retrieve_context", return_value="some docs"):
-            with pytest.raises(RuntimeError, match="tool loop exceeded MAX_TOOL_ROUNDS"):
-                chat.run("Infinite tool loop", [])
+    with patch.object(chat._client.messages, "create", return_value=end_msg) as mock_create:
+        chat.run("Question", [])
+
+    mock_create.assert_called_once()
+    assert mock_create.call_args[1]["model"] == chat.MODEL == "claude-sonnet-5"
+    assert "tools" not in mock_create.call_args[1]
 
 
-def test_unknown_tool_name_returns_error_string():
-    """tool_use block with unknown name — loop continues with error string result."""
+def test_no_text_block_raises():
+    """Response with no text block raises RuntimeError."""
     import chat
 
-    tool_msg = _make_tool_use_msg([
-        {"id": "tool_007", "name": "nonexistent_tool", "input": {"foo": "bar"}},
-    ])
-    end_msg = _make_end_turn_msg(text="<summary>Answer after unknown tool</summary>")
+    msg = MagicMock()
+    msg.content = []
+    msg.usage.input_tokens = 1
+    msg.usage.output_tokens = 1
 
-    with patch.object(chat._client.messages, "create", side_effect=[tool_msg, end_msg]):
-        result = chat.run("Question triggering unknown tool", [])
-
-    assert result["response"] == "<summary>Answer after unknown tool</summary>"
+    with patch.object(chat._client.messages, "create", return_value=msg):
+        with pytest.raises(RuntimeError, match="No text in model response"):
+            chat.run("Question", [])
