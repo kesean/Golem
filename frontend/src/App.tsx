@@ -7,6 +7,8 @@ import { QuestionInput } from './components/QuestionInput'
 import { ResponsePanel } from './components/ResponsePanel'
 import { HistoryPalette } from './components/HistoryPalette'
 import { SuggestedQuestions } from './components/SuggestedQuestions'
+import { TourDialog } from './components/TourDialog'
+import { hasSeenTour, markTourSeen } from './lib/tour'
 import type { HistoryEntry } from './hooks/useHistory'
 
 function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; isGuest?: boolean; onSignOut?: () => void }) {
@@ -14,6 +16,14 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
   const chat = useChat(isGuest)
   const [question, setQuestion] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+
+  const bypassAuth = import.meta.env.VITE_TEST_BYPASS_AUTH === 'true'
+  const [tourOpen, setTourOpen] = useState(() => !bypassAuth && !hasSeenTour())
+
+  function closeTour() {
+    markTourSeen()
+    setTourOpen(false)
+  }
 
   function handleSubmit() {
     if (!question.trim() || chat.isLoading) return
@@ -49,6 +59,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
         theme={theme}
         onToggleTheme={toggleTheme}
         onOpenHistory={() => setHistoryOpen(true)}
+        onOpenTour={() => setTourOpen(true)}
         onNewConversation={handleNewConversation}
         userName={userName}
         onSignOut={onSignOut}
@@ -91,6 +102,8 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
         onSelect={handleHistorySelect}
         isGuest={isGuest}
       />
+
+      <TourDialog open={tourOpen} onClose={closeTour} />
     </div>
   )
 }
