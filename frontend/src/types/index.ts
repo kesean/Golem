@@ -1,3 +1,9 @@
+export type RetrievedChunk = {
+  source: string
+  path: string
+  text: string
+}
+
 export type ParsedResponse = {
   productTag: string
   summary: string
@@ -17,5 +23,6 @@ export type UseChatReturn = {
   error: string | null
   evalId: string | null
   historyId: string | null
+  chunks: RetrievedChunk[]
   reset: () => void
 }

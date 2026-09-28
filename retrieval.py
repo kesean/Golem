@@ -33,14 +33,15 @@ if _voyage_api_key:
 COLLECTION = "dev_support_docs"
 
 
-def retrieve_context(question: str, top_k: int = 5, source: str | None = None) -> str:
-    """Embed question, query Qdrant, return formatted doc block or "" on failure.
+def retrieve_chunks(question: str, top_k: int = 5, source: str | None = None) -> list[dict]:
+    """Embed question, query Qdrant, return matching chunks as a list of
+    {"source", "path", "text"} dicts, most relevant first. [] on any failure.
 
     source: 'clerk' | 'mdn' | None (search all).
     """
     if _qdrant is None or _voyage is None:
-        logging.warning("retrieve_context: client(s) not initialized — skipping")
-        return ""
+        logging.warning("retrieve_chunks: client(s) not initialized — skipping")
+        return []
     try:
         from qdrant_client.models import Filter, FieldCondition, MatchValue
 
@@ -55,18 +56,38 @@ def retrieve_context(question: str, top_k: int = 5, source: str | None = None) -
             limit=top_k,
             query_filter=query_filter,
         ).points
-        if not hits:
-            return ""
-        lines = ["--- RETRIEVED DOCS ---"]
-        for hit in hits:
-            hit_source = hit.payload.get("source", "")
-            path = hit.payload.get("repo_path", "")
-            text = hit.payload.get("text", "")
-            lines.append(f"[{hit_source} - {path}]")
-            lines.append(text)
-            lines.append("")
-        lines.append("--- END DOCS ---")
-        return "\n".join(lines)
+        return [
+            {
+                "source": hit.payload.get("source", ""),
+                "path": hit.payload.get("repo_path", ""),
+                "text": hit.payload.get("text", ""),
+            }
+            for hit in hits
+        ]
     except Exception as e:
-        logging.warning("retrieve_context failed: %s", e)
-        return ""
+        logging.warning("retrieve_chunks failed: %s", e)
+        return []
+
+
+def retrieve_context_and_chunks(question: str, top_k: int = 5, source: str | None = None) -> tuple[str, list[dict]]:
+    """Like retrieve_chunks, but also returns the chunks formatted as a doc
+    block ready to inject into the prompt. ("", []) when nothing is found.
+    """
+    chunks = retrieve_chunks(question, top_k=top_k, source=source)
+    if not chunks:
+        return "", []
+    lines = ["--- RETRIEVED DOCS ---"]
+    for chunk in chunks:
+        lines.append(f"[{chunk['source']} - {chunk['path']}]")
+        lines.append(chunk["text"])
+        lines.append("")
+    lines.append("--- END DOCS ---")
+    return "\n".join(lines), chunks
+
+
+def retrieve_context(question: str, top_k: int = 5, source: str | None = None) -> str:
+    """Formatted-doc-block-only convenience wrapper around
+    retrieve_context_and_chunks, kept for scripts/tests that only need text.
+    """
+    context, _ = retrieve_context_and_chunks(question, top_k=top_k, source=source)
+    return context

@@ -72,6 +72,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
           error={chat.error}
           evalId={chat.evalId}
           historyId={chat.historyId}
+          chunks={chat.chunks}
         />
       </main>
 

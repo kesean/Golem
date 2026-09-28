@@ -22,6 +22,7 @@ def _fake_chat_events(text, input_tokens=10, output_tokens=20, latency_ms=42):
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "latency_ms": latency_ms,
+            "chunks": [],
         },
     ]
 

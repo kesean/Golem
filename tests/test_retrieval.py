@@ -103,6 +103,67 @@ def test_source_filter_passed_to_qdrant_when_provided(monkeypatch):
     assert query_filter == expected_filter
 
 
+def test_retrieve_chunks_returns_structured_hits(monkeypatch):
+    """retrieve_chunks returns dicts with source/path/text, most relevant first."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = [
+        _make_hit("Clerk", "docs/authentication/sessions.mdx", "Session info here."),
+        _make_hit("MDN", "files/en-us/web/api/fetch_api/index.md", "Fetch API docs."),
+    ]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    chunks = retrieval.retrieve_chunks("How do I verify a session?")
+
+    assert chunks == [
+        {"source": "Clerk", "path": "docs/authentication/sessions.mdx", "text": "Session info here."},
+        {"source": "MDN", "path": "files/en-us/web/api/fetch_api/index.md", "text": "Fetch API docs."},
+    ]
+
+
+def test_retrieve_chunks_empty_list_on_failure(monkeypatch):
+    """retrieve_chunks returns [] rather than raising when Qdrant fails."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.side_effect = Exception("Qdrant connection error")
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    assert retrieval.retrieve_chunks("some question") == []
+
+
+def test_retrieve_context_and_chunks_returns_both(monkeypatch):
+    """retrieve_context_and_chunks pairs the formatted block with its source chunks."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = [
+        _make_hit("Clerk", "docs/authentication/sessions.mdx", "Session info here."),
+    ]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    context, chunks = retrieval.retrieve_context_and_chunks("How do I verify a session?")
+
+    assert context.startswith("--- RETRIEVED DOCS ---")
+    assert chunks == [{"source": "Clerk", "path": "docs/authentication/sessions.mdx", "text": "Session info here."}]
+
+
+def test_retrieve_context_and_chunks_empty_when_no_hits(monkeypatch):
+    """No hits — returns ("", []) rather than an empty formatted block."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = []
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    assert retrieval.retrieve_context_and_chunks("some question") == ("", [])
+
+
 def test_no_filter_when_source_is_none(monkeypatch):
     """When source=None (default), query_points is called with query_filter=None."""
     mock_voyage = MagicMock()
