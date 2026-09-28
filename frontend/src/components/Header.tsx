@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useQuery } from 'convex/react'
+import { api } from '../../convex/_generated/api'
 import type { Theme } from '../hooks/useTheme'
 
 type HeaderProps = {
@@ -19,6 +21,7 @@ export function Header({
   onSignOut,
 }: HeaderProps) {
   const [signOutHovered, setSignOutHovered] = useState(false)
+  const totalQuestions = useQuery(api.stats.getGlobalCount)
   return (
     <header
       style={{
@@ -30,16 +33,29 @@ export function Header({
         backgroundColor: 'var(--bg)',
       }}
     >
-      <span
-        style={{
-          fontFamily: "'Newsreader', serif",
-          fontSize: '18px',
-          fontWeight: 600,
-          color: 'var(--accent)',
-        }}
-      >
-        Golem
-      </span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+        <span
+          style={{
+            fontFamily: "'Newsreader', serif",
+            fontSize: '18px',
+            fontWeight: 600,
+            color: 'var(--accent)',
+          }}
+        >
+          Golem
+        </span>
+        {totalQuestions !== undefined && (
+          <span
+            style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            · {totalQuestions.toLocaleString()} questions answered
+          </span>
+        )}
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <button
