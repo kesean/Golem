@@ -30,7 +30,8 @@ def run(question: str, history: list) -> dict:
     """Pre-retrieve docs, then make a single Claude call.
 
     Returns { response, input_tokens, output_tokens, latency_ms }.
-    Raises RuntimeError if the model returns no text.
+    Raises RuntimeError if the model returns no text, or stops for any
+    reason other than end_turn (e.g. max_tokens truncation).
     """
     start = time.time()
 
@@ -49,6 +50,9 @@ def run(question: str, history: list) -> dict:
         system=SYSTEM_PROMPT,
         messages=build_messages(question, history, context=context),
     )
+
+    if message.stop_reason != "end_turn":
+        raise RuntimeError(f"Unexpected stop_reason: {message.stop_reason}")
 
     text_block = next((b for b in message.content if b.type == "text"), None)
     if not text_block:

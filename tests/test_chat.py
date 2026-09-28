@@ -89,14 +89,27 @@ def test_uses_current_model_and_single_call():
 
 
 def test_no_text_block_raises():
-    """Response with no text block raises RuntimeError."""
+    """end_turn response with no text block raises RuntimeError."""
     import chat
 
     msg = MagicMock()
+    msg.stop_reason = "end_turn"
     msg.content = []
     msg.usage.input_tokens = 1
     msg.usage.output_tokens = 1
 
     with patch.object(chat._client.messages, "create", return_value=msg):
         with pytest.raises(RuntimeError, match="No text in model response"):
+            chat.run("Question", [])
+
+
+def test_max_tokens_truncation_raises():
+    """stop_reason == 'max_tokens' raises instead of returning a truncated answer."""
+    import chat
+
+    msg = _make_end_turn_msg(text="<summary>cut off halfway")
+    msg.stop_reason = "max_tokens"
+
+    with patch.object(chat._client.messages, "create", return_value=msg):
+        with pytest.raises(RuntimeError, match="Unexpected stop_reason: max_tokens"):
             chat.run("Question", [])

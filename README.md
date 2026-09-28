@@ -122,7 +122,7 @@ Branch → environment mapping:
 
 | Feature | Status |
 |---------|--------|
-| `/ask` endpoint with response streaming | ✅ Done (removed in the V2 rewrite; restored under V2d) |
+| `/ask` endpoint with response streaming | ✅ Done (removed in the V2 rewrite — see V2d for current status) |
 | XML-tagged section format for incremental rendering | ✅ Done |
 | Per-section streaming: text fades in chunk by chunk | ✅ Done |
 | Response card fades in on first content arrival | ✅ Done |
