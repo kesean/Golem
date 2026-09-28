@@ -5,7 +5,7 @@ import { useToken } from '../contexts/TokenContext'
 import { useHistory } from './useHistory'
 import { parseResponse } from '../lib/parseResponse'
 import { parseSSEChunk } from '../lib/parseSSE'
-import type { ParsedResponse, ChatMessage, UseChatReturn } from '../types'
+import type { ParsedResponse, ChatMessage, UseChatReturn, RetrievedChunk } from '../types'
 
 const MAX_HISTORY = 20
 
@@ -16,6 +16,7 @@ export function useChat(isGuest = false): UseChatReturn {
   const [error, setError] = useState<string | null>(null)
   const [evalId, setEvalId] = useState<string | null>(null)
   const [historyId, setHistoryId] = useState<string | null>(null)
+  const [chunks, setChunks] = useState<RetrievedChunk[]>([])
   const conversationHistory = useRef<ChatMessage[]>([])
 
   const { getToken } = useToken()
@@ -27,6 +28,7 @@ export function useChat(isGuest = false): UseChatReturn {
     setIsStreaming(false)
     setError(null)
     setParsedResponse(null)
+    setChunks([])
 
     conversationHistory.current = [
       ...conversationHistory.current,
@@ -61,7 +63,13 @@ export function useChat(isGuest = false): UseChatReturn {
       const decoder = new TextDecoder()
       let buffer = ''
       let fullText = ''
-      let done: { response: string; input_tokens: number; output_tokens: number; latency_ms: number } | null = null
+      let done: {
+        response: string
+        input_tokens: number
+        output_tokens: number
+        latency_ms: number
+        chunks: RetrievedChunk[]
+      } | null = null
 
       while (true) {
         const { value, done: streamDone } = await reader.read()
@@ -94,6 +102,7 @@ export function useChat(isGuest = false): UseChatReturn {
       ].slice(-MAX_HISTORY)
 
       setParsedResponse(parseResponse(done.response))
+      setChunks(done.chunks)
 
       if (!isGuest) {
         saveToHistory(question, done.response)
@@ -119,6 +128,7 @@ export function useChat(isGuest = false): UseChatReturn {
           : 'Something went wrong. Please try again.'
       setError(msg)
       setParsedResponse(null)
+      setChunks([])
       if (import.meta.env.DEV) {
         console.error('[useChat] ask error:', err)
       }
@@ -133,6 +143,8 @@ export function useChat(isGuest = false): UseChatReturn {
     setEvalId(null)
     setHistoryId(null)
     setError(null)
+    // History entries predate the debug panel's per-request chunk capture
+    setChunks([])
   }
 
   function reset(): void {
@@ -140,7 +152,8 @@ export function useChat(isGuest = false): UseChatReturn {
     setError(null)
     setEvalId(null)
     setHistoryId(null)
+    setChunks([])
   }
 
-  return { ask, loadFromHistory, parsedResponse, isLoading, isStreaming, error, evalId, historyId, reset }
+  return { ask, loadFromHistory, parsedResponse, isLoading, isStreaming, error, evalId, historyId, chunks, reset }
 }

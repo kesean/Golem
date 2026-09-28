@@ -11,7 +11,7 @@ def _fake_chat_result(text="<summary>ok</summary>"):
     """Events matching the shape chat.stream_run() yields."""
     return [
         {"type": "delta", "text": text},
-        {"type": "done", "response": text, "input_tokens": 10, "output_tokens": 20, "latency_ms": 42},
+        {"type": "done", "response": text, "input_tokens": 10, "output_tokens": 20, "latency_ms": 42, "chunks": []},
     ]
 
 

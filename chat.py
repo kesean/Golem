@@ -31,8 +31,10 @@ def stream_run(question: str, history: list):
 
     Pre-retrieves docs, then streams the completion. Yields one
     {"type": "delta", "text": str} per text chunk, followed by exactly one
-    {"type": "done", "response": str, "input_tokens": int,
-     "output_tokens": int, "latency_ms": int}.
+    {"type": "done", "response": str, "input_tokens": int, "output_tokens": int,
+     "latency_ms": int, "chunks": list[dict]} — chunks are the retrieved doc
+    chunks (each {"source", "path", "text"}), for a debug view; [] when RAG
+    is not configured or nothing matched.
 
     Raises RuntimeError if the model returns no text.
     """
@@ -41,9 +43,10 @@ def stream_run(question: str, history: list):
     # Pre-retrieve docs before calling Claude: embed the question, search Qdrant,
     # and inject the context into the user message so one Claude call is enough.
     context = ""
+    chunks: list = []
     if retrieval._qdrant is not None and retrieval._voyage is not None:
         try:
-            context = retrieval.retrieve_context(question)
+            context, chunks = retrieval.retrieve_context_and_chunks(question)
         except Exception as exc:
             logging.warning("pre-retrieval failed: %s", exc)
 
@@ -70,4 +73,5 @@ def stream_run(question: str, history: list):
         "input_tokens": final_message.usage.input_tokens,
         "output_tokens": final_message.usage.output_tokens,
         "latency_ms": round((time.time() - start) * 1000),
+        "chunks": chunks,
     }

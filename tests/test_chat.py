@@ -53,29 +53,38 @@ def test_deltas_then_done_event():
     assert done["output_tokens"] == 20
     assert isinstance(done["latency_ms"], (int, float))
     assert done["latency_ms"] >= 0
+    assert done["chunks"] == []
 
 
-def test_pre_retrieval_context_injected():
-    """retrieve_context called with the full question before Claude when clients are available."""
+def test_pre_retrieval_context_and_chunks_injected():
+    """retrieve_context_and_chunks called with the question; context goes in the
+    prompt and chunks ride along on the done event for the debug panel."""
     import chat
     import retrieval as retrieval_module
 
     cm = _make_stream_cm(["<summary>Answer with context</summary>"])
+    fake_chunks = [{"source": "Clerk", "path": "docs/sessions.mdx", "text": "Session info."}]
 
     with patch.object(chat._client.messages, "stream", return_value=cm) as mock_stream:
         with patch.object(retrieval_module, "_qdrant", MagicMock()):
             with patch.object(retrieval_module, "_voyage", MagicMock()):
-                with patch.object(retrieval_module, "retrieve_context", return_value="clerk docs") as mock_rc:
+                with patch.object(
+                    retrieval_module, "retrieve_context_and_chunks",
+                    return_value=("clerk docs", fake_chunks),
+                ) as mock_rc:
                     events = list(chat.stream_run("How does JWT auth work?", []))
 
     mock_rc.assert_called_once_with("How does JWT auth work?")
     user_content = mock_stream.call_args[1]["messages"][-1]["content"]
     assert "clerk docs" in user_content
-    assert events[-1]["response"] == "<summary>Answer with context</summary>"
+    done = events[-1]
+    assert done["response"] == "<summary>Answer with context</summary>"
+    assert done["chunks"] == fake_chunks
 
 
 def test_pre_retrieval_failure_still_answers():
-    """retrieve_context raises — Claude is still called, without context."""
+    """retrieve_context_and_chunks raises — Claude is still called, without
+    context, and the done event carries an empty chunks list."""
     import chat
     import retrieval as retrieval_module
 
@@ -84,10 +93,15 @@ def test_pre_retrieval_failure_still_answers():
     with patch.object(chat._client.messages, "stream", return_value=cm) as mock_stream:
         with patch.object(retrieval_module, "_qdrant", MagicMock()):
             with patch.object(retrieval_module, "_voyage", MagicMock()):
-                with patch.object(retrieval_module, "retrieve_context", side_effect=Exception("Qdrant down")):
+                with patch.object(
+                    retrieval_module, "retrieve_context_and_chunks",
+                    side_effect=Exception("Qdrant down"),
+                ):
                     events = list(chat.stream_run("Some question", []))
 
-    assert events[-1]["response"] == "<summary>Recovered answer</summary>"
+    done = events[-1]
+    assert done["response"] == "<summary>Recovered answer</summary>"
+    assert done["chunks"] == []
     assert "RETRIEVED DOCS" not in mock_stream.call_args[1]["messages"][-1]["content"]
 
 
