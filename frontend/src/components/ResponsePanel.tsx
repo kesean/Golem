@@ -23,6 +23,7 @@ function ThinkingIndicator() {
 
 type ResponsePanelProps = {
   isLoading: boolean
+  isStreaming: boolean
   parsedResponse: ParsedResponse | null
   error: string | null
   evalId: string | null
@@ -31,6 +32,7 @@ type ResponsePanelProps = {
 
 export function ResponsePanel({
   isLoading,
+  isStreaming,
   parsedResponse,
   error,
   evalId,
@@ -49,7 +51,10 @@ export function ResponsePanel({
 
   if (!isLoading && !parsedResponse && !error) return null
 
-  if (isLoading) {
+  // Show the skeleton only before the first content arrives — once deltas
+  // start streaming in, parsedResponse is set and we fall through to render
+  // sections live instead of waiting for isLoading to become false.
+  if (isLoading && !parsedResponse) {
     return (
       <div
         id="skeleton"
@@ -129,17 +134,19 @@ export function ResponsePanel({
         </SectionCard>
       )}
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: '4px',
-        }}
-      >
-        <FeedbackButtons evalId={evalId} />
-        <ResponseActions parsedResponse={parsedResponse} historyId={historyId} />
-      </div>
+      {!isStreaming && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: '4px',
+          }}
+        >
+          <FeedbackButtons evalId={evalId} />
+          <ResponseActions parsedResponse={parsedResponse} historyId={historyId} />
+        </div>
+      )}
     </div>
   )
 }

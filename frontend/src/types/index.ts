@@ -13,6 +13,7 @@ export type UseChatReturn = {
   loadFromHistory: (rawXml: string) => void
   parsedResponse: ParsedResponse | null
   isLoading: boolean
+  isStreaming: boolean
   error: string | null
   evalId: string | null
   historyId: string | null

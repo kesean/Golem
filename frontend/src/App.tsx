@@ -67,6 +67,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
         />
         <ResponsePanel
           isLoading={chat.isLoading}
+          isStreaming={chat.isStreaming}
           parsedResponse={chat.parsedResponse}
           error={chat.error}
           evalId={chat.evalId}
