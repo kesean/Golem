@@ -7,7 +7,7 @@ const MOCK_TEXT =
 // text, then a done event with usage metrics.
 const MOCK_SSE_BODY =
   `data: ${JSON.stringify({ type: 'delta', text: MOCK_TEXT })}\n\n` +
-  `data: ${JSON.stringify({ type: 'done', response: MOCK_TEXT, input_tokens: 50, output_tokens: 100, latency_ms: 500 })}\n\n`;
+  `data: ${JSON.stringify({ type: 'done', response: MOCK_TEXT, input_tokens: 50, output_tokens: 100, latency_ms: 500, chunks: [] })}\n\n`;
 
 test.beforeEach(async ({ page }) => {
   // Mock the /ask endpoint so no real Flask server is needed

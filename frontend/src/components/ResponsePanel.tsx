@@ -4,7 +4,8 @@ import { ProductBadge } from './ProductBadge'
 import { SectionCard, MarkdownContent, StepList, DocList } from './SectionCard'
 import { FeedbackButtons } from './FeedbackButtons'
 import { ResponseActions } from './ResponseActions'
-import type { ParsedResponse } from '../types'
+import { DebugPanel } from './DebugPanel'
+import type { ParsedResponse, RetrievedChunk } from '../types'
 
 function ThinkingIndicator() {
   return (
@@ -28,6 +29,7 @@ type ResponsePanelProps = {
   error: string | null
   evalId: string | null
   historyId: string | null
+  chunks: RetrievedChunk[]
 }
 
 export function ResponsePanel({
@@ -37,6 +39,7 @@ export function ResponsePanel({
   error,
   evalId,
   historyId,
+  chunks,
 }: ResponsePanelProps) {
   const [showWarmup, setShowWarmup] = useState(false)
 
@@ -133,6 +136,8 @@ export function ResponsePanel({
           <DocList docs={parsedResponse.docs} />
         </SectionCard>
       )}
+
+      {!isStreaming && <DebugPanel chunks={chunks} />}
 
       {!isStreaming && (
         <div

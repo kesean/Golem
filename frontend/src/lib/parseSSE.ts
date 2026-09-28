@@ -1,6 +1,15 @@
+import type { RetrievedChunk } from '../types'
+
 export type AskEvent =
   | { type: 'delta'; text: string }
-  | { type: 'done'; response: string; input_tokens: number; output_tokens: number; latency_ms: number }
+  | {
+      type: 'done'
+      response: string
+      input_tokens: number
+      output_tokens: number
+      latency_ms: number
+      chunks: RetrievedChunk[]
+    }
   | { type: 'error'; error: string }
 
 /**

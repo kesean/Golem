@@ -231,7 +231,7 @@ Branch → environment mapping:
 | DOMPurify-sanitized markdown rendering in React | ✅ Done |
 | Animated thinking indicator during response loading | ✅ Done |
 | Restore streaming responses — `/ask` streams SSE, sections fade in as text arrives | ✅ Done |
-| Debug panel showing retrieved doc chunks | 🔲 Planned |
+| Debug panel showing retrieved doc chunks | ✅ Done |
 
 ### Guest access
 
