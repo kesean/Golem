@@ -45,18 +45,12 @@ export function TourDialog({ open, onClose }: TourDialogProps) {
       <DialogContent
         data-testid="tour-dialog"
         style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
           backgroundColor: 'var(--bg-card)',
           border: '1px solid var(--border-color)',
           borderRadius: '8px',
-          padding: '24px',
           maxWidth: '500px',
           width: '90%',
           boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-          zIndex: 50,
         }}
       >
         <DialogHeader>
@@ -71,14 +65,7 @@ export function TourDialog({ open, onClose }: TourDialogProps) {
           </div>
         </DialogHeader>
 
-        <DialogFooter
-          style={{
-            display: 'flex',
-            gap: '8px',
-            justifyContent: 'flex-end',
-            marginTop: '24px',
-          }}
-        >
+        <DialogFooter>
           {!isLastStep && (
             <Button
               onClick={handleClose}
