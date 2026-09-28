@@ -8,7 +8,11 @@ TEST_GUEST_SECRET = "test-guest-secret-placeholder"
 
 
 def _fake_chat_result(text="<product_tag>Other</product_tag><summary>ok</summary>"):
-    return {"response": text, "input_tokens": 10, "output_tokens": 20, "latency_ms": 42}
+    """Events matching the shape chat.stream_run() yields."""
+    return [
+        {"type": "delta", "text": text},
+        {"type": "done", "response": text, "input_tokens": 10, "output_tokens": 20, "latency_ms": 42},
+    ]
 
 
 # ── /guest-token endpoint ─────────────────────────────────────────────────────

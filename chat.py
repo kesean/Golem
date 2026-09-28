@@ -1,7 +1,7 @@
 """
 chat.py — Claude call orchestrator.
 
-Exposes run(question, history) -> dict.
+Exposes stream_run(question, history) -> generator of SSE-ready event dicts.
 """
 
 import logging
@@ -26,10 +26,14 @@ MODEL = "claude-sonnet-5"
 # Public interface
 # ---------------------------------------------------------------------------
 
-def run(question: str, history: list) -> dict:
-    """Pre-retrieve docs, then make a single Claude call.
+def stream_run(question: str, history: list):
+    """Stream a Claude response as a sequence of event dicts.
 
-    Returns { response, input_tokens, output_tokens, latency_ms }.
+    Pre-retrieves docs, then streams the completion. Yields one
+    {"type": "delta", "text": str} per text chunk, followed by exactly one
+    {"type": "done", "response": str, "input_tokens": int,
+     "output_tokens": int, "latency_ms": int}.
+
     Raises RuntimeError if the model returns no text, or stops for any
     reason other than end_turn (e.g. max_tokens truncation).
     """
@@ -44,23 +48,30 @@ def run(question: str, history: list) -> dict:
         except Exception as exc:
             logging.warning("pre-retrieval failed: %s", exc)
 
-    message = _client.messages.create(
+    messages = build_messages(question, history, context=context)
+
+    full_text = ""
+    with _client.messages.stream(
         model=MODEL,
         max_tokens=2048,
         system=SYSTEM_PROMPT,
-        messages=build_messages(question, history, context=context),
-    )
+        messages=messages,
+    ) as stream:
+        for delta in stream.text_stream:
+            full_text += delta
+            yield {"type": "delta", "text": delta}
+        final_message = stream.get_final_message()
 
-    if message.stop_reason != "end_turn":
-        raise RuntimeError(f"Unexpected stop_reason: {message.stop_reason}")
-
-    text_block = next((b for b in message.content if b.type == "text"), None)
-    if not text_block:
+    if not full_text:
         raise RuntimeError("No text in model response")
 
-    return {
-        "response": text_block.text,
-        "input_tokens": message.usage.input_tokens,
-        "output_tokens": message.usage.output_tokens,
+    if final_message.stop_reason != "end_turn":
+        raise RuntimeError(f"Unexpected stop_reason: {final_message.stop_reason}")
+
+    yield {
+        "type": "done",
+        "response": full_text,
+        "input_tokens": final_message.usage.input_tokens,
+        "output_tokens": final_message.usage.output_tokens,
         "latency_ms": round((time.time() - start) * 1000),
     }

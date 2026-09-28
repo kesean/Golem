@@ -10,13 +10,13 @@ import uuid
 import logging
 import urllib.request
 from functools import wraps
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify, g, Response, stream_with_context
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 import jwt
-from chat import run as chat_run
+from chat import stream_run as chat_run
 
 load_dotenv()
 
@@ -184,7 +184,16 @@ def guest_token():
 def ask():
     """
     Accepts a JSON body: { "question": "...", "history": [...] }
-    Returns a JSON response: { "response": "<xml>...", "input_tokens": int, "output_tokens": int, "latency_ms": int }
+
+    Returns a text/event-stream response. Each SSE frame's `data` is one
+    JSON-encoded event:
+      {"type": "delta", "text": "..."}                 — zero or more
+      {"type": "done", "response", "input_tokens",
+       "output_tokens", "latency_ms"}                  — exactly one, on success
+      {"type": "error", "error": "..."}                 — instead of "done", on failure
+
+    All validation happens before the stream opens, so a bad request still
+    gets a plain 4xx JSON response.
     """
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
@@ -202,11 +211,19 @@ def ask():
     if not isinstance(history, list):
         return jsonify({"error": "Invalid history format"}), 400
 
-    try:
-        result = chat_run(question, history)
-    except RuntimeError as exc:
-        return jsonify({"error": str(exc)}), 502
-    return jsonify(result)
+    def generate():
+        try:
+            for event in chat_run(question, history):
+                yield f"data: {json.dumps(event)}\n\n"
+        except RuntimeError as exc:
+            logging.warning("stream_run failed: %s", exc)
+            yield f"data: {json.dumps({'type': 'error', 'error': str(exc)})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 if __name__ == "__main__":

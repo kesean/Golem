@@ -4,6 +4,7 @@ import { api } from '../../convex/_generated/api'
 import { useToken } from '../contexts/TokenContext'
 import { useHistory } from './useHistory'
 import { parseResponse } from '../lib/parseResponse'
+import { parseSSEChunk } from '../lib/parseSSE'
 import type { ParsedResponse, ChatMessage, UseChatReturn } from '../types'
 
 const MAX_HISTORY = 20
@@ -11,6 +12,7 @@ const MAX_HISTORY = 20
 export function useChat(isGuest = false): UseChatReturn {
   const [parsedResponse, setParsedResponse] = useState<ParsedResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [evalId, setEvalId] = useState<string | null>(null)
   const [historyId, setHistoryId] = useState<string | null>(null)
@@ -22,6 +24,7 @@ export function useChat(isGuest = false): UseChatReturn {
 
   async function ask(question: string): Promise<void> {
     setIsLoading(true)
+    setIsStreaming(false)
     setError(null)
     setParsedResponse(null)
 
@@ -50,28 +53,59 @@ export function useChat(isGuest = false): UseChatReturn {
       if (!res.ok) {
         throw new Error(res.status === 429 ? '429' : 'SERVER_ERROR')
       }
+      if (!res.body) {
+        throw new Error('SERVER_ERROR')
+      }
 
-      const data = await res.json()
-      const parsed = parseResponse(data.response)
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let fullText = ''
+      let done: { response: string; input_tokens: number; output_tokens: number; latency_ms: number } | null = null
+
+      while (true) {
+        const { value, done: streamDone } = await reader.read()
+        if (streamDone) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const { events, rest } = parseSSEChunk(buffer)
+        buffer = rest
+
+        for (const event of events) {
+          if (event.type === 'delta') {
+            fullText += event.text
+            setIsStreaming(true)
+            setParsedResponse(parseResponse(fullText))
+          } else if (event.type === 'done') {
+            done = event
+          } else if (event.type === 'error') {
+            throw new Error(event.error || 'SERVER_ERROR')
+          }
+        }
+      }
+
+      if (!done) {
+        throw new Error('SERVER_ERROR')
+      }
 
       conversationHistory.current = [
         ...conversationHistory.current,
-        { role: 'assistant' as const, content: data.response },
+        { role: 'assistant' as const, content: done.response },
       ].slice(-MAX_HISTORY)
 
-      setParsedResponse(parsed)
+      setParsedResponse(parseResponse(done.response))
 
       if (!isGuest) {
-        saveToHistory(question, data.response)
+        saveToHistory(question, done.response)
           .then(hId => setHistoryId(hId))
           .catch(() => {})
 
         createEval({
           question,
-          response: data.response,
-          latency_ms: data.latency_ms,
-          input_tokens: data.input_tokens,
-          output_tokens: data.output_tokens,
+          response: done.response,
+          latency_ms: done.latency_ms,
+          input_tokens: done.input_tokens,
+          output_tokens: done.output_tokens,
         })
           .then(id => setEvalId(id))
           .catch(() => { setEvalId('eval-unavailable') })
@@ -84,11 +118,13 @@ export function useChat(isGuest = false): UseChatReturn {
           ? 'Guest access is temporarily unavailable. Please sign in to continue.'
           : 'Something went wrong. Please try again.'
       setError(msg)
+      setParsedResponse(null)
       if (import.meta.env.DEV) {
         console.error('[useChat] ask error:', err)
       }
     } finally {
       setIsLoading(false)
+      setIsStreaming(false)
     }
   }
 
@@ -106,5 +142,5 @@ export function useChat(isGuest = false): UseChatReturn {
     setHistoryId(null)
   }
 
-  return { ask, loadFromHistory, parsedResponse, isLoading, error, evalId, historyId, reset }
+  return { ask, loadFromHistory, parsedResponse, isLoading, isStreaming, error, evalId, historyId, reset }
 }
