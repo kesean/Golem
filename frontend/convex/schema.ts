@@ -16,4 +16,7 @@ export default defineSchema({
     output_tokens: v.number(),
     feedback: v.optional(v.union(v.literal("up"), v.literal("down"))),
   }).index("by_user", ["userId"]),
+  stats: defineTable({
+    totalQuestions: v.number(),
+  }),
 });
