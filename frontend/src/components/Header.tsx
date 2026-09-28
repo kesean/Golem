@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
+import { CircleHelp } from 'lucide-react'
 import type { Theme } from '../hooks/useTheme'
 
 type HeaderProps = {
   theme: Theme
   onToggleTheme: () => void
   onOpenHistory: () => void
+  onOpenTour: () => void
   onNewConversation: () => void
   userName?: string
   onSignOut?: () => void
@@ -16,6 +18,7 @@ export function Header({
   theme,
   onToggleTheme,
   onOpenHistory,
+  onOpenTour,
   onNewConversation,
   userName,
   onSignOut,
@@ -106,6 +109,26 @@ export function Header({
           }}
         >
           {theme === 'light' ? '🌙' : '☀️'}
+        </button>
+
+        <button
+          id="tour-btn"
+          onClick={onOpenTour}
+          aria-label="Show guided tour"
+          style={{
+            background: 'none',
+            border: '1px solid var(--border-color)',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            padding: '5px 10px',
+            color: 'var(--text-secondary)',
+            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <CircleHelp size={16} strokeWidth={2} />
         </button>
 
         {userName && (
