@@ -24,16 +24,7 @@ export function SuggestedQuestions({ onPick }: SuggestedQuestionsProps) {
             type="button"
             data-testid="suggested-question"
             onClick={() => onPick(question)}
-            style={{
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: '13px',
-              padding: '6px 12px',
-              borderRadius: '999px',
-              border: '1px solid var(--border-color)',
-              backgroundColor: 'var(--bg-card)',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
+            className="suggested-chip"
           >
             {label}
           </button>

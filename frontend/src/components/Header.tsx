@@ -115,6 +115,7 @@ export function Header({
           id="tour-btn"
           onClick={onOpenTour}
           aria-label="Show guided tour"
+          title="Show guided tour"
           style={{
             background: 'none',
             border: '1px solid var(--border-color)',
