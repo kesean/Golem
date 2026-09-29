@@ -1,6 +1,7 @@
 import React from 'react'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import { parseDocLink } from '../lib/docLink'
 
 type SectionCardProps = {
   title: string
@@ -73,23 +74,38 @@ export function StepList({ steps }: { steps: string[] }) {
 export function DocList({ docs }: { docs: string[] }) {
   return (
     <ul style={{ paddingLeft: '20px', margin: 0 }}>
-      {docs.map((doc, i) => (
-        <li key={i} style={{ marginBottom: '4px' }}>
-          <a
-            href={doc}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '13px',
-              color: 'var(--col-docs)',
-              textDecoration: 'none',
-            }}
-          >
-            {doc}
-          </a>
-        </li>
-      ))}
+      {docs.map((doc, i) => {
+        const { label, href } = parseDocLink(doc)
+        return (
+          <li key={i} style={{ marginBottom: '4px' }}>
+            {href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '13px',
+                  color: 'var(--col-docs)',
+                  textDecoration: 'none',
+                }}
+              >
+                {label}
+              </a>
+            ) : (
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '13px',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                {label}
+              </span>
+            )}
+          </li>
+        )
+      })}
     </ul>
   )
 }
