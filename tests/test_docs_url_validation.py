@@ -248,3 +248,21 @@ Another Doc: https://example.com/doc3
     ]
     result = find_unretrieved_doc_urls(response, chunks)
     assert set(result) == {"https://example.com/doc2", "https://example.com/doc3"}
+
+
+def test_trailing_punctuation_and_bold_are_stripped():
+    from chat import find_unretrieved_doc_urls
+    r = "<docs>Title: **https://x.dev/a.**\nB: https://x.dev/b,</docs>"
+    assert find_unretrieved_doc_urls(r, [{"url": "https://x.dev/a"}, {"url": "https://x.dev/b"}]) == []
+
+
+def test_uppercase_tag_and_unclosed_block():
+    from chat import find_unretrieved_doc_urls
+    assert find_unretrieved_doc_urls("<DOCS>T: https://x.dev/a</DOCS>", []) == ["https://x.dev/a"]
+    assert find_unretrieved_doc_urls("<docs>T: https://x.dev/a", []) == []
+
+
+def test_order_is_preserved():
+    from chat import find_unretrieved_doc_urls
+    r = "<docs>A: https://x.dev/2\nB: https://x.dev/1</docs>"
+    assert find_unretrieved_doc_urls(r, []) == ["https://x.dev/2", "https://x.dev/1"]
