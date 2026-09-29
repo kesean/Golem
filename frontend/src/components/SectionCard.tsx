@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useId, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { ExternalLink } from 'lucide-react'
@@ -35,23 +35,26 @@ const STEP_PREFIX = /^\s*step\s*\d+\s*[:.)-]\s*/i
 
 /** Steps the reader can tick off; the list numbering replaces the model's "Step N:" prefix. */
 export function StepList({ steps }: { steps: string[] }) {
-  const [done, setDone] = useState<Record<number, boolean>>({})
+  // Keyed by step text so ticks can't stick to a different step as streamed output re-splits
+  const [done, setDone] = useState<Record<string, boolean>>({})
+  const idBase = useId()
   return (
     <ol className="nb-steps">
       {steps.map((raw, i) => {
         const text = raw.replace(STEP_PREFIX, '')
-        const checked = !!done[i]
+        const checked = !!done[text]
+        const textId = `${idBase}-${i}`
         return (
           <li key={i} className={checked ? 'nb-step nb-step-done' : 'nb-step'}>
             <label className="nb-step-main">
               <input
                 type="checkbox"
                 checked={checked}
-                onChange={() => setDone((d) => ({ ...d, [i]: !d[i] }))}
-                aria-label={`Mark step ${i + 1} done`}
+                onChange={() => setDone((d) => ({ ...d, [text]: !d[text] }))}
+                aria-labelledby={textId}
               />
               <span className="nb-step-num" aria-hidden="true">{i + 1}</span>
-              <span className="nb-step-text nb-prose" dangerouslySetInnerHTML={{ __html: safeHtml(text) }} />
+              <span id={textId} className="nb-step-text nb-prose" dangerouslySetInnerHTML={{ __html: safeHtml(text) }} />
             </label>
             <CopyStep text={text} />
           </li>
@@ -64,10 +67,10 @@ export function StepList({ steps }: { steps: string[] }) {
 function CopyStep({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   function copy() {
-    navigator.clipboard.writeText(text).then(() => {
+    navigator.clipboard?.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    })
+    }).catch(() => {})
   }
   return (
     <button type="button" className="nb-copy" onClick={copy} aria-label="Copy this step">

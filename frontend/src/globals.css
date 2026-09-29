@@ -201,12 +201,12 @@ input::placeholder {
 .nb-prose pre code { background: none; padding: 0; }
 
 .nb-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.nb-step { display: flex; align-items: flex-start; gap: 12px; justify-content: space-between; }
+.nb-step { position: relative; display: flex; align-items: flex-start; gap: 12px; justify-content: space-between; }
 .nb-step-main { display: flex; align-items: baseline; gap: 12px; cursor: pointer; min-width: 0; flex: 1; }
 .nb-step-main input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .nb-step-num {
   flex: none; width: 22px; height: 22px; border-radius: 50%;
-  border: 1.5px solid var(--border-color); color: var(--text-secondary);
+  border: 1.5px solid var(--text-muted); color: var(--text-secondary);
   font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600;
   display: inline-flex; align-items: center; justify-content: center;
   transform: translateY(2px);
