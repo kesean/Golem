@@ -80,7 +80,29 @@ def test_retrieve_chunks_empty_list_on_failure(monkeypatch):
 
 
 def test_source_filter_passed_to_qdrant_when_provided(monkeypatch):
-    """When source='clerk' is passed, query_points is called with a filter on source == 'clerk'."""
+    """When source='Clerk' is passed, query_points is called with a filter on source == 'Clerk'."""
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = []
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    retrieval.retrieve_chunks("How do I verify a session?", source="Clerk")
+
+    call_kwargs = mock_qdrant.query_points.call_args.kwargs
+    query_filter = call_kwargs.get("query_filter")
+    assert query_filter is not None
+    expected_filter = Filter(
+        must=[FieldCondition(key="source", match=MatchValue(value="Clerk"))]
+    )
+    assert query_filter == expected_filter
+
+
+def test_source_filter_case_insensitive_lowercase_clerk(monkeypatch):
+    """When source='clerk' (lowercase) is passed, filter normalizes to 'Clerk'."""
     from qdrant_client.models import Filter, FieldCondition, MatchValue
 
     mock_voyage = MagicMock()
@@ -96,7 +118,51 @@ def test_source_filter_passed_to_qdrant_when_provided(monkeypatch):
     query_filter = call_kwargs.get("query_filter")
     assert query_filter is not None
     expected_filter = Filter(
-        must=[FieldCondition(key="source", match=MatchValue(value="clerk"))]
+        must=[FieldCondition(key="source", match=MatchValue(value="Clerk"))]
+    )
+    assert query_filter == expected_filter
+
+
+def test_source_filter_case_insensitive_lowercase_mdn(monkeypatch):
+    """When source='mdn' (lowercase) is passed, filter normalizes to 'MDN'."""
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = []
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    retrieval.retrieve_chunks("How do I verify a session?", source="mdn")
+
+    call_kwargs = mock_qdrant.query_points.call_args.kwargs
+    query_filter = call_kwargs.get("query_filter")
+    assert query_filter is not None
+    expected_filter = Filter(
+        must=[FieldCondition(key="source", match=MatchValue(value="MDN"))]
+    )
+    assert query_filter == expected_filter
+
+
+def test_source_filter_unknown_source_passes_through(monkeypatch):
+    """Unknown source values pass through unchanged."""
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = []
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    retrieval.retrieve_chunks("How do I verify a session?", source="CustomSource")
+
+    call_kwargs = mock_qdrant.query_points.call_args.kwargs
+    query_filter = call_kwargs.get("query_filter")
+    assert query_filter is not None
+    expected_filter = Filter(
+        must=[FieldCondition(key="source", match=MatchValue(value="CustomSource"))]
     )
     assert query_filter == expected_filter
 
@@ -442,3 +508,16 @@ def test_retrieve_context_and_chunks_sanitizes_carriage_return_in_path(monkeypat
     # Carriage return should be replaced with space in the header
     assert "[Clerk - docs/auth malicious.mdx]" in context
     assert "[Clerk - docs/auth\rmalicious.mdx]" not in context
+
+
+# Tests for canonical_url path safety (existing and new)
+def test_canonical_url_rejects_double_slash():
+    """canonical_url must return None for paths with empty segments (//)."""
+    url = retrieval.canonical_url("Clerk", "docs//auth.mdx")
+    assert url is None
+
+
+def test_canonical_url_rejects_two_dots():
+    """canonical_url must return None for paths with .. segments."""
+    url = retrieval.canonical_url("Clerk", "docs/../../../etc/passwd.mdx")
+    assert url is None

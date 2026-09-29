@@ -57,7 +57,7 @@ def canonical_url(source: str, path: str) -> str | None:
     source_lower = source.lower() if source else ""
 
     def _is_safe_path_remainder(rest: str) -> bool:
-        """Check if path remainder is safe: only [A-Za-z0-9._~/-], no '..' or '//', no control chars."""
+        """Check if path remainder is safe: only [A-Za-z0-9._~/-], no '..' or '//'."""
         if not rest:
             return True  # Empty is safe (for top-level index case)
         # Check for '..' segments
@@ -66,22 +66,14 @@ def canonical_url(source: str, path: str) -> str | None:
         # Check for empty segments (//)
         if "//" in rest:
             return False
-        # Check for newlines and carriage returns
-        if "\n" in rest or "\r" in rest:
-            return False
-        # Check for control characters (0x00-0x1F, 0x7F)
-        if any(ord(c) < 0x20 or ord(c) == 0x7F for c in rest):
-            return False
-        # Check for dangerous characters
-        if any(c in rest for c in "?#@ "):
-            return False
         # Check that remainder matches the safe pattern [A-Za-z0-9._~/-]
+        # This regex implicitly rejects newlines, control chars, and dangerous characters
         if not re.match(r"^[A-Za-z0-9._~/-]+$", rest):
             return False
         return True
 
-    def _check_safe_path(path: str, prefix: str) -> bool:
-        """Check if path has no empty segments (//) and valid prefix."""
+    def _check_safe_path(path: str) -> bool:
+        """Check if path has no empty segments (//)."""
         return "//" not in path
 
     if source_lower == "clerk":
@@ -89,7 +81,7 @@ def canonical_url(source: str, path: str) -> str | None:
         if not path.startswith("docs/") or not path.endswith(".mdx"):
             return None
         # Check for '//' in the full path (empty segments)
-        if not _check_safe_path(path, "docs/"):
+        if not _check_safe_path(path):
             return None
         # Remove "docs/" prefix and ".mdx" suffix
         rest = path[5:-4]  # Remove "docs/" (5 chars) and ".mdx" (4 chars)
@@ -112,7 +104,7 @@ def canonical_url(source: str, path: str) -> str | None:
         if not path.startswith("files/en-us/") or not path.endswith("/index.md"):
             return None
         # Check for '//' in the full path (empty segments)
-        if not _check_safe_path(path, "files/en-us/"):
+        if not _check_safe_path(path):
             return None
         # Remove "files/en-us/" prefix (12 chars) and "/index.md" suffix (9 chars)
         rest = path[12:-9]
@@ -132,7 +124,9 @@ def retrieve_chunks(question: str, top_k: int = 5, source: str | None = None) ->
     """Embed question, query Qdrant, return matching chunks as a list of
     {"source", "path", "text", "url"} dicts, most relevant first. [] on any failure.
 
-    source: 'clerk' | 'mdn' | None (search all).
+    source: case-insensitive source name ('clerk', 'mdn', 'Clerk', 'MDN', etc.) or None (search all).
+            'clerk' and 'mdn' are normalized to their canonical payload names ('Clerk', 'MDN').
+            Unknown sources pass through unchanged.
     """
     if _qdrant is None or _voyage is None:
         logging.warning("retrieve_chunks: client(s) not initialized — skipping")
@@ -142,9 +136,22 @@ def retrieve_chunks(question: str, top_k: int = 5, source: str | None = None) ->
 
         result = _voyage.embed([question], model="voyage-3.5-lite", input_type="query")
         vector = result.embeddings[0]
+
+        # Normalize source name: 'clerk' -> 'Clerk', 'mdn' -> 'MDN'
+        normalized_source = None
+        if source:
+            source_lower = source.lower()
+            if source_lower == "clerk":
+                normalized_source = "Clerk"
+            elif source_lower == "mdn":
+                normalized_source = "MDN"
+            else:
+                # Unknown source, pass through unchanged
+                normalized_source = source
+
         query_filter = Filter(
-            must=[FieldCondition(key="source", match=MatchValue(value=source))]
-        ) if source else None
+            must=[FieldCondition(key="source", match=MatchValue(value=normalized_source))]
+        ) if normalized_source else None
         hits = _qdrant.query_points(
             collection_name=COLLECTION,
             query=vector,
