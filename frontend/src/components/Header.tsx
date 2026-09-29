@@ -31,12 +31,14 @@ export function Header({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '14px 24px',
+        padding: '14px 12px',
         borderBottom: '1px solid var(--border-color)',
         backgroundColor: 'var(--bg)',
+        flexWrap: 'nowrap',
+        gap: '8px',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'nowrap', minWidth: 0 }}>
         <span
           style={{
             fontFamily: "'Newsreader', serif",
@@ -48,21 +50,39 @@ export function Header({
           Golem
         </span>
         {totalQuestions !== undefined && (
-          <span
-            style={{
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: '12px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            · {totalQuestions.toLocaleString()} questions answered
-          </span>
+          <>
+            <span
+              className="hidden sm:inline"
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              · {totalQuestions.toLocaleString()} {totalQuestions === 1 ? 'question' : 'questions'} answered
+            </span>
+            <span
+              className="sm:hidden"
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+                whiteSpace: 'nowrap',
+              }}
+              title={`${totalQuestions.toLocaleString()} ${totalQuestions === 1 ? 'question' : 'questions'} answered`}
+              aria-label={`${totalQuestions.toLocaleString()} ${totalQuestions === 1 ? 'question' : 'questions'} answered`}
+            >
+              · {totalQuestions.toLocaleString()}
+            </span>
+          </>
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap', minWidth: 0 }}>
         <button
           onClick={onNewConversation}
+          aria-label="New conversation"
           style={{
             fontFamily: "'DM Sans', sans-serif",
             fontSize: '13px',
@@ -70,10 +90,12 @@ export function Header({
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            padding: '6px 10px',
+            padding: '6px 8px',
+            whiteSpace: 'nowrap',
           }}
         >
-          New conversation
+          <span className="hidden sm:inline">New conversation</span>
+          <span className="sm:hidden">New</span>
         </button>
 
         <button
@@ -89,6 +111,7 @@ export function Header({
             borderRadius: '6px',
             cursor: 'pointer',
             padding: '5px 10px',
+            whiteSpace: 'nowrap',
           }}
         >
           History
@@ -106,6 +129,7 @@ export function Header({
             padding: '5px 10px',
             color: 'var(--text-secondary)',
             fontSize: '14px',
+            whiteSpace: 'nowrap',
           }}
         >
           {theme === 'light' ? '🌙' : '☀️'}
@@ -127,6 +151,8 @@ export function Header({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
           }}
         >
           <CircleHelp size={16} strokeWidth={2} />
@@ -139,6 +165,7 @@ export function Header({
               fontSize: '12px',
               color: 'var(--text-muted)',
               marginLeft: '4px',
+              whiteSpace: 'nowrap',
             }}
           >
             {userName}
@@ -165,6 +192,7 @@ export function Header({
               padding: '5px 10px',
               transition: 'color 0.15s ease, border-color 0.15s ease',
               marginLeft: '4px',
+              whiteSpace: 'nowrap',
             }}
           >
             <svg
