@@ -27,6 +27,8 @@ test('clicking a suggestion submits it and hides the suggestions', async ({ page
   expect(body.question).toBe(DEMO_QUESTIONS[0].question);
   await expect(page.getByText('Test summary.')).toBeVisible();
   await expect(page.getByTestId('suggested-question')).toHaveCount(0);
+  const questionValue = await page.locator('#question').inputValue();
+  expect(questionValue).toBe(DEMO_QUESTIONS[0].question);
 });
 
 test('typing in the input hides the suggestions', async ({ page }) => {
