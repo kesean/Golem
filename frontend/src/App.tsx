@@ -36,6 +36,8 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
     if (chat.isLoading) return
     setQuestion(q)
     chat.ask(q)
+    // The chip unmounts once loading starts; move focus to the input
+    document.getElementById('question')?.focus()
   }
 
   function handleHistorySelect(entry: HistoryEntry) {

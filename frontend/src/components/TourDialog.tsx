@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { TOUR_STEPS } from '../lib/tour'
 import { Button } from './ui/button'
 import {
@@ -17,6 +17,13 @@ type TourDialogProps = {
 
 export function TourDialog({ open, onClose }: TourDialogProps) {
   const [step, setStep] = useState(0)
+  const primaryRef = useRef<HTMLButtonElement>(null)
+  const [wasOpen, setWasOpen] = useState(open)
+  // Reset on open (not close) so the step doesn't flash to 1 during the close animation.
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setStep(0)
+  }
 
   const currentStep = TOUR_STEPS[step]
   const isLastStep = step === TOUR_STEPS.length - 1
@@ -32,11 +39,12 @@ export function TourDialog({ open, onClose }: TourDialogProps) {
   function handleBack() {
     if (step > 0) {
       setStep(step - 1)
+      // Back unmounts on step 1; keep focus inside the dialog
+      if (step - 1 === 0) requestAnimationFrame(() => primaryRef.current?.focus())
     }
   }
 
   function handleClose() {
-    setStep(0)
     onClose()
   }
 
@@ -65,7 +73,7 @@ export function TourDialog({ open, onClose }: TourDialogProps) {
           </div>
         </DialogHeader>
 
-        <DialogFooter>
+        <DialogFooter className="rounded-b-[7px]">
           {!isLastStep && (
             <Button
               onClick={handleClose}
@@ -93,6 +101,7 @@ export function TourDialog({ open, onClose }: TourDialogProps) {
 
           <Button
             key="primary-button"
+            ref={primaryRef}
             onClick={handleNext}
             style={{
               backgroundColor: 'var(--accent)',
