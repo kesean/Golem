@@ -20,6 +20,13 @@ from chat import stream_run as chat_run
 
 load_dotenv()
 
+# Root handler so WARNING+ reaches stderr under gunicorn. Without it,
+# flask-limiter's own logger (which only has a NullHandler) swallows storage
+# failures silently — that is how a dead Redis went unnoticed.
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 app = Flask(__name__)
 
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
@@ -47,6 +54,35 @@ limiter = Limiter(
     storage_options={"socket_connect_timeout": 2, "socket_timeout": 2} if _redis_url else {},
     swallow_errors=True,
 )
+
+
+def check_limiter_storage() -> bool:
+    """Log which rate-limit storage is active and whether it is reachable.
+
+    The limiter runs with swallow_errors=True (a Redis outage must not take
+    /ask down), which fails open: limits silently stop applying. This makes
+    that state loud at startup instead of invisible.
+    """
+    if not _redis_url:
+        logger.warning(
+            "REDIS_URL not set: rate limits use per-process memory, so each "
+            "gunicorn worker counts separately and limits are not enforced globally"
+        )
+        return False
+    try:
+        healthy = bool(limiter.storage.check())
+    except Exception:
+        logger.exception("Rate-limit Redis check raised; limits are NOT enforced")
+        return False
+    if not healthy:
+        logger.error("Rate-limit Redis is unreachable; limits are NOT enforced (failing open)")
+        return False
+    logger.info("Rate-limit storage: Redis reachable")
+    return True
+
+
+check_limiter_storage()
+
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
 GUEST_JWT_SECRET = os.getenv("GUEST_JWT_SECRET", "")
 
