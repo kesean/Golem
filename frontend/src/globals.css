@@ -182,9 +182,10 @@ input::placeholder {
   color: var(--text-secondary); line-height: 1.7;
 }
 .nb-label-marked span {
-  background: linear-gradient(transparent 55%, var(--highlight) 55%);
+  background: linear-gradient(transparent 55%, var(--highlight) 55%) no-repeat 0 0 / 100% 100%;
   padding: 0 3px; margin: 0 -3px; color: var(--text-primary);
 }
+
 .nb-body { font-family: 'Newsreader', serif; font-size: 17px; line-height: 1.7; color: var(--text-primary); min-width: 0; }
 @media (max-width: 640px) {
   .nb-row { grid-template-columns: 1fr; row-gap: 6px; }
@@ -232,3 +233,13 @@ input::placeholder {
 .nb-doc-link:hover { color: var(--accent-hover, var(--accent)); text-decoration-thickness: 2px; }
 .nb-doc-host { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted); }
 .nb-doc-plain { color: var(--text-secondary); }
+
+/* ---- The one orchestrated moment: the answer settles in ----
+   Summary streams live; then the marker sweeps under "Cause" and each fix step lands in turn.
+   Plays once when the content mounts; skipped entirely for reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .nb-label-marked span { animation: nb-sweep .7s .25s cubic-bezier(.3,.7,.2,1) backwards; }
+  .nb-step { animation: nb-land .35s cubic-bezier(.2,.7,.2,1) backwards; animation-delay: calc(var(--i, 0) * 90ms + 400ms); }
+}
+@keyframes nb-sweep { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
+@keyframes nb-land { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
