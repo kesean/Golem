@@ -254,3 +254,24 @@ input::placeholder {
   margin: -4px 0 8px; max-width: 46ch;
   font-family: 'Newsreader', serif; font-size: 18px; line-height: 1.5; color: var(--text-secondary);
 }
+
+/* Accessibility: strong focus ring on the question box (the default 50% ring is ~2:1) */
+#question:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -64px;
+  z-index: 100;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--btn-text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+}
+.skip-link:focus { top: 12px; outline: 2px solid var(--text-primary); outline-offset: 2px; }

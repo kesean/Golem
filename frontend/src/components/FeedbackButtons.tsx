@@ -27,6 +27,8 @@ export function FeedbackButtons({ evalId }: FeedbackButtonsProps) {
     border: '1px solid var(--border-color)',
     borderRadius: '6px',
     padding: '4px 10px',
+    minHeight: '44px',
+    minWidth: '44px',
     fontSize: '14px',
     cursor: 'pointer',
     background: 'none',
