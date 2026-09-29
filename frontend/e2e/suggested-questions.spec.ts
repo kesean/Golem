@@ -36,3 +36,22 @@ test('typing in the input hides the suggestions', async ({ page }) => {
   await page.locator('#question').fill('hello');
   await expect(page.getByTestId('suggested-question')).toHaveCount(0);
 });
+
+test('focus moves to the question input after picking a suggestion', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('suggested-question').first().click();
+  await expect(page.locator('#question')).toBeFocused();
+});
+
+test('suggestions stay hidden while loading and after an error', async ({ page }) => {
+  await page.unroute('**/ask');
+  await page.route('**/ask', async (route) => {
+    await new Promise((r) => setTimeout(r, 500));
+    await route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"boom"}' });
+  });
+  await page.goto('/');
+  await page.getByTestId('suggested-question').first().click();
+  await expect(page.getByTestId('suggested-question')).toHaveCount(0);
+  await expect(page.getByRole('alert').or(page.getByText(/error|wrong|failed/i)).first()).toBeVisible();
+  await expect(page.getByTestId('suggested-question')).toHaveCount(0);
+});

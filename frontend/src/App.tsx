@@ -19,7 +19,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
   const [question, setQuestion] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  const [tourOpen, setTourOpen] = useState(() => !bypassAuth && !hasSeenTour())
+  const [tourOpen, setTourOpen] = useState(() => !hasSeenTour())
 
   function closeTour() {
     markTourSeen()

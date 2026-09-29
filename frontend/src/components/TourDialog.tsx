@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { TOUR_STEPS } from '../lib/tour'
 import { Button } from './ui/button'
 import {
@@ -18,6 +18,13 @@ type TourDialogProps = {
 export function TourDialog({ open, onClose }: TourDialogProps) {
   const [step, setStep] = useState(0)
   const primaryRef = useRef<HTMLButtonElement>(null)
+  const refocusPrimary = useRef(false)
+  useEffect(() => {
+    if (refocusPrimary.current) {
+      refocusPrimary.current = false
+      primaryRef.current?.focus()
+    }
+  }, [step])
   const [wasOpen, setWasOpen] = useState(open)
   // Reset on open (not close) so the step doesn't flash to 1 during the close animation.
   if (open !== wasOpen) {
@@ -40,7 +47,7 @@ export function TourDialog({ open, onClose }: TourDialogProps) {
     if (step > 0) {
       setStep(step - 1)
       // Back unmounts on step 1; keep focus inside the dialog
-      if (step - 1 === 0) requestAnimationFrame(() => primaryRef.current?.focus())
+      if (step - 1 === 0) refocusPrimary.current = true
     }
   }
 
