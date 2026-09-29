@@ -67,6 +67,9 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
         flexDirection: 'column',
       }}
     >
+      <a href="#question" className="skip-link">
+        Skip to question
+      </a>
       <Header
         theme={theme}
         onToggleTheme={toggleTheme}

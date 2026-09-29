@@ -52,6 +52,45 @@ export function ResponsePanel({
     return () => clearTimeout(timer)
   }, [isLoading])
 
+  // Mounted before any content so screen readers announce changes to it.
+  // Streamed sections are deliberately not live: they would be read out token by token.
+  const status = error
+    ? ''
+    : isLoading
+      ? 'Analyzing your question.'
+      : parsedResponse
+        ? 'Answer ready.'
+        : ''
+
+  return (
+    <>
+      <div role="status" aria-live="polite" className="sr-only">
+        {status}
+      </div>
+      <ResponseBody
+        isLoading={isLoading}
+        isStreaming={isStreaming}
+        parsedResponse={parsedResponse}
+        error={error}
+        evalId={evalId}
+        historyId={historyId}
+        chunks={chunks}
+        showWarmup={showWarmup}
+      />
+    </>
+  )
+}
+
+function ResponseBody({
+  isLoading,
+  isStreaming,
+  parsedResponse,
+  error,
+  evalId,
+  historyId,
+  chunks,
+  showWarmup,
+}: ResponsePanelProps & { showWarmup: boolean }) {
   if (!isLoading && !parsedResponse && !error) return null
 
   // Show the skeleton only before the first content arrives — once deltas
@@ -61,9 +100,7 @@ export function ResponsePanel({
     return (
       <div
         id="skeleton"
-        role="status"
-        aria-live="polite"
-        aria-label="Loading response"
+        aria-hidden="true"
         style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}
       >
         <ThinkingIndicator />

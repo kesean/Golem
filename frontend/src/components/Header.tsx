@@ -45,16 +45,17 @@ export function Header({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'nowrap', minWidth: 0 }}>
-        <span
+        <h1
           style={{
             fontFamily: "'Newsreader', serif",
             fontSize: '18px',
             fontWeight: 600,
             color: 'var(--accent)',
+            margin: 0,
           }}
         >
           Golem
-        </span>
+        </h1>
         {totalQuestions !== undefined && (
           <>
             <span
@@ -96,8 +97,8 @@ export function Header({
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            paddingTop: '6px',
-            paddingBottom: '6px',
+            minHeight: '44px',
+            minWidth: '44px',
             whiteSpace: 'nowrap',
           }}
           className="px-1 sm:px-2.5"
@@ -118,8 +119,8 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            paddingTop: '5px',
-            paddingBottom: '5px',
+            minHeight: '44px',
+            minWidth: '44px',
             whiteSpace: 'nowrap',
           }}
           className="px-1.5 sm:px-2.5"
@@ -136,8 +137,8 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            paddingTop: '5px',
-            paddingBottom: '5px',
+            minHeight: '44px',
+            minWidth: '44px',
             color: 'var(--text-secondary)',
             fontSize: '14px',
             whiteSpace: 'nowrap',
@@ -157,8 +158,8 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            paddingTop: '5px',
-            paddingBottom: '5px',
+            minHeight: '44px',
+            minWidth: '44px',
             color: 'var(--text-secondary)',
             fontSize: '14px',
             display: 'flex',

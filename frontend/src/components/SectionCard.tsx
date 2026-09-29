@@ -19,9 +19,9 @@ type NotebookRowProps = {
 export function NotebookRow({ label, marked: isMarked, children }: NotebookRowProps) {
   return (
     <section className="nb-row">
-      <h3 className={isMarked ? 'nb-label nb-label-marked' : 'nb-label'}>
+      <h2 className={isMarked ? 'nb-label nb-label-marked' : 'nb-label'}>
         <span>{label}</span>
-      </h3>
+      </h2>
       <div className="nb-body">{children}</div>
     </section>
   )
