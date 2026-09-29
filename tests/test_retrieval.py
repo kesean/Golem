@@ -236,3 +236,209 @@ def test_retrieve_context_and_chunks_omits_url_when_none(monkeypatch):
     # Should not have "URL: None" or "URL: " lines
     assert not any(line.startswith("URL:") for line in context.split("\n"))
     assert "[UnknownSource - docs/something.mdx]" in context
+
+
+# Path safety tests: canonical_url must reject unsafe paths
+def test_canonical_url_rejects_newline_injection():
+    """canonical_url must return None for paths with newline characters."""
+    url = retrieval.canonical_url("Clerk", "docs/auth\nmalicious.mdx")
+    assert url is None
+
+
+def test_canonical_url_rejects_carriage_return():
+    """canonical_url must return None for paths with carriage returns."""
+    url = retrieval.canonical_url("Clerk", "docs/auth\rmalicious.mdx")
+    assert url is None
+
+
+def test_canonical_url_rejects_parent_directory_traversal():
+    """canonical_url must return None for paths containing '..'."""
+    url = retrieval.canonical_url("Clerk", "docs/../../../etc/passwd.mdx")
+    assert url is None
+
+
+def test_canonical_url_rejects_question_mark():
+    """canonical_url must return None for paths containing '?' (query string injection)."""
+    url = retrieval.canonical_url("Clerk", "docs/auth?param=value.mdx")
+    assert url is None
+
+
+def test_canonical_url_rejects_hash():
+    """canonical_url must return None for paths containing '#' (fragment injection)."""
+    url = retrieval.canonical_url("Clerk", "docs/auth#section.mdx")
+    assert url is None
+
+
+def test_canonical_url_rejects_space():
+    """canonical_url must return None for paths containing spaces."""
+    url = retrieval.canonical_url("Clerk", "docs/auth space.mdx")
+    assert url is None
+
+
+def test_canonical_url_rejects_at_sign():
+    """canonical_url must return None for paths containing '@' (email injection)."""
+    url = retrieval.canonical_url("Clerk", "docs/auth@evil.mdx")
+    assert url is None
+
+
+def test_canonical_url_rejects_empty_segments():
+    """canonical_url must return None for paths with empty segments (//)."""
+    url = retrieval.canonical_url("Clerk", "docs//auth.mdx")
+    assert url is None
+
+
+def test_canonical_url_rejects_control_characters():
+    """canonical_url must return None for paths with control characters."""
+    url = retrieval.canonical_url("Clerk", "docs/auth\x00null.mdx")
+    assert url is None
+
+
+# Top-level index handling
+def test_canonical_url_clerk_top_level_index():
+    """canonical_url for Clerk top-level index: docs/index.mdx → https://clerk.com/docs"""
+    url = retrieval.canonical_url("Clerk", "docs/index.mdx")
+    assert url == "https://clerk.com/docs"
+
+
+def test_canonical_url_mdn_top_level_index_returns_none():
+    """canonical_url for MDN top-level index: files/en-us/index.md → None (empty rest)."""
+    url = retrieval.canonical_url("MDN", "files/en-us/index.md")
+    assert url is None
+
+
+def test_canonical_url_clerk_nested_index_stripped():
+    """canonical_url for Clerk nested index: docs/guides/index.mdx → https://clerk.com/docs/guides"""
+    url = retrieval.canonical_url("Clerk", "docs/guides/index.mdx")
+    assert url == "https://clerk.com/docs/guides"
+
+
+# Case-insensitive source handling
+def test_canonical_url_case_insensitive_clerk_lowercase():
+    """canonical_url source is case-insensitive: 'clerk' should work."""
+    url = retrieval.canonical_url("clerk", "docs/auth/sessions.mdx")
+    assert url == "https://clerk.com/docs/auth/sessions"
+
+
+def test_canonical_url_case_insensitive_mdn_uppercase():
+    """canonical_url source is case-insensitive: 'MDN' should work."""
+    url = retrieval.canonical_url("mdn", "files/en-us/web/api/fetch_api/index.md")
+    assert url == "https://developer.mozilla.org/en-US/docs/web/api/fetch_api"
+
+
+def test_canonical_url_case_sensitive_source_casing_preserved():
+    """canonical_url output URLs use canonical casing (e.g., Mozilla retains lowercase)."""
+    url = retrieval.canonical_url("mdn", "files/en-us/web/api/index.md")
+    # MDN's own redirects use lowercase slug in the returned URL
+    assert "developer.mozilla.org" in url and "en-US" in url
+
+
+# None-safety test for retrieve_chunks
+def test_retrieve_chunks_handles_null_repo_path(monkeypatch):
+    """retrieve_chunks gracefully handles hit.payload.repo_path being None."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    hit = MagicMock()
+    hit.payload = {"source": "Clerk", "repo_path": None, "text": "Some text."}
+    mock_qdrant.query_points.return_value.points = [hit]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    chunks = retrieval.retrieve_chunks("some question")
+
+    assert len(chunks) == 1
+    assert chunks[0]["path"] is None or chunks[0]["path"] == ""
+    assert chunks[0]["url"] is None
+    assert chunks[0]["text"] == "Some text."
+    assert chunks[0]["source"] == "Clerk"
+
+
+def test_retrieve_chunks_handles_null_source(monkeypatch):
+    """retrieve_chunks gracefully handles hit.payload.source being None."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    hit = MagicMock()
+    hit.payload = {"source": None, "repo_path": "docs/auth.mdx", "text": "Some text."}
+    mock_qdrant.query_points.return_value.points = [hit]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    chunks = retrieval.retrieve_chunks("some question")
+
+    assert len(chunks) == 1
+    assert chunks[0]["source"] is None or chunks[0]["source"] == ""
+    assert chunks[0]["url"] is None
+
+
+# Header injection hardening
+def test_retrieve_context_and_chunks_sanitizes_newline_in_source(monkeypatch):
+    """retrieve_context_and_chunks replaces \\n in source name with space for header safety."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    hit = MagicMock()
+    hit.payload = {"source": "Clerk\nEvil", "repo_path": "docs/auth.mdx", "text": "Safe text."}
+    mock_qdrant.query_points.return_value.points = [hit]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    context, chunks = retrieval.retrieve_context_and_chunks("some question")
+
+    # Newline should be replaced with space in the header
+    assert "[Clerk Evil - docs/auth.mdx]" in context
+    assert "[Clerk\nEvil" not in context
+
+
+def test_retrieve_context_and_chunks_sanitizes_newline_in_path(monkeypatch):
+    """retrieve_context_and_chunks replaces \\n in path with space for header safety."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    hit = MagicMock()
+    hit.payload = {"source": "Clerk", "repo_path": "docs/auth\nmalicious.mdx", "text": "Safe text."}
+    mock_qdrant.query_points.return_value.points = [hit]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    context, chunks = retrieval.retrieve_context_and_chunks("some question")
+
+    # Newline should be replaced with space in the header
+    assert "[Clerk - docs/auth malicious.mdx]" in context
+    assert "[Clerk - docs/auth\nmalicious.mdx]" not in context
+
+
+def test_retrieve_context_and_chunks_sanitizes_carriage_return_in_source(monkeypatch):
+    """retrieve_context_and_chunks replaces \\r in source name with space for header safety."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    hit = MagicMock()
+    hit.payload = {"source": "Clerk\rEvil", "repo_path": "docs/auth.mdx", "text": "Safe text."}
+    mock_qdrant.query_points.return_value.points = [hit]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    context, chunks = retrieval.retrieve_context_and_chunks("some question")
+
+    # Carriage return should be replaced with space in the header
+    assert "[Clerk Evil - docs/auth.mdx]" in context
+    assert "[Clerk\rEvil" not in context
+
+
+def test_retrieve_context_and_chunks_sanitizes_carriage_return_in_path(monkeypatch):
+    """retrieve_context_and_chunks replaces \\r in path with space for header safety."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    hit = MagicMock()
+    hit.payload = {"source": "Clerk", "repo_path": "docs/auth\rmalicious.mdx", "text": "Safe text."}
+    mock_qdrant.query_points.return_value.points = [hit]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    context, chunks = retrieval.retrieve_context_and_chunks("some question")
+
+    # Carriage return should be replaced with space in the header
+    assert "[Clerk - docs/auth malicious.mdx]" in context
+    assert "[Clerk - docs/auth\rmalicious.mdx]" not in context

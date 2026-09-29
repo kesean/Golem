@@ -2,6 +2,7 @@ export type RetrievedChunk = {
   source: string
   path: string
   text: string
+  url?: string | null
 }
 
 export type ParsedResponse = {

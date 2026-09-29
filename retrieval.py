@@ -9,6 +9,7 @@ Clients initialized once at import time; None when env vars are absent.
 
 import os
 import logging
+import re
 
 _qdrant = None
 _voyage = None
@@ -47,27 +48,80 @@ def canonical_url(source: str, path: str) -> str | None:
     Mapping rules:
     - Clerk: docs/<rest>.mdx → https://clerk.com/docs/<rest> (drop .mdx, drop trailing /index)
     - MDN: files/en-us/<rest>/index.md → https://developer.mozilla.org/en-US/docs/<rest>
+      (Note: MDN paths keep the repo's lowercase slug in the URL; MDN itself redirects to canonical casing)
+
+    Path safety: Returns None if path contains newlines, control chars, spaces, '?', '#', '@',
+    or '..' segments, or has empty segments ('//'), or the remainder doesn't match [A-Za-z0-9._~/-]+.
     """
     # Normalize source name for case-insensitive comparison
     source_lower = source.lower() if source else ""
 
+    def _is_safe_path_remainder(rest: str) -> bool:
+        """Check if path remainder is safe: only [A-Za-z0-9._~/-], no '..' or '//', no control chars."""
+        if not rest:
+            return True  # Empty is safe (for top-level index case)
+        # Check for '..' segments
+        if ".." in rest:
+            return False
+        # Check for empty segments (//)
+        if "//" in rest:
+            return False
+        # Check for newlines and carriage returns
+        if "\n" in rest or "\r" in rest:
+            return False
+        # Check for control characters (0x00-0x1F, 0x7F)
+        if any(ord(c) < 0x20 or ord(c) == 0x7F for c in rest):
+            return False
+        # Check for dangerous characters
+        if any(c in rest for c in "?#@ "):
+            return False
+        # Check that remainder matches the safe pattern [A-Za-z0-9._~/-]
+        if not re.match(r"^[A-Za-z0-9._~/-]+$", rest):
+            return False
+        return True
+
+    def _check_safe_path(path: str, prefix: str) -> bool:
+        """Check if path has no empty segments (//) and valid prefix."""
+        return "//" not in path
+
     if source_lower == "clerk":
         # Clerk: docs/<rest>.mdx
         if not path.startswith("docs/") or not path.endswith(".mdx"):
+            return None
+        # Check for '//' in the full path (empty segments)
+        if not _check_safe_path(path, "docs/"):
             return None
         # Remove "docs/" prefix and ".mdx" suffix
         rest = path[5:-4]  # Remove "docs/" (5 chars) and ".mdx" (4 chars)
         # Remove trailing "/index" if present
         if rest.endswith("/index"):
             rest = rest[:-6]
+        # Also handle bare "index" case (for docs/index.mdx)
+        elif rest == "index":
+            rest = ""
+        # Validate the remainder
+        if not _is_safe_path_remainder(rest):
+            return None
+        # Handle top-level index: empty rest -> "https://clerk.com/docs"
+        if rest == "":
+            return "https://clerk.com/docs"
         return f"https://clerk.com/docs/{rest}"
 
     elif source_lower == "mdn":
         # MDN: files/en-us/<rest>/index.md
         if not path.startswith("files/en-us/") or not path.endswith("/index.md"):
             return None
+        # Check for '//' in the full path (empty segments)
+        if not _check_safe_path(path, "files/en-us/"):
+            return None
         # Remove "files/en-us/" prefix (12 chars) and "/index.md" suffix (9 chars)
         rest = path[12:-9]
+        # Validate the remainder
+        if not _is_safe_path_remainder(rest):
+            return None
+        # For MDN, empty rest (just the index.md) returns None as it's not a valid doc
+        if not rest:
+            return None
         return f"https://developer.mozilla.org/en-US/docs/{rest}"
 
     # Unknown source
@@ -99,10 +153,10 @@ def retrieve_chunks(question: str, top_k: int = 5, source: str | None = None) ->
         ).points
         return [
             {
-                "source": hit.payload.get("source", ""),
-                "path": hit.payload.get("repo_path", ""),
-                "text": hit.payload.get("text", ""),
-                "url": canonical_url(hit.payload.get("source", ""), hit.payload.get("repo_path", "")),
+                "source": hit.payload.get("source") or "",
+                "path": hit.payload.get("repo_path") or "",
+                "text": hit.payload.get("text") or "",
+                "url": canonical_url(hit.payload.get("source") or "", hit.payload.get("repo_path") or ""),
             }
             for hit in hits
         ]
@@ -120,7 +174,10 @@ def retrieve_context_and_chunks(question: str, top_k: int = 5, source: str | Non
         return "", []
     lines = ["--- RETRIEVED DOCS ---"]
     for chunk in chunks:
-        lines.append(f"[{chunk['source']} - {chunk['path']}]")
+        # Sanitize source and path for header injection: replace \r and \n with space
+        source_sanitized = chunk['source'].replace('\r', ' ').replace('\n', ' ')
+        path_sanitized = chunk['path'].replace('\r', ' ').replace('\n', ' ')
+        lines.append(f"[{source_sanitized} - {path_sanitized}]")
         if chunk.get("url"):
             lines.append(f"URL: {chunk['url']}")
         lines.append(chunk["text"])

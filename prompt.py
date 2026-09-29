@@ -28,7 +28,7 @@ Another Title: Another URL
 Rules:
 - <product_tag> must be exactly one of: Authentication, Rate Limits, CORS, SDK, Networking, Database, Configuration, Deployment, Performance, Streaming, Debugging, Other.
 - Each debug step must be on its own line, starting with "Step N: ".
-- In the <docs> section, cite ONLY the documents that appear in the RETRIEVED DOCS block below. Format each as "Title: URL" using the exact URL provided.
+- In the <docs> section, cite ONLY the documents that are provided in the user message. Format each as "Title: URL" using the exact URL provided.
 - Never invent or guess URLs. If no retrieved doc is relevant, leave the docs section empty.
 - Be concise and technically precise. No fluff.
 - If you are unsure, say so inside the relevant field — never invent answers.

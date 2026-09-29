@@ -54,6 +54,11 @@ def test_system_prompt_contains_injection_defense():
 
 def test_system_prompt_contains_canonical_url_rules():
     """SYSTEM_PROMPT contains new rules about citing only retrieved docs."""
-    assert "Title: URL" in SYSTEM_PROMPT or "title" in SYSTEM_PROMPT.lower()
-    assert "RETRIEVED DOCS" in SYSTEM_PROMPT
+    assert "Title: URL" in SYSTEM_PROMPT
+    assert "provided in the user message" in SYSTEM_PROMPT.lower()
     assert "never invent" in SYSTEM_PROMPT.lower()
+
+
+def test_system_prompt_mentions_cite_only_retrieved_docs():
+    """SYSTEM_PROMPT mentions citing ONLY retrieved docs."""
+    assert "cite ONLY the documents" in SYSTEM_PROMPT
