@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import time
+from urllib.parse import urlsplit
 
 import anthropic
 
@@ -35,6 +36,12 @@ def _norm_url(url: str) -> str:
     return url.rstrip(".,;:!?*`/")
 
 
+def _loggable(url: str) -> str:
+    """scheme://host/path only: user-pasted URLs may carry tokens in query/fragment."""
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}{parts.path}"
+
+
 def _cited_doc_urls(response_text: str) -> list[str]:
     """Unique http(s) URLs inside <docs> blocks (trailing slash/punctuation stripped), in order."""
     urls = [
@@ -48,8 +55,8 @@ def _cited_doc_urls(response_text: str) -> list[str]:
 def find_unretrieved_doc_urls(response_text: str, chunks: list[dict] | None) -> list[str]:
     """<docs> URLs that are not the url of any retrieved chunk. Never raises."""
     try:
-        retrieved = {_norm_url(str(c["url"])) for c in chunks or [] if isinstance(c, dict) and c.get("url")}
-        return [u for u in _cited_doc_urls(response_text) if u not in retrieved]
+        retrieved = {_norm_url(str(c["url"])).lower() for c in chunks or [] if isinstance(c, dict) and c.get("url")}
+        return [u for u in _cited_doc_urls(response_text) if u.lower() not in retrieved]
     except Exception as exc:
         logging.debug("find_unretrieved_doc_urls failed: %s", exc)
         return []
@@ -112,7 +119,7 @@ def stream_run(question: str, history: list):
                 "docs-url-miss n_unretrieved=%d n_cited=%d urls=%s",
                 len(unretrieved_urls),
                 len(_cited_doc_urls(full_text)),
-                unretrieved_urls,
+                [_loggable(u) for u in unretrieved_urls],
             )
     except Exception as exc:  # logging must never break the stream
         logging.debug("docs-url-miss logging failed: %s", exc)

@@ -266,3 +266,9 @@ def test_order_is_preserved():
     from chat import find_unretrieved_doc_urls
     r = "<docs>A: https://x.dev/2\nB: https://x.dev/1</docs>"
     assert find_unretrieved_doc_urls(r, []) == ["https://x.dev/2", "https://x.dev/1"]
+
+
+def test_case_differences_are_not_misses():
+    from chat import find_unretrieved_doc_urls
+    r = "<docs>T: https://developer.mozilla.org/en-US/docs/Web/API/Fetch</docs>"
+    assert find_unretrieved_doc_urls(r, [{"url": "https://developer.mozilla.org/en-US/docs/web/api/fetch"}]) == []
