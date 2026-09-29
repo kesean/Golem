@@ -7,9 +7,11 @@ type QuestionInputProps = {
   onChange: (value: string) => void
   onSubmit: () => void
   isLoading: boolean
+  /** Empty state: show the large heading. Once there is an answer it shrinks to a small label. */
+  hero?: boolean
 }
 
-export function QuestionInput({ value, onChange, onSubmit, isLoading }: QuestionInputProps) {
+export function QuestionInput({ value, onChange, onSubmit, isLoading, hero = false }: QuestionInputProps) {
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault()
@@ -18,25 +20,22 @@ export function QuestionInput({ value, onChange, onSubmit, isLoading }: Question
   }
 
   return (
-    <div style={{ padding: '24px 24px 0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <label
-        htmlFor="question"
-        style={{
-          fontFamily: "'DM Sans', sans-serif",
-          fontSize: '14px',
-          fontWeight: 500,
-          color: 'var(--text-secondary)',
-        }}
-      >
-        What can I help you with?
+    <div style={{ padding: hero ? '48px 24px 0' : '24px 24px 0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <label htmlFor="question" className={hero ? 'q-hero' : 'q-label'}>
+        What’s broken?
       </label>
+      {hero && (
+        <p className="q-hero-sub">
+          Describe an auth, CORS, streaming or rate-limit problem. Answers are grounded in Clerk and MDN docs.
+        </p>
+      )}
 
       <Textarea
         id="question"
         value={value}
         onChange={e => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Describe your issue…"
+        placeholder="Paste an error message or describe what you see…"
         disabled={isLoading}
         rows={4}
         style={{
