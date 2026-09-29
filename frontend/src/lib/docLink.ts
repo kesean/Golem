@@ -22,31 +22,38 @@ function validateUrl(candidate: string): { valid: boolean; href: string | null }
  * Strip trailing punctuation while respecting balanced parentheses.
  * Removes trailing ')' only if count of ')' > count of '('.
  * Also removes trailing ASCII and unicode punctuation (. , ; : ! ? ' " » etc.)
+ * Loops until stable: keeps running until the string stops changing.
  */
 function stripTrailingPunctuation(url: string): string {
   let result = url
+  let previousResult: string
 
-  // Handle unbalanced closing parentheses
-  while (result.endsWith(')')) {
-    const openCount = (result.match(/\(/g) || []).length
-    const closeCount = (result.match(/\)/g) || []).length
-    if (closeCount > openCount) {
-      result = result.slice(0, -1)
-    } else {
-      break
+  // Loop until stable: keep running the cleanup until the result doesn't change
+  do {
+    previousResult = result
+
+    // Handle unbalanced closing parentheses
+    while (result.endsWith(')')) {
+      const openCount = (result.match(/\(/g) || []).length
+      const closeCount = (result.match(/\)/g) || []).length
+      if (closeCount > openCount) {
+        result = result.slice(0, -1)
+      } else {
+        break
+      }
     }
-  }
 
-  // Strip trailing punctuation (ASCII and unicode)
-  // Includes: . , ; : ! ? ' " « » … and other common punctuation
-  // Excludes ( and ) since they're handled by balanced parens logic above
-  result = result.replace(/[.,;:!?'"«»……]+$/, '')
+    // Strip trailing punctuation (ASCII and unicode)
+    // Includes: . , ; : ! ? ' " « » … ` and * (backticks and asterisks)
+    // Excludes ( and ) since they're handled by balanced parens logic above
+    result = result.replace(/[.,;:!?'"«»……`*]+$/, '')
+  } while (result !== previousResult)
 
   return result
 }
 
 /**
- * Extract URL from text, handling angle brackets
+ * Extract URL from text, handling angle brackets, backticks, and asterisks
  */
 function extractUrl(text: string): { url: string; beforeUrl: string } | null {
   // Try angle-bracket format first: <URL>
@@ -58,9 +65,9 @@ function extractUrl(text: string): { url: string; beforeUrl: string } | null {
     }
   }
 
-  // Try regular URL pattern
-  // URL can include balanced parens, but not whitespace, <, >, or quotes
-  const urlMatch = text.match(/https?:\/\/[^\s<>"]+/i)
+  // Try regular URL pattern (excluding backticks and asterisks from URL chars)
+  // URL can include balanced parens, but not whitespace, <, >, quotes, backticks, or asterisks
+  const urlMatch = text.match(/https?:\/\/[^\s<>"`*]+/i)
   if (urlMatch) {
     return {
       url: urlMatch[0],
@@ -82,7 +89,7 @@ function cleanLabel(label: string): string {
 
   // Strip surrounding markdown emphasis
   // Handle **, *, _, and backticks
-  result = result.replace(/^(\*\*|__|__|`)(.*)\1$/, '$2')
+  result = result.replace(/^(\*\*|__|`)(.*)\1$/, '$2')
   result = result.replace(/^(_|\*)(.*)\1$/, '$2')
 
   // Strip angle brackets from edges
@@ -124,15 +131,42 @@ export function parseDocLink(raw: string): DocLink {
   }
 
   // Extract and clean label from text before URL
-  let label = beforeUrl
-    .replace(/[\s:(\-–—<>]+$/, '') // Remove trailing separators and angle brackets
-    .trim()
+  let label = beforeUrl.trim()
 
   // Clean up list markers and markdown emphasis
   label = cleanLabel(label)
 
+  // Remove trailing separators and angle brackets (but not backticks or asterisks yet)
+  label = label.replace(/[\s:(\-–—<>]+$/, '').trim()
+
+  // Remove trailing asterisks and backticks only if they don't form balanced pairs
+  // (e.g., remove trailing backticks from "See `" but keep them in "*Title*" or "**Title**")
+  let previousLabel: string
+  do {
+    previousLabel = label
+    while (label.endsWith('*') || label.endsWith('`')) {
+      const match = label.match(/^(\*\*|\_\_|`|\*|\_)(.*)\1$/)
+      if (match) {
+        // It's a balanced pair, stop stripping
+        break
+      }
+      // Not balanced, remove the trailing character
+      label = label.slice(0, -1).trim()
+    }
+    // After removing trailing punctuation, strip any remaining trailing separators
+    label = label.replace(/[\s:(\-–—<>]+$/, '').trim()
+  } while (label !== previousLabel)
+
+  // Apply cleanLabel again to handle cases where the separators exposed the markup delimiters
+  label = cleanLabel(label)
+
+  // If label is empty or just markup, use the URL as the label
+  if (!label || label === '`' || label === '*' || label === '**') {
+    label = url
+  }
+
   return {
-    label: label || url,
+    label,
     href: validation.href,
   }
 }

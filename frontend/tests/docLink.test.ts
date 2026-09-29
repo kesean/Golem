@@ -189,5 +189,64 @@ describe('parseDocLink', () => {
       expect(parseDocLink('See https://a.com/x!').href).toBe('https://a.com/x')
       expect(parseDocLink('See https://a.com/x?').href).toBe('https://a.com/x')
     })
+    it('loops cleanup until stable: strips punctuation after unbalanced parens', () => {
+      expect(
+        parseDocLink('Title (https://clerk.com/docs/sessions).')
+      ).toEqual({
+        label: 'Title',
+        href: 'https://clerk.com/docs/sessions',
+      })
+    })
+    it('preserves balanced parens while stripping trailing punctuation', () => {
+      expect(
+        parseDocLink('Wiki: https://en.wikipedia.org/wiki/Foo_(bar)).')
+      ).toEqual({
+        label: 'Wiki',
+        href: 'https://en.wikipedia.org/wiki/Foo_(bar)',
+      })
+    })
+  })
+
+  describe('Backticks and asterisks around URLs', () => {
+    it('strips backticks around URL', () => {
+      expect(parseDocLink('`https://a.com/x`')).toEqual({
+        label: 'https://a.com/x',
+        href: 'https://a.com/x',
+      })
+    })
+    it('strips backticks with text prefix', () => {
+      expect(parseDocLink('See `https://a.com/x`')).toEqual({
+        label: 'See',
+        href: 'https://a.com/x',
+      })
+    })
+    it('strips double asterisks around URL', () => {
+      expect(parseDocLink('**https://a.com/x**')).toEqual({
+        label: 'https://a.com/x',
+        href: 'https://a.com/x',
+      })
+    })
+    it('strips single asterisks around URL', () => {
+      expect(parseDocLink('*https://a.com/x*')).toEqual({
+        label: 'https://a.com/x',
+        href: 'https://a.com/x',
+      })
+    })
+    it('strips backticks with text and handles label', () => {
+      expect(parseDocLink('Title: `https://a.com/x`')).toEqual({
+        label: 'Title',
+        href: 'https://a.com/x',
+      })
+    })
+    it('does not leave lone backtick or asterisk as label', () => {
+      expect(parseDocLink('`https://a.com/x`')).toEqual({
+        label: 'https://a.com/x',
+        href: 'https://a.com/x',
+      })
+      expect(parseDocLink('*https://a.com/x*')).toEqual({
+        label: 'https://a.com/x',
+        href: 'https://a.com/x',
+      })
+    })
   })
 })
