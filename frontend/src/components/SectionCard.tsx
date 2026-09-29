@@ -45,7 +45,11 @@ export function StepList({ steps }: { steps: string[] }) {
         const checked = !!done[text]
         const textId = `${idBase}-${i}`
         return (
-          <li key={i} className={checked ? 'nb-step nb-step-done' : 'nb-step'}>
+          <li
+            key={i}
+            className={checked ? 'nb-step nb-step-done' : 'nb-step'}
+            style={{ '--i': Math.min(i, 5) } as React.CSSProperties}
+          >
             <label className="nb-step-main">
               <input
                 type="checkbox"
