@@ -6,7 +6,9 @@ Exposes stream_run(question, history) -> generator of SSE-ready event dicts.
 
 import logging
 import os
+import re
 import time
+from urllib.parse import urlsplit
 
 import anthropic
 
@@ -20,6 +22,44 @@ from prompt import SYSTEM_PROMPT, build_messages
 _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
 MODEL = "claude-sonnet-5"
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_DOCS_BLOCK_RE = re.compile(r"<docs>(.*?)</docs>", re.DOTALL | re.IGNORECASE)
+_URL_RE = re.compile(r"https?://[^\s<>\"')\]]+", re.IGNORECASE)
+
+
+def _norm_url(url: str) -> str:
+    return url.rstrip(".,;:!?*`/")
+
+
+def _loggable(url: str) -> str:
+    """scheme://host/path only: user-pasted URLs may carry tokens in query/fragment."""
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}{parts.path}"
+
+
+def _cited_doc_urls(response_text: str) -> list[str]:
+    """Unique http(s) URLs inside <docs> blocks (trailing slash/punctuation stripped), in order."""
+    urls = [
+        _norm_url(m)
+        for block in _DOCS_BLOCK_RE.findall(response_text or "")
+        for m in _URL_RE.findall(block)
+    ]
+    return list(dict.fromkeys(u for u in urls if u))
+
+
+def find_unretrieved_doc_urls(response_text: str, chunks: list[dict] | None) -> list[str]:
+    """<docs> URLs that are not the url of any retrieved chunk. Never raises."""
+    try:
+        retrieved = {_norm_url(str(c["url"])).lower() for c in chunks or [] if isinstance(c, dict) and c.get("url")}
+        return [u for u in _cited_doc_urls(response_text) if u.lower() not in retrieved]
+    except Exception as exc:
+        logging.debug("find_unretrieved_doc_urls failed: %s", exc)
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -70,6 +110,19 @@ def stream_run(question: str, history: list):
 
     if final_message.stop_reason != "end_turn":
         raise RuntimeError(f"Unexpected stop_reason: {final_message.stop_reason}")
+
+    # Check for unretrieved doc URLs and log if any found
+    try:
+        unretrieved_urls = find_unretrieved_doc_urls(full_text, chunks)
+        if unretrieved_urls:
+            logging.warning(
+                "docs-url-miss n_unretrieved=%d n_cited=%d urls=%s",
+                len(unretrieved_urls),
+                len(_cited_doc_urls(full_text)),
+                [_loggable(u) for u in unretrieved_urls],
+            )
+    except Exception as exc:  # logging must never break the stream
+        logging.debug("docs-url-miss logging failed: %s", exc)
 
     yield {
         "type": "done",

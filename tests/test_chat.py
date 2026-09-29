@@ -147,3 +147,40 @@ def test_max_tokens_truncation_raises():
 
     # The partial delta was already yielded before the truncation was detected
     assert events == [{"type": "delta", "text": "<summary>cut off halfway"}]
+
+
+def test_unretrieved_doc_url_is_logged_and_done_still_yields(caplog):
+    import logging
+    import chat
+    import retrieval as retrieval_module
+
+    text = "<docs>T: https://clerk.com/docs/nope</docs>"
+    cm = _make_stream_cm([text])
+    with patch.object(chat._client.messages, "stream", return_value=cm):
+        with patch.object(retrieval_module, "_qdrant", MagicMock()):
+            with patch.object(retrieval_module, "_voyage", MagicMock()):
+                with patch.object(
+                    retrieval_module, "retrieve_context_and_chunks",
+                    return_value=("ctx", [{"url": "https://clerk.com/docs/real"}]),
+                ):
+                    with caplog.at_level(logging.WARNING):
+                        events = list(chat.stream_run("q", []))
+
+    assert events[-1]["type"] == "done"
+    assert "docs-url-miss n_unretrieved=1 n_cited=1" in caplog.text
+
+
+def test_docs_url_miss_log_omits_query_and_fragment(caplog):
+    import logging
+    import chat
+    import retrieval as retrieval_module
+
+    cm = _make_stream_cm(["<docs>T: https://x.dev/a?token=SECRET#frag</docs>"])
+    with patch.object(chat._client.messages, "stream", return_value=cm):
+        with patch.object(retrieval_module, "_qdrant", MagicMock()):
+            with patch.object(retrieval_module, "_voyage", MagicMock()):
+                with patch.object(retrieval_module, "retrieve_context_and_chunks", return_value=("ctx", [])):
+                    with caplog.at_level(logging.WARNING):
+                        list(chat.stream_run("q", []))
+    assert "https://x.dev/a" in caplog.text
+    assert "SECRET" not in caplog.text
