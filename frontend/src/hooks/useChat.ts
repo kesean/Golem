@@ -134,7 +134,10 @@ export function useChat(isGuest = false): UseChatReturn {
 
       // Unconditional — unlike history/eval below, the global counter
       // includes guest usage, since a demo visitor is almost always a guest.
-      incrementStats({}).catch(() => {})
+      incrementStats({}).catch((err) => {
+        // Non-fatal to the user, but log so a silently missed count is diagnosable
+        console.warn('stats increment failed', err)
+      })
 
       if (!isGuest) {
         saveToHistory(question, done.response)
