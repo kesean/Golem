@@ -22,13 +22,17 @@ test('doc links are split from titles and rendered correctly', async ({ page }) 
   expect(body.question).toBe(DEMO_QUESTIONS[0].question);
   await expect(page.getByText('Test summary with documentation.')).toBeVisible();
 
+  // Locate the Documentation section by its 'Documentation' heading
+  const docsSection = page.locator(':has-text("Documentation")').filter({ hasText: 'MDN - CORS' });
+
   // Assert: a link named 'MDN - CORS' has href exactly 'https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS'
-  const corsLink = page.locator('a', { hasText: 'MDN - CORS' });
+  const corsLink = docsSection.locator('a', { hasText: 'MDN - CORS' });
   await expect(corsLink).toHaveCount(1);
   await expect(corsLink).toHaveAttribute('href', 'https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS');
 
-  // Assert: the text 'Clerk session tokens overview' is visible and is NOT inside an <a>
-  await expect(page.getByText('Clerk session tokens overview')).toBeVisible();
-  const clerkLink = page.locator('a', { hasText: 'Clerk session tokens overview' });
+  // Assert: the text 'Clerk session tokens overview' is visible and is NOT inside an <a> within the docs section
+  const clerkText = docsSection.getByText('Clerk session tokens overview');
+  await expect(clerkText).toBeVisible();
+  const clerkLink = docsSection.locator('a', { hasText: 'Clerk session tokens overview' });
   await expect(clerkLink).toHaveCount(0);
 });
