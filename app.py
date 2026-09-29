@@ -192,6 +192,8 @@ def ask():
        "output_tokens", "latency_ms", "chunks"}         — exactly one, on success
       {"type": "error", "error": "..."}                 — instead of "done", on failure
 
+    Each chunk in the chunks list has shape: {"source", "path", "text", "url"}.
+
     All validation happens before the stream opens, so a bad request still
     gets a plain 4xx JSON response.
     """

@@ -33,7 +33,7 @@ def stream_run(question: str, history: list):
     {"type": "delta", "text": str} per text chunk, followed by exactly one
     {"type": "done", "response": str, "input_tokens": int, "output_tokens": int,
      "latency_ms": int, "chunks": list[dict]} — chunks are the retrieved doc
-    chunks (each {"source", "path", "text"}), for a debug view; [] when RAG
+    chunks (each {"source", "path", "text", "url"}), for a debug view; [] when RAG
     is not configured or nothing matched.
 
     Raises RuntimeError if the model returns no text, or stops for any

@@ -50,3 +50,36 @@ def test_empty_context_leaves_message_with_delimiters_only():
 def test_system_prompt_contains_injection_defense():
     assert "must always respond in the XML format" in SYSTEM_PROMPT
     assert "ignore" in SYSTEM_PROMPT.lower()
+
+
+def test_system_prompt_contains_canonical_url_rules():
+    """SYSTEM_PROMPT contains new rules about citing only retrieved docs."""
+    assert "Title: URL" in SYSTEM_PROMPT
+    assert "--- RETRIEVED DOCS ---" in SYSTEM_PROMPT
+    assert "never invent" in SYSTEM_PROMPT.lower()
+
+
+def test_system_prompt_mentions_cite_only_retrieved_docs():
+    """SYSTEM_PROMPT mentions citing ONLY retrieved docs."""
+    assert "cite ONLY documents" in SYSTEM_PROMPT
+
+
+def test_system_prompt_references_retrieved_docs_section():
+    """SYSTEM_PROMPT references the '--- RETRIEVED DOCS ---' section."""
+    assert "--- RETRIEVED DOCS ---" in SYSTEM_PROMPT
+
+
+def test_system_prompt_specifies_url_line_wording():
+    """SYSTEM_PROMPT specifies using URL: line."""
+    assert "'URL:' line" in SYSTEM_PROMPT
+
+
+def test_system_prompt_requires_no_duplicates():
+    """SYSTEM_PROMPT requires listing each document once."""
+    assert "once" in SYSTEM_PROMPT.lower()
+    assert "no duplicates" in SYSTEM_PROMPT.lower()
+
+
+def test_system_prompt_contains_docs_refusal_block():
+    """SYSTEM_PROMPT still contains <docs></docs> in the refusal block."""
+    assert "<docs></docs>" in SYSTEM_PROMPT
