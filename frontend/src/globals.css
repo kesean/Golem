@@ -86,7 +86,7 @@
     --col-steps: #2fa870;
     --border-color: #252d3d;
     --border-subtle: #1d2433;
-    --highlight: rgba(242, 217, 92, 0.28);
+    --highlight: rgba(242, 217, 92, 0.5);
   }
 
   * {
