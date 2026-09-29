@@ -73,3 +73,21 @@ def test_chunk_id_differs_by_index():
     """Same path, different index produces different IDs."""
     from scripts.embed_docs import chunk_id
     assert chunk_id("docs/auth/sessions.mdx", 0) != chunk_id("docs/auth/sessions.mdx", 1)
+
+
+# --- check_canonical_urls tests ---
+
+def test_check_canonical_urls_flags_unmappable_paths():
+    from scripts.embed_docs import check_canonical_urls
+    sources = [
+        {"name": "Clerk", "files": ["docs/quickstarts/nextjs.mdx"]},
+        {"name": "MDN", "files": ["files/en-us/web/api/fetch/index.md"]},
+        {"name": "Unknown", "files": ["docs/x.md"]},
+        {"name": "Clerk", "files": ["not-docs/x.mdx"]},
+    ]
+    assert check_canonical_urls(sources) == ["Unknown: docs/x.md", "Clerk: not-docs/x.mdx"]
+
+
+def test_check_canonical_urls_all_real_sources_map():
+    from scripts.embed_docs import SOURCES, check_canonical_urls
+    assert check_canonical_urls(SOURCES) == []

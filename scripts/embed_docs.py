@@ -139,7 +139,25 @@ def check_file_exists(owner: str, repo: str, path: str) -> bool:
     raise RuntimeError(f"GitHub API returned {resp.status_code} for {path} — set GITHUB_TOKEN to avoid rate limits")
 
 
+def check_canonical_urls(sources: list[dict]) -> list[str]:
+    """Return 'Source: path' for every ingested path canonical_url can't map."""
+    from retrieval import canonical_url
+
+    return [
+        f"{source['name']}: {path}"
+        for source in sources
+        for path in source["files"]
+        if canonical_url(source["name"], path) is None
+    ]
+
+
 def validate_sources() -> None:
+    unmapped = check_canonical_urls(SOURCES)
+    if unmapped:
+        logging.error("No canonical URL for %d path(s) — citations would lose links:", len(unmapped))
+        for u in unmapped:
+            logging.error("  %s", u)
+        sys.exit(1)
     if not GITHUB_TOKEN:
         logging.warning("GITHUB_TOKEN not set — validation limited to 60 req/hr; set it to avoid rate limit errors")
     failed = []
