@@ -11,6 +11,8 @@ export default defineConfig({
   testDir: './e2e',
   use: {
     baseURL,
+    // Mark the tour seen by default so it doesn't cover the page in other specs
+    storageState: { cookies: [], origins: [{ origin: new URL(baseURL).origin, localStorage: [{ name: 'golem-tour-seen', value: '1' }] }] },
     extraHTTPHeaders,
   },
   ...(!process.env.BASE_URL && {
