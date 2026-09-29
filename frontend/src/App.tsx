@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useUser, useClerk } from '@clerk/clerk-react'
 import { useTheme } from './hooks/useTheme'
 import { useChat } from './hooks/useChat'
@@ -18,6 +18,14 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
   const chat = useChat(isGuest)
   const [question, setQuestion] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+  const refocusQuestion = useRef(false)
+  // The textarea is disabled while loading, so restore focus once it re-enables
+  useEffect(() => {
+    if (!chat.isLoading && refocusQuestion.current) {
+      refocusQuestion.current = false
+      document.getElementById('question')?.focus()
+    }
+  }, [chat.isLoading])
 
   const [tourOpen, setTourOpen] = useState(() => !hasSeenTour())
 
@@ -36,8 +44,8 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
     if (chat.isLoading) return
     setQuestion(q)
     chat.ask(q)
-    // The chip unmounts once loading starts; move focus to the input
-    document.getElementById('question')?.focus()
+    // The chip unmounts once loading starts; move focus to the input when it re-enables
+    refocusQuestion.current = true
   }
 
   function handleHistorySelect(entry: HistoryEntry) {
