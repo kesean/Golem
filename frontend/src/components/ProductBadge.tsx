@@ -15,6 +15,7 @@ export function ProductBadge({ tag }: ProductBadgeProps) {
         borderRadius: '4px',
         padding: '2px 8px',
         letterSpacing: '0.02em',
+        alignSelf: 'flex-start',
       }}
     >
       {tag}

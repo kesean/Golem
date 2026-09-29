@@ -34,6 +34,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
 
   function handlePickSuggestion(q: string) {
     if (chat.isLoading) return
+    setQuestion(q)
     chat.ask(q)
   }
 

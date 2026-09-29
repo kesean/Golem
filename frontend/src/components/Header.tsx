@@ -25,18 +25,26 @@ export function Header({
 }: HeaderProps) {
   const [signOutHovered, setSignOutHovered] = useState(false)
   const totalQuestions = useQuery(api.stats.getGlobalCount)
+
+  // Compute counter label once
+  const counterLabel =
+    totalQuestions !== undefined
+      ? `${totalQuestions.toLocaleString()} ${totalQuestions === 1 ? 'question' : 'questions'} answered`
+      : ''
   return (
     <header
       style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '14px 24px',
+        padding: '14px 12px',
         borderBottom: '1px solid var(--border-color)',
         backgroundColor: 'var(--bg)',
+        flexWrap: 'nowrap',
+        gap: '8px',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'nowrap', minWidth: 0 }}>
         <span
           style={{
             fontFamily: "'Newsreader', serif",
@@ -48,21 +56,39 @@ export function Header({
           Golem
         </span>
         {totalQuestions !== undefined && (
-          <span
-            style={{
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: '12px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            · {totalQuestions.toLocaleString()} questions answered
-          </span>
+          <>
+            <span
+              className="hidden sm:inline"
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              · {totalQuestions.toLocaleString()} {totalQuestions === 1 ? 'question' : 'questions'} answered
+            </span>
+            <span
+              className="sm:hidden"
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+                whiteSpace: 'nowrap',
+              }}
+              aria-hidden="true"
+            >
+              · {totalQuestions.toLocaleString()}
+            </span>
+            <span className="sr-only">{counterLabel}</span>
+          </>
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap', minWidth: 0 }}>
         <button
           onClick={onNewConversation}
+          aria-label="New conversation"
           style={{
             fontFamily: "'DM Sans', sans-serif",
             fontSize: '13px',
@@ -70,10 +96,14 @@ export function Header({
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            padding: '6px 10px',
+            paddingTop: '6px',
+            paddingBottom: '6px',
+            whiteSpace: 'nowrap',
           }}
+          className="px-1 sm:px-2.5"
         >
-          New conversation
+          <span className="hidden sm:inline">New conversation</span>
+          <span className="sm:hidden">New</span>
         </button>
 
         <button
@@ -88,8 +118,11 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            padding: '5px 10px',
+            paddingTop: '5px',
+            paddingBottom: '5px',
+            whiteSpace: 'nowrap',
           }}
+          className="px-1.5 sm:px-2.5"
         >
           History
         </button>
@@ -103,10 +136,13 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            padding: '5px 10px',
+            paddingTop: '5px',
+            paddingBottom: '5px',
             color: 'var(--text-secondary)',
             fontSize: '14px',
+            whiteSpace: 'nowrap',
           }}
+          className="px-1.5 sm:px-2.5"
         >
           {theme === 'light' ? '🌙' : '☀️'}
         </button>
@@ -121,24 +157,30 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            padding: '5px 10px',
+            paddingTop: '5px',
+            paddingBottom: '5px',
             color: 'var(--text-secondary)',
             fontSize: '14px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
           }}
+          className="px-1.5 sm:px-2.5"
         >
           <CircleHelp size={16} strokeWidth={2} />
         </button>
 
         {userName && (
           <span
+            className="hidden sm:inline"
             style={{
               fontFamily: "'DM Sans', sans-serif",
               fontSize: '12px',
               color: 'var(--text-muted)',
               marginLeft: '4px',
+              whiteSpace: 'nowrap',
             }}
           >
             {userName}
@@ -154,7 +196,6 @@ export function Header({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '5px',
               fontFamily: "'DM Sans', sans-serif",
               fontSize: '13px',
               color: signOutHovered ? '#a85238' : 'var(--text-secondary)',
@@ -162,10 +203,13 @@ export function Header({
               border: `1px solid ${signOutHovered ? '#a85238' : 'var(--border-color)'}`,
               borderRadius: '6px',
               cursor: 'pointer',
-              padding: '5px 10px',
+              paddingTop: '5px',
+              paddingBottom: '5px',
               transition: 'color 0.15s ease, border-color 0.15s ease',
               marginLeft: '4px',
+              whiteSpace: 'nowrap',
             }}
+            className="px-1.5 sm:px-2.5 sm:gap-1.5"
           >
             <svg
               width="13"
@@ -202,7 +246,7 @@ export function Header({
                 strokeLinecap="round"
               />
             </svg>
-            Sign out
+            <span className="hidden sm:inline">Sign out</span>
           </button>
         )}
       </div>
