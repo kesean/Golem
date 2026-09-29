@@ -67,8 +67,8 @@ def canonical_url(source: str, path: str) -> str | None:
         if "//" in rest:
             return False
         # Check that remainder matches the safe pattern [A-Za-z0-9._~/-]
-        # This regex implicitly rejects newlines, control chars, and dangerous characters
-        if not re.match(r"^[A-Za-z0-9._~/-]+$", rest):
+        # fullmatch (not `$`, which tolerates a trailing "\n") also rejects control chars and ?#@ space
+        if not re.fullmatch(r"[A-Za-z0-9._~/-]+", rest):
             return False
         return True
 

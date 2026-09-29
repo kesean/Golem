@@ -521,3 +521,9 @@ def test_canonical_url_rejects_two_dots():
     """canonical_url must return None for paths with .. segments."""
     url = retrieval.canonical_url("Clerk", "docs/../../../etc/passwd.mdx")
     assert url is None
+
+
+def test_canonical_url_rejects_trailing_newline_in_segment():
+    from retrieval import canonical_url
+    assert canonical_url("Clerk", "docs/x\n.mdx") is None
+    assert canonical_url("MDN", "files/en-us/web/x\n/index.md") is None
