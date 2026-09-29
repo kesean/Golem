@@ -527,3 +527,12 @@ def test_canonical_url_rejects_trailing_newline_in_segment():
     from retrieval import canonical_url
     assert canonical_url("Clerk", "docs/x\n.mdx") is None
     assert canonical_url("MDN", "files/en-us/web/x\n/index.md") is None
+
+
+import pytest
+
+
+@pytest.mark.parametrize("bad", ["a?b", "a#b", "a@b", "a b", "a\x00", "a\x7f", "a\r", "\u00e9"])
+def test_canonical_url_rejects_unsafe_chars(bad):
+    from retrieval import canonical_url
+    assert canonical_url("Clerk", f"docs/{bad}.mdx") is None

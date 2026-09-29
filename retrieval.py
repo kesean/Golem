@@ -33,6 +33,7 @@ if _voyage_api_key:
         logging.warning("retrieval: failed to init Voyage client: %s", e)
 
 COLLECTION = "dev_support_docs"
+_SOURCE_NAMES = {"clerk": "Clerk", "mdn": "MDN"}
 
 
 def canonical_url(source: str, path: str) -> str | None:
@@ -137,17 +138,8 @@ def retrieve_chunks(question: str, top_k: int = 5, source: str | None = None) ->
         result = _voyage.embed([question], model="voyage-3.5-lite", input_type="query")
         vector = result.embeddings[0]
 
-        # Normalize source name: 'clerk' -> 'Clerk', 'mdn' -> 'MDN'
-        normalized_source = None
-        if source:
-            source_lower = source.lower()
-            if source_lower == "clerk":
-                normalized_source = "Clerk"
-            elif source_lower == "mdn":
-                normalized_source = "MDN"
-            else:
-                # Unknown source, pass through unchanged
-                normalized_source = source
+        # Payload stores canonical names; accept any case/padding ('clerk', ' MDN '). Unknown values pass through.
+        normalized_source = _SOURCE_NAMES.get(source.strip().lower(), source.strip()) if source else None
 
         query_filter = Filter(
             must=[FieldCondition(key="source", match=MatchValue(value=normalized_source))]
