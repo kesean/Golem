@@ -21,14 +21,15 @@ Step 2: description of second step
 Step 3: description of third step
 </debug_steps>
 <docs>
-Relevant doc title or URL
-Another doc title or URL
+Title: URL
+Another Title: Another URL
 </docs>
 
 Rules:
 - <product_tag> must be exactly one of: Authentication, Rate Limits, CORS, SDK, Networking, Database, Configuration, Deployment, Performance, Streaming, Debugging, Other.
 - Each debug step must be on its own line, starting with "Step N: ".
-- Each doc must be on its own line. If none apply, leave the docs section empty.
+- In the <docs> section, cite ONLY the documents that appear in the RETRIEVED DOCS block below. Format each as "Title: URL" using the exact URL provided.
+- Never invent or guess URLs. If no retrieved doc is relevant, leave the docs section empty.
 - Be concise and technically precise. No fluff.
 - If you are unsure, say so inside the relevant field — never invent answers.
 - Output nothing outside the XML tags.

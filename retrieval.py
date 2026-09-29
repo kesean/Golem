@@ -34,9 +34,49 @@ if _voyage_api_key:
 COLLECTION = "dev_support_docs"
 
 
+def canonical_url(source: str, path: str) -> str | None:
+    """Convert a repo path to its canonical public URL.
+
+    Args:
+        source: The documentation source name ("Clerk", "MDN", etc.)
+        path: The repository path to the file
+
+    Returns:
+        The canonical URL as a string, or None if the source/path is unknown.
+
+    Mapping rules:
+    - Clerk: docs/<rest>.mdx → https://clerk.com/docs/<rest> (drop .mdx, drop trailing /index)
+    - MDN: files/en-us/<rest>/index.md → https://developer.mozilla.org/en-US/docs/<rest>
+    """
+    # Normalize source name for case-insensitive comparison
+    source_lower = source.lower() if source else ""
+
+    if source_lower == "clerk":
+        # Clerk: docs/<rest>.mdx
+        if not path.startswith("docs/") or not path.endswith(".mdx"):
+            return None
+        # Remove "docs/" prefix and ".mdx" suffix
+        rest = path[5:-4]  # Remove "docs/" (5 chars) and ".mdx" (4 chars)
+        # Remove trailing "/index" if present
+        if rest.endswith("/index"):
+            rest = rest[:-6]
+        return f"https://clerk.com/docs/{rest}"
+
+    elif source_lower == "mdn":
+        # MDN: files/en-us/<rest>/index.md
+        if not path.startswith("files/en-us/") or not path.endswith("/index.md"):
+            return None
+        # Remove "files/en-us/" prefix (12 chars) and "/index.md" suffix (9 chars)
+        rest = path[12:-9]
+        return f"https://developer.mozilla.org/en-US/docs/{rest}"
+
+    # Unknown source
+    return None
+
+
 def retrieve_chunks(question: str, top_k: int = 5, source: str | None = None) -> list[dict]:
     """Embed question, query Qdrant, return matching chunks as a list of
-    {"source", "path", "text"} dicts, most relevant first. [] on any failure.
+    {"source", "path", "text", "url"} dicts, most relevant first. [] on any failure.
 
     source: 'clerk' | 'mdn' | None (search all).
     """
@@ -62,6 +102,7 @@ def retrieve_chunks(question: str, top_k: int = 5, source: str | None = None) ->
                 "source": hit.payload.get("source", ""),
                 "path": hit.payload.get("repo_path", ""),
                 "text": hit.payload.get("text", ""),
+                "url": canonical_url(hit.payload.get("source", ""), hit.payload.get("repo_path", "")),
             }
             for hit in hits
         ]
@@ -80,6 +121,8 @@ def retrieve_context_and_chunks(question: str, top_k: int = 5, source: str | Non
     lines = ["--- RETRIEVED DOCS ---"]
     for chunk in chunks:
         lines.append(f"[{chunk['source']} - {chunk['path']}]")
+        if chunk.get("url"):
+            lines.append(f"URL: {chunk['url']}")
         lines.append(chunk["text"])
         lines.append("")
     lines.append("--- END DOCS ---")

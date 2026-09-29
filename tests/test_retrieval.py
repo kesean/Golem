@@ -10,7 +10,7 @@ def _make_hit(source, path, text):
 
 
 def test_retrieve_chunks_returns_structured_hits(monkeypatch):
-    """retrieve_chunks returns dicts with source/path/text, most relevant first."""
+    """retrieve_chunks returns dicts with source/path/text/url, most relevant first."""
     mock_voyage = MagicMock()
     mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
     mock_qdrant = MagicMock()
@@ -24,8 +24,8 @@ def test_retrieve_chunks_returns_structured_hits(monkeypatch):
     chunks = retrieval.retrieve_chunks("How do I verify a session?")
 
     assert chunks == [
-        {"source": "Clerk", "path": "docs/authentication/sessions.mdx", "text": "Session info here."},
-        {"source": "MDN", "path": "files/en-us/web/api/fetch_api/index.md", "text": "Fetch API docs."},
+        {"source": "Clerk", "path": "docs/authentication/sessions.mdx", "text": "Session info here.", "url": "https://clerk.com/docs/authentication/sessions"},
+        {"source": "MDN", "path": "files/en-us/web/api/fetch_api/index.md", "text": "Fetch API docs.", "url": "https://developer.mozilla.org/en-US/docs/web/api/fetch_api"},
     ]
 
 
@@ -137,8 +137,8 @@ def test_retrieve_context_and_chunks_returns_both(monkeypatch):
     assert "Fetch API docs." in context
     assert context.strip().endswith("--- END DOCS ---")
     assert chunks == [
-        {"source": "Clerk", "path": "docs/authentication/sessions.mdx", "text": "Session info here."},
-        {"source": "MDN", "path": "files/en-us/web/api/fetch_api/index.md", "text": "Fetch API docs."},
+        {"source": "Clerk", "path": "docs/authentication/sessions.mdx", "text": "Session info here.", "url": "https://clerk.com/docs/authentication/sessions"},
+        {"source": "MDN", "path": "files/en-us/web/api/fetch_api/index.md", "text": "Fetch API docs.", "url": "https://developer.mozilla.org/en-US/docs/web/api/fetch_api"},
     ]
 
 
@@ -152,3 +152,87 @@ def test_retrieve_context_and_chunks_empty_when_no_hits(monkeypatch):
     monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
 
     assert retrieval.retrieve_context_and_chunks("some question") == ("", [])
+
+
+# Tests for canonical_url function
+def test_canonical_url_clerk_path():
+    """canonical_url for Clerk path: docs/<rest>.mdx → https://clerk.com/docs/<rest>"""
+    url = retrieval.canonical_url("Clerk", "docs/guides/sessions/session-tokens.mdx")
+    assert url == "https://clerk.com/docs/guides/sessions/session-tokens"
+
+
+def test_canonical_url_clerk_index_mdx():
+    """canonical_url for Clerk index.mdx: drops the /index suffix."""
+    url = retrieval.canonical_url("Clerk", "docs/guides/how-clerk-works/index.mdx")
+    assert url == "https://clerk.com/docs/guides/how-clerk-works"
+
+
+def test_canonical_url_mdn_path():
+    """canonical_url for MDN path: files/en-us/<rest>/index.md → https://developer.mozilla.org/en-US/docs/<rest>"""
+    url = retrieval.canonical_url("MDN", "files/en-us/web/api/fetch_api/index.md")
+    assert url == "https://developer.mozilla.org/en-US/docs/web/api/fetch_api"
+
+
+def test_canonical_url_unknown_source():
+    """canonical_url for unknown source → None."""
+    url = retrieval.canonical_url("UnknownSource", "docs/something.mdx")
+    assert url is None
+
+
+def test_canonical_url_nonmatching_path():
+    """canonical_url for non-matching path pattern → None."""
+    url = retrieval.canonical_url("Clerk", "something/else.txt")
+    assert url is None
+
+
+def test_retrieve_chunks_includes_url(monkeypatch):
+    """retrieve_chunks results include 'url' field."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = [
+        _make_hit("Clerk", "docs/guides/sessions/session-tokens.mdx", "Session info here."),
+    ]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    chunks = retrieval.retrieve_chunks("How do I verify a session?")
+
+    assert len(chunks) == 1
+    assert "url" in chunks[0]
+    assert chunks[0]["url"] == "https://clerk.com/docs/guides/sessions/session-tokens"
+
+
+def test_retrieve_context_and_chunks_includes_url_header(monkeypatch):
+    """Formatted context block includes URL: <url> under each header."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = [
+        _make_hit("Clerk", "docs/guides/sessions/session-tokens.mdx", "Session info here."),
+    ]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    context, chunks = retrieval.retrieve_context_and_chunks("How do I verify a session?")
+
+    assert "URL: https://clerk.com/docs/guides/sessions/session-tokens" in context
+    assert "[Clerk - docs/guides/sessions/session-tokens.mdx]" in context
+
+
+def test_retrieve_context_and_chunks_omits_url_when_none(monkeypatch):
+    """Formatted context block omits URL line when url is None."""
+    mock_voyage = MagicMock()
+    mock_voyage.embed.return_value.embeddings = [[0.1] * 512]
+    mock_qdrant = MagicMock()
+    mock_qdrant.query_points.return_value.points = [
+        _make_hit("UnknownSource", "docs/something.mdx", "Some info."),
+    ]
+    monkeypatch.setattr(retrieval, "_voyage", mock_voyage)
+    monkeypatch.setattr(retrieval, "_qdrant", mock_qdrant)
+
+    context, chunks = retrieval.retrieve_context_and_chunks("some question")
+
+    # Should not have "URL: None" or "URL: " lines
+    assert not any(line.startswith("URL:") for line in context.split("\n"))
+    assert "[UnknownSource - docs/something.mdx]" in context

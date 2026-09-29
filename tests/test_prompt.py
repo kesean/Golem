@@ -50,3 +50,10 @@ def test_empty_context_leaves_message_with_delimiters_only():
 def test_system_prompt_contains_injection_defense():
     assert "must always respond in the XML format" in SYSTEM_PROMPT
     assert "ignore" in SYSTEM_PROMPT.lower()
+
+
+def test_system_prompt_contains_canonical_url_rules():
+    """SYSTEM_PROMPT contains new rules about citing only retrieved docs."""
+    assert "Title: URL" in SYSTEM_PROMPT or "title" in SYSTEM_PROMPT.lower()
+    assert "RETRIEVED DOCS" in SYSTEM_PROMPT
+    assert "never invent" in SYSTEM_PROMPT.lower()
