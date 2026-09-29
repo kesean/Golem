@@ -76,10 +76,11 @@ export function Header({
                 color: 'var(--text-secondary)',
                 whiteSpace: 'nowrap',
               }}
+              aria-hidden="true"
             >
               · {totalQuestions.toLocaleString()}
-              <span className="sr-only">{counterLabel}</span>
             </span>
+            <span className="sr-only">{counterLabel}</span>
           </>
         )}
       </div>
@@ -95,10 +96,11 @@ export function Header({
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            padding: '6px 4px',
+            paddingTop: '6px',
+            paddingBottom: '6px',
             whiteSpace: 'nowrap',
           }}
-          className="sm:px-2"
+          className="px-1 sm:px-2.5"
         >
           <span className="hidden sm:inline">New conversation</span>
           <span className="sm:hidden">New</span>
@@ -116,10 +118,11 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            padding: '5px 6px',
+            paddingTop: '5px',
+            paddingBottom: '5px',
             whiteSpace: 'nowrap',
           }}
-          className="sm:px-2.5"
+          className="px-1.5 sm:px-2.5"
         >
           History
         </button>
@@ -133,12 +136,13 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            padding: '5px 6px',
+            paddingTop: '5px',
+            paddingBottom: '5px',
             color: 'var(--text-secondary)',
             fontSize: '14px',
             whiteSpace: 'nowrap',
           }}
-          className="sm:px-2.5"
+          className="px-1.5 sm:px-2.5"
         >
           {theme === 'light' ? '🌙' : '☀️'}
         </button>
@@ -153,7 +157,8 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            padding: '5px 6px',
+            paddingTop: '5px',
+            paddingBottom: '5px',
             color: 'var(--text-secondary)',
             fontSize: '14px',
             display: 'flex',
@@ -162,7 +167,7 @@ export function Header({
             whiteSpace: 'nowrap',
             flexShrink: 0,
           }}
-          className="sm:px-2.5"
+          className="px-1.5 sm:px-2.5"
         >
           <CircleHelp size={16} strokeWidth={2} />
         </button>
@@ -191,7 +196,6 @@ export function Header({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '5px',
               fontFamily: "'DM Sans', sans-serif",
               fontSize: '13px',
               color: signOutHovered ? '#a85238' : 'var(--text-secondary)',
@@ -199,12 +203,13 @@ export function Header({
               border: `1px solid ${signOutHovered ? '#a85238' : 'var(--border-color)'}`,
               borderRadius: '6px',
               cursor: 'pointer',
-              padding: '5px 6px',
+              paddingTop: '5px',
+              paddingBottom: '5px',
               transition: 'color 0.15s ease, border-color 0.15s ease',
               marginLeft: '4px',
               whiteSpace: 'nowrap',
             }}
-            className="sm:px-2.5 sm:gap-1.5"
+            className="px-1.5 sm:px-2.5 sm:gap-1.5"
           >
             <svg
               width="13"
