@@ -167,7 +167,7 @@ input::placeholder {
 .nb-summary {
   border-left: 3px solid var(--accent);
   padding: 2px 0 2px 20px; margin-bottom: 8px;
-  font-family: 'Newsreader', serif; font-size: 22px; line-height: 1.5; color: var(--text-primary);
+  font-family: 'Newsreader', serif; font-size: clamp(19px, 4.6vw, 22px); line-height: 1.5; color: var(--text-primary);
 }
 .nb-summary p, .nb-prose p { margin: 0 0 0.6em; }
 .nb-summary p:last-child, .nb-prose p:last-child { margin-bottom: 0; }
