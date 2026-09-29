@@ -25,6 +25,12 @@ export function Header({
 }: HeaderProps) {
   const [signOutHovered, setSignOutHovered] = useState(false)
   const totalQuestions = useQuery(api.stats.getGlobalCount)
+
+  // Compute counter label once
+  const counterLabel =
+    totalQuestions !== undefined
+      ? `${totalQuestions.toLocaleString()} ${totalQuestions === 1 ? 'question' : 'questions'} answered`
+      : ''
   return (
     <header
       style={{
@@ -70,10 +76,9 @@ export function Header({
                 color: 'var(--text-secondary)',
                 whiteSpace: 'nowrap',
               }}
-              title={`${totalQuestions.toLocaleString()} ${totalQuestions === 1 ? 'question' : 'questions'} answered`}
-              aria-label={`${totalQuestions.toLocaleString()} ${totalQuestions === 1 ? 'question' : 'questions'} answered`}
             >
               · {totalQuestions.toLocaleString()}
+              <span className="sr-only">{counterLabel}</span>
             </span>
           </>
         )}
@@ -90,9 +95,10 @@ export function Header({
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            padding: '6px 8px',
+            padding: '6px 4px',
             whiteSpace: 'nowrap',
           }}
+          className="sm:px-2"
         >
           <span className="hidden sm:inline">New conversation</span>
           <span className="sm:hidden">New</span>
@@ -110,9 +116,10 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            padding: '5px 10px',
+            padding: '5px 6px',
             whiteSpace: 'nowrap',
           }}
+          className="sm:px-2.5"
         >
           History
         </button>
@@ -126,11 +133,12 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            padding: '5px 10px',
+            padding: '5px 6px',
             color: 'var(--text-secondary)',
             fontSize: '14px',
             whiteSpace: 'nowrap',
           }}
+          className="sm:px-2.5"
         >
           {theme === 'light' ? '🌙' : '☀️'}
         </button>
@@ -145,7 +153,7 @@ export function Header({
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
             cursor: 'pointer',
-            padding: '5px 10px',
+            padding: '5px 6px',
             color: 'var(--text-secondary)',
             fontSize: '14px',
             display: 'flex',
@@ -154,12 +162,14 @@ export function Header({
             whiteSpace: 'nowrap',
             flexShrink: 0,
           }}
+          className="sm:px-2.5"
         >
           <CircleHelp size={16} strokeWidth={2} />
         </button>
 
         {userName && (
           <span
+            className="hidden sm:inline"
             style={{
               fontFamily: "'DM Sans', sans-serif",
               fontSize: '12px',
@@ -189,11 +199,12 @@ export function Header({
               border: `1px solid ${signOutHovered ? '#a85238' : 'var(--border-color)'}`,
               borderRadius: '6px',
               cursor: 'pointer',
-              padding: '5px 10px',
+              padding: '5px 6px',
               transition: 'color 0.15s ease, border-color 0.15s ease',
               marginLeft: '4px',
               whiteSpace: 'nowrap',
             }}
+            className="sm:px-2.5 sm:gap-1.5"
           >
             <svg
               width="13"
@@ -230,7 +241,7 @@ export function Header({
                 strokeLinecap="round"
               />
             </svg>
-            Sign out
+            <span className="hidden sm:inline">Sign out</span>
           </button>
         )}
       </div>
