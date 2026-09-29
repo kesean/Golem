@@ -93,6 +93,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
           onChange={setQuestion}
           onSubmit={handleSubmit}
           isLoading={chat.isLoading}
+          hero={!chat.isLoading && !chat.parsedResponse && !chat.error}
         />
         {!chat.isLoading && !chat.parsedResponse && !chat.error && !question.trim() && (
           <SuggestedQuestions onPick={handlePickSuggestion} />

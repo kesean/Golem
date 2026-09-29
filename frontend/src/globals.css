@@ -243,3 +243,14 @@ input::placeholder {
 }
 @keyframes nb-sweep { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
 @keyframes nb-land { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ---- Empty-state hero ---- */
+.q-label { font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.q-hero {
+  font-family: 'Newsreader', serif; font-size: clamp(32px, 6vw, 44px); font-weight: 500;
+  line-height: 1.1; letter-spacing: -0.01em; color: var(--text-primary);
+}
+.q-hero-sub {
+  margin: -4px 0 8px; max-width: 46ch;
+  font-family: 'Newsreader', serif; font-size: 18px; line-height: 1.5; color: var(--text-secondary);
+}
