@@ -22,8 +22,8 @@ test('doc links are split from titles and rendered correctly', async ({ page }) 
   expect(body.question).toBe(DEMO_QUESTIONS[0].question);
   await expect(page.getByText('Test summary with documentation.')).toBeVisible();
 
-  // Locate the Documentation section by its 'Documentation' heading
-  const docsSection = page.locator(':has-text("Documentation")').filter({ hasText: 'MDN - CORS' });
+  // Locate the docs row by its 'Docs' label
+  const docsSection = page.locator('section.nb-row', { hasText: 'Docs' }).filter({ hasText: 'MDN - CORS' });
 
   // Assert: a link named 'MDN - CORS' has href exactly 'https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS'
   const corsLink = docsSection.locator('a', { hasText: 'MDN - CORS' });
@@ -35,4 +35,14 @@ test('doc links are split from titles and rendered correctly', async ({ page }) 
   await expect(clerkText).toBeVisible();
   const clerkLink = docsSection.locator('a', { hasText: 'Clerk session tokens overview' });
   await expect(clerkLink).toHaveCount(0);
+});
+
+test('debug steps can be ticked off and the "Step N:" prefix is dropped', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('suggested-question').first().click();
+  const step = page.locator('.nb-step').first();
+  await expect(step).toContainText('Check your logs.');
+  await expect(step).not.toContainText('Step 1:');
+  await step.locator('input[type=checkbox]').check({ force: true });
+  await expect(step).toHaveClass(/nb-step-done/);
 });

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Skeleton } from './ui/skeleton'
 import { ProductBadge } from './ProductBadge'
-import { SectionCard, MarkdownContent, StepList, DocList } from './SectionCard'
+import { NotebookRow, MarkdownContent, StepList, DocList } from './SectionCard'
 import { FeedbackButtons } from './FeedbackButtons'
 import { ResponseActions } from './ResponseActions'
 import { DebugPanel } from './DebugPanel'
@@ -111,30 +111,31 @@ export function ResponsePanel({
       id="response-area"
       role="region"
       aria-label="Response"
-      style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}
+      className="nb-doc"
+      style={{ padding: '24px' }}
     >
       {parsedResponse.productTag && (
         <ProductBadge tag={parsedResponse.productTag} />
       )}
 
-      <SectionCard title="Summary" accentColor="var(--accent)" animationDelay={0}>
+      <div className="nb-summary">
         <MarkdownContent content={parsedResponse.summary} />
-      </SectionCard>
+      </div>
 
-      <SectionCard title="Root Cause" accentColor="var(--col-root)" animationDelay={80}>
+      <NotebookRow label="Cause" marked>
         <MarkdownContent content={parsedResponse.rootCause} />
-      </SectionCard>
+      </NotebookRow>
 
       {parsedResponse.debugSteps.length > 0 && (
-        <SectionCard title="Debug Steps" accentColor="var(--col-steps)" animationDelay={160}>
+        <NotebookRow label="Fix">
           <StepList steps={parsedResponse.debugSteps} />
-        </SectionCard>
+        </NotebookRow>
       )}
 
       {parsedResponse.docs.length > 0 && (
-        <SectionCard title="Documentation" accentColor="var(--col-docs)" animationDelay={240}>
+        <NotebookRow label="Docs">
           <DocList docs={parsedResponse.docs} />
-        </SectionCard>
+        </NotebookRow>
       )}
 
       {!isStreaming && <DebugPanel chunks={chunks} />}
