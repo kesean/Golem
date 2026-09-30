@@ -113,7 +113,12 @@ export function HistoryPalette({ open, onOpenChange, onSelect, isGuest }: Histor
   }
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange}>
+    <CommandDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Question history"
+      description="Search your past questions"
+    >
       <HistoryPaletteBody entries={entries} onSelect={onSelect} onOpenChange={onOpenChange} />
     </CommandDialog>
   )

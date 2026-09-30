@@ -150,6 +150,8 @@ const STATES: ScanState[] = [
       await expect(input).toBeFocused();
       await expect(input).toHaveAccessibleName('Search history');
       await expect(input).toHaveAccessibleDescription('No history yet.');
+      await expect(dialog).toHaveAccessibleName('Question history');
+      await expect(dialog).toHaveAccessibleDescription('Search your past questions');
     },
   },
   {
