@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { SignInButton } from '@clerk/clerk-react'
+import { useCommandState } from 'cmdk'
 import {
   CommandDialog,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -114,33 +114,53 @@ export function HistoryPalette({ open, onOpenChange, onSelect, isGuest }: Histor
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
+      <HistoryPaletteBody entries={entries} onSelect={onSelect} onOpenChange={onOpenChange} />
+    </CommandDialog>
+  )
+}
+
+// Rendered inside cmdk's <Command> (via CommandDialog) so useCommandState works.
+function HistoryPaletteBody({
+  entries,
+  onSelect,
+  onOpenChange,
+}: {
+  entries: HistoryEntry[]
+  onSelect: (entry: HistoryEntry) => void
+  onOpenChange: (open: boolean) => void
+}) {
+  // True both when there is no history and when the search matches nothing.
+  const noResults = useCommandState(state => state.filtered.count === 0)
+  const emptyMessage = entries.length === 0 ? 'No history yet.' : 'No matching questions.'
+
+  return (
+    <>
       <CommandInput placeholder="Search history…" />
-      {entries.length === 0 && (
-        // Outside the listbox: an empty cmdk listbox fails aria-required-children,
-        // so the list is aria-hidden when empty and this message stays readable.
-        <p className="py-6 text-center text-sm">No history yet.</p>
-      )}
-      <CommandList aria-hidden={entries.length === 0}>
+      {/* Outside the listbox: an empty cmdk listbox fails aria-required-children,
+          so the list is aria-hidden while empty and this polite live region
+          carries the message. cmdk points the input's aria-controls at the list,
+          so the list must stay mounted. */}
+      <div aria-live="polite">
+        {noResults && <p className="py-6 text-center text-sm">{emptyMessage}</p>}
+      </div>
+      <CommandList aria-hidden={noResults}>
         {entries.length > 0 && (
-          <>
-            <CommandEmpty>No history yet.</CommandEmpty>
-            <CommandGroup heading="Recent Questions">
-              {entries.map(entry => (
-                <CommandItem
-                  key={entry._id}
-                  onSelect={() => {
-                    onSelect(entry)
-                    onOpenChange(false)
-                  }}
-                  style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '14px' }}
-                >
-                  {entry.question}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </>
+          <CommandGroup heading="Recent Questions">
+            {entries.map(entry => (
+              <CommandItem
+                key={entry._id}
+                onSelect={() => {
+                  onSelect(entry)
+                  onOpenChange(false)
+                }}
+                style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '14px' }}
+              >
+                {entry.question}
+              </CommandItem>
+            ))}
+          </CommandGroup>
         )}
       </CommandList>
-    </CommandDialog>
+    </>
   )
 }
