@@ -84,11 +84,28 @@ const VIEWPORTS = {
 
 const THEMES = ['light', 'dark'] as const;
 
+// Seeded into the palette via the test-bypass seam in src/hooks/useHistory.ts
+const SEEDED_HISTORY = [
+  { _id: 'e2e-1', question: 'Why am I getting a 401 error?', rawXml: MOCK_TEXT, _creationTime: 1 },
+  { _id: 'e2e-2', question: 'How do I rotate an API key?', rawXml: MOCK_TEXT, _creationTime: 2 },
+];
+
+async function openHistoryPalette(page: Page) {
+  await page.keyboard.press('Control+k');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  // Assert it's specifically the history palette by checking for cmdk-input
+  await expect(dialog.locator('[cmdk-input]')).toBeVisible();
+  return dialog;
+}
+
 type ScanState = {
   name: string;
   viewports: (keyof typeof VIEWPORTS)[];
   // false for dialogs, which cover #question and the h1
   requireContent: boolean;
+  // Seed SEEDED_HISTORY before the page loads
+  seedHistory?: boolean;
   setup: (page: Page) => Promise<void>;
 };
 
@@ -125,11 +142,32 @@ const STATES: ScanState[] = [
     viewports: ['desktop'],
     requireContent: false,
     setup: async (page) => {
-      await page.keyboard.press('Control+k');
-      const dialog = page.getByRole('dialog');
-      await expect(dialog).toBeVisible();
-      // Assert it's specifically the history palette by checking for cmdk-input
-      await expect(dialog.locator('[cmdk-input]')).toBeVisible();
+      const dialog = await openHistoryPalette(page);
+      await expect(dialog.getByText('No history yet.')).toBeVisible();
+    },
+  },
+  {
+    name: 'history palette with entries',
+    viewports: ['desktop'],
+    requireContent: false,
+    seedHistory: true,
+    setup: async (page) => {
+      const dialog = await openHistoryPalette(page);
+      await expect(dialog.getByRole('option')).toHaveCount(SEEDED_HISTORY.length);
+      await expect(dialog.getByRole('option').first()).toHaveText(SEEDED_HISTORY[0].question);
+    },
+  },
+  {
+    name: 'history palette no-match search',
+    viewports: ['desktop'],
+    requireContent: false,
+    seedHistory: true,
+    setup: async (page) => {
+      const dialog = await openHistoryPalette(page);
+      await expect(dialog.getByRole('option')).toHaveCount(SEEDED_HISTORY.length);
+      await dialog.locator('[cmdk-input]').fill('zzz no such question');
+      await expect(dialog.getByRole('option')).toHaveCount(0);
+      await expect(dialog.getByText('No matching questions.')).toBeVisible();
     },
   },
 ];
@@ -142,6 +180,11 @@ for (const state of STATES) {
       test(title, async ({ page }) => {
         await page.setViewportSize(viewport);
         await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+        if (state.seedHistory) {
+          await page.addInitScript((entries) => {
+            (window as { __GOLEM_E2E_HISTORY__?: unknown }).__GOLEM_E2E_HISTORY__ = entries;
+          }, SEEDED_HISTORY);
+        }
         await page.goto('/');
         await state.setup(page);
         if (theme === 'dark') {
