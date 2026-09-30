@@ -144,6 +144,12 @@ const STATES: ScanState[] = [
     setup: async (page) => {
       const dialog = await openHistoryPalette(page);
       await expect(dialog.getByText('No history yet.')).toBeVisible();
+      // Read on open as the focused input's description (a live region
+      // mounted with the dialog would not be announced).
+      const input = dialog.locator('[cmdk-input]');
+      await expect(input).toBeFocused();
+      await expect(input).toHaveAccessibleName('Search history');
+      await expect(input).toHaveAccessibleDescription('No history yet.');
     },
   },
   {
@@ -155,6 +161,7 @@ const STATES: ScanState[] = [
       const dialog = await openHistoryPalette(page);
       await expect(dialog.getByRole('option')).toHaveCount(SEEDED_HISTORY.length);
       await expect(dialog.getByRole('option').first()).toHaveText(SEEDED_HISTORY[0].question);
+      await expect(dialog.locator('[cmdk-input]')).toHaveAccessibleDescription('');
     },
   },
   {
@@ -168,6 +175,7 @@ const STATES: ScanState[] = [
       await dialog.locator('[cmdk-input]').fill('zzz no such question');
       await expect(dialog.getByRole('option')).toHaveCount(0);
       await expect(dialog.getByText('No matching questions.')).toBeVisible();
+      await expect(dialog.locator('[cmdk-input]')).toHaveAccessibleDescription('No matching questions.');
     },
   },
 ];

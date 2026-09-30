@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import { SignInButton } from '@clerk/clerk-react'
 import { useCommandState } from 'cmdk'
 import {
@@ -132,15 +132,25 @@ function HistoryPaletteBody({
   // True both when there is no history and when the search matches nothing.
   const noResults = useCommandState(state => state.filtered.count === 0)
   const emptyMessage = entries.length === 0 ? 'No history yet.' : 'No matching questions.'
+  const messageId = useId()
 
   return (
     <>
-      <CommandInput placeholder="Search history…" />
+      {/* The input is focused when the dialog opens, and a live region that
+          mounts with the dialog is not announced, so the message is also the
+          input's description. The wrapper always exists, so the reference is
+          always valid; it is empty (no description) while there are results.
+          cmdk labels the input with an empty <label>, so it needs aria-label. */}
+      <CommandInput
+        placeholder="Search history…"
+        aria-label="Search history"
+        aria-describedby={messageId}
+      />
       {/* Outside the listbox: an empty cmdk listbox fails aria-required-children,
           so the list is aria-hidden while empty and this polite live region
-          carries the message. cmdk points the input's aria-controls at the list,
-          so the list must stay mounted. */}
-      <div aria-live="polite">
+          announces the message when a search stops matching. cmdk points the
+          input's aria-controls at the list, so the list must stay mounted. */}
+      <div id={messageId} aria-live="polite">
         {noResults && <p className="py-6 text-center text-sm">{emptyMessage}</p>}
       </div>
       <CommandList aria-hidden={noResults}>
