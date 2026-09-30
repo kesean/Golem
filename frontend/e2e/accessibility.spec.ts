@@ -74,149 +74,139 @@ async function scan(
   expect(violations, label).toEqual([]);
 }
 
-// Empty state tests (no question, no response)
-test('empty state: 1280x800 light theme', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'light');
-  await page.goto('/');
-  // Verify theme matches
-  const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
-  expect(isDark).toBe(false);
-  await scan(page, 'empty state: 1280x800 light');
-});
+// Scan matrix: every state below is scanned in each of its viewports x both
+// themes. Each state's setup must assert real content is on screen before the
+// scan runs, so a blank or wrong page can't pass axe vacuously.
+const VIEWPORTS = {
+  desktop: { width: 1280, height: 800 },
+  mobile: { width: 375, height: 812 },
+} as const;
 
-test('empty state: 1280x800 dark theme', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'dark');
-  await page.goto('/');
-  // Verify theme matches
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
-  await scan(page, 'empty state: 1280x800 dark');
-});
+const THEMES = ['light', 'dark'] as const;
 
-test('empty state: 375x812 light theme', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'light');
-  await page.goto('/');
-  // Verify theme matches
-  const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
-  expect(isDark).toBe(false);
-  await scan(page, 'empty state: 375x812 light');
-});
+// Seeded into the palette via the test-bypass seam in src/hooks/useHistory.ts
+const SEEDED_HISTORY = [
+  { _id: 'e2e-1', question: 'Why am I getting a 401 error?', rawXml: MOCK_TEXT, _creationTime: 1 },
+  { _id: 'e2e-2', question: 'How do I rotate an API key?', rawXml: MOCK_TEXT, _creationTime: 2 },
+];
 
-test('empty state: 375x812 dark theme', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'dark');
-  await page.goto('/');
-  // Verify theme matches
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
-  await scan(page, 'empty state: 375x812 dark');
-});
-
-// Answered state tests (question filled, response received)
-test('answered state: 1280x800 light theme', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'light');
-  await page.goto('/');
-  await page.locator('#question').fill('Why am I getting a 401 error?');
-  await page.locator('#ask-btn').click();
-  await expect(page.locator('#response-area')).toBeVisible();
-  await expect(page.getByText('Test summary.')).toBeVisible();
-  await expect(page.locator('[role=status]')).toHaveText('Answer ready.');
-  const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
-  expect(isDark).toBe(false);
-  await scan(page, 'answered state: 1280x800 light');
-});
-
-test('answered state: 1280x800 dark theme', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'dark');
-  await page.goto('/');
-  await page.locator('#question').fill('Why am I getting a 401 error?');
-  await page.locator('#ask-btn').click();
-  await expect(page.locator('#response-area')).toBeVisible();
-  await expect(page.getByText('Test summary.')).toBeVisible();
-  await expect(page.locator('[role=status]')).toHaveText('Answer ready.');
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
-  await scan(page, 'answered state: 1280x800 dark');
-});
-
-test('answered state: 375x812 light theme', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'light');
-  await page.goto('/');
-  await page.locator('#question').fill('Why am I getting a 401 error?');
-  await page.locator('#ask-btn').click();
-  await expect(page.locator('#response-area')).toBeVisible();
-  await expect(page.getByText('Test summary.')).toBeVisible();
-  await expect(page.locator('[role=status]')).toHaveText('Answer ready.');
-  const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
-  expect(isDark).toBe(false);
-  await scan(page, 'answered state: 375x812 light');
-});
-
-test('answered state: 375x812 dark theme', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'dark');
-  await page.goto('/');
-  await page.locator('#question').fill('Why am I getting a 401 error?');
-  await page.locator('#ask-btn').click();
-  await expect(page.locator('#response-area')).toBeVisible();
-  await expect(page.getByText('Test summary.')).toBeVisible();
-  await expect(page.locator('[role=status]')).toHaveText('Answer ready.');
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
-  await scan(page, 'answered state: 375x812 dark');
-});
-
-// Tour dialog tests
-test('tour dialog open: 1280x800 light theme', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'light');
-  await page.goto('/');
-  await page.locator('#tour-btn').click();
-  await expect(page.getByTestId('tour-dialog')).toBeVisible();
-  const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
-  expect(isDark).toBe(false);
-  await scan(page, 'tour dialog: 1280x800 light', { requireContent: false });
-});
-
-test('tour dialog open: 1280x800 dark theme', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'dark');
-  await page.goto('/');
-  await page.locator('#tour-btn').click();
-  await expect(page.getByTestId('tour-dialog')).toBeVisible();
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
-  await scan(page, 'tour dialog: 1280x800 dark', { requireContent: false });
-});
-
-// History palette tests
-test('history palette open: 1280x800 light theme', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'light');
-  await page.goto('/');
+async function openHistoryPalette(page: Page) {
   await page.keyboard.press('Control+k');
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   // Assert it's specifically the history palette by checking for cmdk-input
   await expect(dialog.locator('[cmdk-input]')).toBeVisible();
-  const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
-  expect(isDark).toBe(false);
-  await scan(page, 'history palette: 1280x800 light', { requireContent: false });
-});
+  return dialog;
+}
 
-test('history palette open: 1280x800 dark theme', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.addInitScript((t) => localStorage.setItem('theme', t), 'dark');
-  await page.goto('/');
-  await page.keyboard.press('Control+k');
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
-  // Assert it's specifically the history palette by checking for cmdk-input
-  await expect(dialog.locator('[cmdk-input]')).toBeVisible();
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
-  await scan(page, 'history palette: 1280x800 dark', { requireContent: false });
-});
+type ScanState = {
+  name: string;
+  viewports: (keyof typeof VIEWPORTS)[];
+  // false for dialogs, which cover #question and the h1
+  requireContent: boolean;
+  // Seed SEEDED_HISTORY before the page loads
+  seedHistory?: boolean;
+  setup: (page: Page) => Promise<void>;
+};
+
+const STATES: ScanState[] = [
+  {
+    name: 'empty state',
+    viewports: ['desktop', 'mobile'],
+    requireContent: true,
+    setup: async () => {},
+  },
+  {
+    name: 'answered state',
+    viewports: ['desktop', 'mobile'],
+    requireContent: true,
+    setup: async (page) => {
+      await page.locator('#question').fill('Why am I getting a 401 error?');
+      await page.locator('#ask-btn').click();
+      await expect(page.locator('#response-area')).toBeVisible();
+      await expect(page.getByText('Test summary.')).toBeVisible();
+      await expect(page.locator('[role=status]')).toHaveText('Answer ready.');
+    },
+  },
+  {
+    name: 'tour dialog open',
+    viewports: ['desktop'],
+    requireContent: false,
+    setup: async (page) => {
+      await page.locator('#tour-btn').click();
+      await expect(page.getByTestId('tour-dialog')).toBeVisible();
+    },
+  },
+  {
+    name: 'history palette open',
+    viewports: ['desktop'],
+    requireContent: false,
+    setup: async (page) => {
+      const dialog = await openHistoryPalette(page);
+      await expect(dialog.getByText('No history yet.')).toBeVisible();
+      // Read on open as the focused input's description (a live region
+      // mounted with the dialog would not be announced).
+      const input = dialog.locator('[cmdk-input]');
+      await expect(input).toBeFocused();
+      await expect(input).toHaveAccessibleName('Search history');
+      await expect(input).toHaveAccessibleDescription('No history yet.');
+      await expect(dialog).toHaveAccessibleName('Question history');
+      await expect(dialog).toHaveAccessibleDescription('Search your past questions');
+    },
+  },
+  {
+    name: 'history palette with entries',
+    viewports: ['desktop'],
+    requireContent: false,
+    seedHistory: true,
+    setup: async (page) => {
+      const dialog = await openHistoryPalette(page);
+      await expect(dialog.getByRole('option')).toHaveCount(SEEDED_HISTORY.length);
+      await expect(dialog.getByRole('option').first()).toHaveText(SEEDED_HISTORY[0].question);
+      await expect(dialog.locator('[cmdk-input]')).toHaveAccessibleDescription('');
+    },
+  },
+  {
+    name: 'history palette no-match search',
+    viewports: ['desktop'],
+    requireContent: false,
+    seedHistory: true,
+    setup: async (page) => {
+      const dialog = await openHistoryPalette(page);
+      await expect(dialog.getByRole('option')).toHaveCount(SEEDED_HISTORY.length);
+      await dialog.locator('[cmdk-input]').fill('zzz no such question');
+      await expect(dialog.getByRole('option')).toHaveCount(0);
+      await expect(dialog.getByText('No matching questions.')).toBeVisible();
+      await expect(dialog.locator('[cmdk-input]')).toHaveAccessibleDescription('No matching questions.');
+    },
+  },
+];
+
+for (const state of STATES) {
+  for (const viewportName of state.viewports) {
+    const viewport = VIEWPORTS[viewportName];
+    for (const theme of THEMES) {
+      const title = `${state.name}: ${viewport.width}x${viewport.height} ${theme} theme`;
+      test(title, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+        if (state.seedHistory) {
+          await page.addInitScript((entries) => {
+            (window as { __GOLEM_E2E_HISTORY__?: unknown }).__GOLEM_E2E_HISTORY__ = entries;
+          }, SEEDED_HISTORY);
+        }
+        await page.goto('/');
+        await state.setup(page);
+        if (theme === 'dark') {
+          await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+        } else {
+          await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+        }
+        await scan(page, title, { requireContent: state.requireContent });
+      });
+    }
+  }
+}
 
 // 320px viewport test
 test('320px viewport: no horizontal scroll, axe clean', async ({ page }) => {
