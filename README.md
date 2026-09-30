@@ -8,7 +8,7 @@ A chatbot integration project, built as hands-on practice.
 |-------|------|
 | API | Python · Flask · Anthropic SDK |
 | Frontend | React · TypeScript |
-| CI / Deploy | GitHub Actions · Railway · Vercel · Playwright |
+| CI / Deploy | GitHub Actions · Railway · Vercel · Playwright · axe-core |
 
 ## What it does
 
@@ -46,7 +46,10 @@ ANTHROPIC_API_KEY=...
 CLERK_SECRET_KEY=...
 CLERK_JWKS_URL=...
 GUEST_JWT_SECRET=...   # generate with: openssl rand -hex 32
+REDIS_URL=...          # optional — without it, rate limits are per-process (a warning is logged at startup)
 ```
+
+On startup the API checks the rate-limit storage and logs whether Redis is reachable. The limiter fails open (a Redis outage won't take `/ask` down), so an unreachable Redis is logged as an error instead of silently disabling limits.
 
 Copy `.env.example` to `frontend/.env` and fill in the frontend keys:
 
@@ -66,6 +69,19 @@ cd frontend && npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173).
+
+**4. Run the tests**
+
+```bash
+# Backend unit tests
+pytest tests/
+
+# Frontend unit tests (vitest)
+cd frontend && npm test
+
+# End-to-end + accessibility tests (Playwright + axe-core)
+cd frontend && npm run test:e2e
+```
 
 ## Deploying
 
@@ -243,3 +259,45 @@ Branch → environment mapping:
 | Per-user daily cap reduced to 5 requests | ✅ Done |
 | Prompt injection defense — `<user_input>` XML delimiters + system prompt reinforcement | ✅ Done |
 | Cold-start warm-up disclaimer after 2 s of loading | ✅ Done |
+
+### Demo experience
+
+| Feature | Status |
+|---------|--------|
+| Global "questions answered" counter in the header (Convex `stats` table, includes guests) | ✅ Done |
+| Suggested demo questions on the empty state | ✅ Done |
+| First-visit guided tour with a header replay button | ✅ Done |
+| Empty-state hero and clearer input placeholder | ✅ Done |
+
+### Doc citations
+
+| Feature | Status |
+|---------|--------|
+| Canonical public doc URLs on retrieved chunks (Clerk, MDN) | ✅ Done |
+| System prompt cites only retrieved docs | ✅ Done |
+| Doc links parsed robustly (markdown/paren/angle URLs, title split from URL, userinfo URLs rejected) | ✅ Done |
+| Log cited `<docs>` URLs that weren't retrieved (`docs-url-miss` warning) | ✅ Done |
+
+### Notebook-style answer
+
+| Feature | Status |
+|---------|--------|
+| Answer rendered as a notebook page with checkable debug steps and real doc links | ✅ Done |
+| Answer reveal — marker sweeps under Cause, steps land in turn (reduced-motion safe) | ✅ Done |
+
+### Reliability
+
+| Feature | Status |
+|---------|--------|
+| Startup rate-limit storage check — logs when Redis is missing or unreachable | ✅ Done |
+| Limiter storage errors visible in logs (root log handler under gunicorn) | ✅ Done |
+| Console warning when the global stats increment fails | ✅ Done |
+
+### Accessibility
+
+| Feature | Status |
+|---------|--------|
+| Accessibility audit fixes — stronger focus ring, skip-to-question link, heading structure, 44px touch targets | ✅ Done |
+| Live region announces "analyzing" and "answer ready" | ✅ Done |
+| axe-core scans in the e2e suite (empty/answered states, phone + desktop, light + dark, tour, history palette) | ✅ Done |
+| History palette: proper dialog name/description, labelled search input, announced empty and no-match states | ✅ Done |
