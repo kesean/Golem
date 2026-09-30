@@ -106,6 +106,9 @@ type ScanState = {
   requireContent: boolean;
   // Seed SEEDED_HISTORY before the page loads
   seedHistory?: boolean;
+  // Needs the VITE_TEST_BYPASS_AUTH build (history seam, cmdk palette); the
+  // deployed preview is a real Clerk build, so these run only against the local dev server
+  bypassOnly?: boolean;
   setup: (page: Page) => Promise<void>;
 };
 
@@ -140,6 +143,7 @@ const STATES: ScanState[] = [
   {
     name: 'history palette open',
     viewports: ['desktop'],
+    bypassOnly: true,
     requireContent: false,
     setup: async (page) => {
       const dialog = await openHistoryPalette(page);
@@ -157,6 +161,7 @@ const STATES: ScanState[] = [
   {
     name: 'history palette with entries',
     viewports: ['desktop'],
+    bypassOnly: true,
     requireContent: false,
     seedHistory: true,
     setup: async (page) => {
@@ -169,6 +174,7 @@ const STATES: ScanState[] = [
   {
     name: 'history palette no-match search',
     viewports: ['desktop'],
+    bypassOnly: true,
     requireContent: false,
     seedHistory: true,
     setup: async (page) => {
@@ -188,6 +194,7 @@ for (const state of STATES) {
     for (const theme of THEMES) {
       const title = `${state.name}: ${viewport.width}x${viewport.height} ${theme} theme`;
       test(title, async ({ page }) => {
+        test.skip(!!state.bypassOnly && !!process.env.BASE_URL, 'needs the test-bypass build');
         await page.setViewportSize(viewport);
         await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
         if (state.seedHistory) {
