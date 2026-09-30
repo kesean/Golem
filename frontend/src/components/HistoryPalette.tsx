@@ -115,22 +115,31 @@ export function HistoryPalette({ open, onOpenChange, onSelect, isGuest }: Histor
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput placeholder="Search history…" />
-      <CommandList>
-        <CommandEmpty>No history yet.</CommandEmpty>
-        <CommandGroup heading="Recent Questions">
-          {entries.map(entry => (
-            <CommandItem
-              key={entry._id}
-              onSelect={() => {
-                onSelect(entry)
-                onOpenChange(false)
-              }}
-              style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '14px' }}
-            >
-              {entry.question}
-            </CommandItem>
-          ))}
-        </CommandGroup>
+      {entries.length === 0 && (
+        // Outside the listbox: an empty cmdk listbox fails aria-required-children,
+        // so the list is aria-hidden when empty and this message stays readable.
+        <p className="py-6 text-center text-sm">No history yet.</p>
+      )}
+      <CommandList aria-hidden={entries.length === 0}>
+        {entries.length > 0 && (
+          <>
+            <CommandEmpty>No history yet.</CommandEmpty>
+            <CommandGroup heading="Recent Questions">
+              {entries.map(entry => (
+                <CommandItem
+                  key={entry._id}
+                  onSelect={() => {
+                    onSelect(entry)
+                    onOpenChange(false)
+                  }}
+                  style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '14px' }}
+                >
+                  {entry.question}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
       </CommandList>
     </CommandDialog>
   )
