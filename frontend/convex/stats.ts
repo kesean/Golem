@@ -10,8 +10,10 @@ export const getGlobalCount = query({
   },
 });
 
-// Public — no auth required. Called once per successfully answered
-// question, for guests and signed-in users alike.
+// Public — no auth required, by design. Called once per successfully
+// answered question, for guests and signed-in users alike. Guests have no
+// Convex identity (Convex only trusts Clerk), so an auth check here would
+// drop guest usage. Accepted risk: anyone can inflate this cosmetic counter.
 export const increment = mutation({
   args: {},
   handler: async (ctx) => {
