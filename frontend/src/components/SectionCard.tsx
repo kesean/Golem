@@ -21,7 +21,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 })
 
 function safeHtml(markdown: string): string {
-  return DOMPurify.sanitize(marked.parse(markdown) as string, { ALLOWED_TAGS, ALLOWED_ATTR })
+  return DOMPurify.sanitize(marked.parse(markdown) as string, { ALLOWED_TAGS, ALLOWED_ATTR, ALLOW_DATA_ATTR: false, ALLOW_ARIA_ATTR: false })
 }
 
 type NotebookRowProps = {

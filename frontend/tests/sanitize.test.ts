@@ -18,6 +18,9 @@ const ATTACK = [
   '![](https://evil.example/p.png)',
   '[bad](javascript:alert(1))',
   '[ok](https://clerk.com/docs)',
+  '<p aria-hidden="true" aria-label="x" data-state="open">p</p>',
+  '[t](tel:123)',
+  '[r](/relative)',
 ].join('\n\n')
 
 describe('safeHtml hardening', () => {
@@ -28,6 +31,8 @@ describe('safeHtml hardening', () => {
       const href = a.getAttribute('href')
       if (href !== null) expect(href).toMatch(/^(https?:|mailto:)/i)
     }
+    expect(prose.querySelector('a[href="tel:123"], a[href="/relative"]')).toBeNull()
+    expect(prose.querySelector('[aria-hidden], [aria-label], [data-state]')).toBeNull()
   })
 
   it('keeps safe links and opens them in a new tab', () => {
