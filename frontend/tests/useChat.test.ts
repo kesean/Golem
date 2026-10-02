@@ -77,3 +77,20 @@ describe('useChat stats increment', () => {
     expect(createEvalMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('useChat loadFromHistory', () => {
+  it('sets historyId when one is given, and leaves evalId null', () => {
+    const { result } = renderHook(() => useChat(false))
+    act(() => result.current.loadFromHistory('<summary>ok</summary>', 'h1'))
+    expect(result.current.historyId).toBe('h1')
+    expect(result.current.evalId).toBeNull()
+    expect(result.current.parsedResponse?.summary).toBe('ok')
+  })
+
+  it('clears historyId when none is given', () => {
+    const { result } = renderHook(() => useChat(false))
+    act(() => result.current.loadFromHistory('<summary>ok</summary>', 'h1'))
+    act(() => result.current.loadFromHistory('<summary>ok</summary>'))
+    expect(result.current.historyId).toBeNull()
+  })
+})

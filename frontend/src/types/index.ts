@@ -17,7 +17,7 @@ export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
 export type UseChatReturn = {
   ask: (question: string) => Promise<void>
-  loadFromHistory: (rawXml: string) => void
+  loadFromHistory: (rawXml: string, historyId?: string) => void
   parsedResponse: ParsedResponse | null
   isLoading: boolean
   isStreaming: boolean
