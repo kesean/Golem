@@ -8,6 +8,8 @@ import { ResponsePanel } from './components/ResponsePanel'
 import { HistoryPalette } from './components/HistoryPalette'
 import { SuggestedQuestions } from './components/SuggestedQuestions'
 import { TourDialog } from './components/TourDialog'
+import { SharedNotice } from './components/SharedNotice'
+import { useSharedEntry, sharedViewFor } from './hooks/useSharedEntry'
 import { hasSeenTour, markTourSeen } from './lib/tour'
 import type { HistoryEntry } from './hooks/useHistory'
 
@@ -18,6 +20,23 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
   const chat = useChat(isGuest)
   const [question, setQuestion] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+  const sharedEntry = useSharedEntry()
+  // Once the user starts their own work, a share lookup that resolves late is ignored.
+  const [userActed, setUserActed] = useState(false)
+  const [sharedLoaded, setSharedLoaded] = useState(false)
+  const [sharedDismissed, setSharedDismissed] = useState(false)
+  // Notice stays while a shared answer is on screen, even if the user edits the question.
+  const sharedView = sharedDismissed ? 'none' : sharedLoaded ? 'found' : sharedViewFor(sharedEntry, userActed)
+
+  useEffect(() => {
+    if (sharedEntry.status !== 'found' || userActed) return
+    setQuestion(sharedEntry.question)
+    chat.loadFromHistory(sharedEntry.rawXml, sharedEntry.id)
+    setSharedLoaded(true)
+    // Runs once per lookup result; chat's functions are not referentially stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedEntry.status])
+
   const refocusQuestion = useRef(false)
   // The textarea is disabled while loading, so restore focus once it re-enables
   useEffect(() => {
@@ -27,7 +46,10 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
     }
   }, [chat.isLoading])
 
-  const [tourOpen, setTourOpen] = useState(() => !hasSeenTour())
+  // A shared answer shouldn't open under the tour's modal; the tour still shows on a later visit.
+  const [tourOpen, setTourOpen] = useState(
+    () => !hasSeenTour() && !new URLSearchParams(window.location.search).has('share'),
+  )
 
   function closeTour() {
     markTourSeen()
@@ -36,12 +58,16 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
 
   function handleSubmit() {
     if (!question.trim() || chat.isLoading) return
+    setSharedDismissed(true)
+    setUserActed(true)
     chat.ask(question)
     setQuestion('')
   }
 
   function handlePickSuggestion(q: string) {
     if (chat.isLoading) return
+    setSharedDismissed(true)
+    setUserActed(true)
     setQuestion(q)
     chat.ask(q)
     // The chip unmounts once loading starts; move focus to the input when it re-enables
@@ -49,13 +75,30 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
   }
 
   function handleHistorySelect(entry: HistoryEntry) {
+    setSharedDismissed(true)
+    setUserActed(true)
     setQuestion(entry.question)
     chat.loadFromHistory(entry.rawXml)
   }
 
   function handleNewConversation() {
+    setSharedDismissed(true)
+    setUserActed(true)
     setQuestion('')
     chat.reset()
+  }
+
+  function handleQuestionChange(value: string) {
+    setUserActed(true)
+    setQuestion(value)
+  }
+
+  function handleAskOwn() {
+    setSharedDismissed(true)
+    setUserActed(true)
+    setQuestion('')
+    chat.reset()
+    document.getElementById('question')?.focus()
   }
 
   return (
@@ -93,14 +136,16 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
       >
         <QuestionInput
           value={question}
-          onChange={setQuestion}
+          onChange={handleQuestionChange}
           onSubmit={handleSubmit}
           isLoading={chat.isLoading}
           hero={!chat.isLoading && !chat.parsedResponse && !chat.error}
         />
-        {!chat.isLoading && !chat.parsedResponse && !chat.error && !question.trim() && (
+        {!chat.isLoading && !chat.parsedResponse && !chat.error && !question.trim() &&
+          sharedEntry.status !== 'loading' && sharedView === 'none' && (
           <SuggestedQuestions onPick={handlePickSuggestion} />
         )}
+        <SharedNotice view={sharedView} onAskOwn={handleAskOwn} />
         <ResponsePanel
           isLoading={chat.isLoading}
           isStreaming={chat.isStreaming}
@@ -109,6 +154,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
           evalId={chat.evalId}
           historyId={chat.historyId}
           chunks={chat.chunks}
+          isShared={sharedView === 'found'}
         />
       </main>
 

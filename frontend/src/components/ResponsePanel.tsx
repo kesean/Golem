@@ -30,6 +30,7 @@ type ResponsePanelProps = {
   evalId: string | null
   historyId: string | null
   chunks: RetrievedChunk[]
+  isShared?: boolean
 }
 
 export function ResponsePanel({
@@ -40,6 +41,7 @@ export function ResponsePanel({
   evalId,
   historyId,
   chunks,
+  isShared = false,
 }: ResponsePanelProps) {
   const [showWarmup, setShowWarmup] = useState(false)
 
@@ -59,7 +61,7 @@ export function ResponsePanel({
     : isLoading
       ? 'Analyzing your question.'
       : parsedResponse
-        ? 'Answer ready.'
+        ? (isShared ? 'Shared answer loaded.' : 'Answer ready.')
         : ''
 
   return (
@@ -75,6 +77,7 @@ export function ResponsePanel({
         evalId={evalId}
         historyId={historyId}
         chunks={chunks}
+        isShared={isShared}
         showWarmup={showWarmup}
       />
     </>
@@ -89,6 +92,7 @@ function ResponseBody({
   evalId,
   historyId,
   chunks,
+  isShared,
   showWarmup,
 }: ResponsePanelProps & { showWarmup: boolean }) {
   if (!isLoading && !parsedResponse && !error) return null
@@ -151,7 +155,7 @@ function ResponseBody({
       className="nb-doc"
       style={{ padding: '24px' }}
     >
-      {parsedResponse.productTag && (
+      {!isShared && parsedResponse.productTag && (
         <ProductBadge tag={parsedResponse.productTag} />
       )}
 
@@ -186,7 +190,7 @@ function ResponseBody({
             marginTop: '4px',
           }}
         >
-          <FeedbackButtons evalId={evalId} />
+          {isShared ? <span /> : <FeedbackButtons evalId={evalId} />}
           <ResponseActions parsedResponse={parsedResponse} historyId={historyId} />
         </div>
       )}

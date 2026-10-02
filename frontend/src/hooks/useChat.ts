@@ -178,11 +178,11 @@ export function useChat(isGuest = false): UseChatReturn {
     }
   }
 
-  function loadFromHistory(rawXml: string): void {
+  function loadFromHistory(rawXml: string, historyId?: string): void {
     abortControllerRef.current?.abort()
     setParsedResponse(parseResponse(rawXml))
     setEvalId(null)
-    setHistoryId(null)
+    setHistoryId(historyId ?? null)
     setError(null)
     // History entries predate the debug panel's per-request chunk capture
     setChunks([])
