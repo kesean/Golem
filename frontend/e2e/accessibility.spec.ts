@@ -128,7 +128,7 @@ const STATES: ScanState[] = [
       await page.locator('#ask-btn').click();
       await expect(page.locator('#response-area')).toBeVisible();
       await expect(page.getByText('Test summary.')).toBeVisible();
-      await expect(page.locator('[role=status]')).toHaveText('Answer ready.');
+      await expect(page.locator('[role=status]', { hasText: 'Answer ready.' })).toHaveText('Answer ready.');
     },
   },
   {
@@ -262,5 +262,5 @@ test('live region announces answer ready', async ({ page }) => {
   await page.locator('#ask-btn').click();
   await expect(page.locator('#response-area')).toBeVisible();
   // Check that the live region contains the status message
-  await expect(page.locator('[role=status]')).toHaveText('Answer ready.');
+  await expect(page.locator('[role=status]', { hasText: 'Answer ready.' })).toHaveText('Answer ready.');
 });

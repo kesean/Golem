@@ -145,7 +145,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
           sharedEntry.status !== 'loading' && sharedView === 'none' && (
           <SuggestedQuestions onPick={handlePickSuggestion} />
         )}
-        {sharedView !== 'none' && <SharedNotice view={sharedView} onAskOwn={handleAskOwn} />}
+        <SharedNotice view={sharedView} onAskOwn={handleAskOwn} />
         <ResponsePanel
           isLoading={chat.isLoading}
           isStreaming={chat.isStreaming}
