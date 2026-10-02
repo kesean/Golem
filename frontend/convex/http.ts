@@ -109,7 +109,24 @@ function validateRegressions(regressions: any): boolean {
   return true;
 }
 
-// Validate EvalRunPayload shape
+// Type validators
+function isFiniteNumber(n: any): boolean {
+  return typeof n === "number" && Number.isFinite(n);
+}
+
+function isString(s: any): boolean {
+  return typeof s === "string";
+}
+
+function isBoolean(b: any): boolean {
+  return typeof b === "boolean";
+}
+
+function isStringArray(arr: any): boolean {
+  return Array.isArray(arr) && arr.every((item) => typeof item === "string");
+}
+
+// Validate EvalRunPayload shape with comprehensive type checking
 function validatePayload(body: any): {
   valid: boolean;
   error?: string;
@@ -161,6 +178,31 @@ function validatePayload(body: any): {
       return { valid: false, error: "Invalid run.status" };
     }
 
+    // Validate string fields
+    if (!isString(run.gitSha)) {
+      return { valid: false, error: "Invalid run.gitSha type" };
+    }
+    if (!isString(run.gitRef)) {
+      return { valid: false, error: "Invalid run.gitRef type" };
+    }
+    if (!isString(run.appModel)) {
+      return { valid: false, error: "Invalid run.appModel type" };
+    }
+    if (!isString(run.judgeModel)) {
+      return { valid: false, error: "Invalid run.judgeModel type" };
+    }
+
+    // Validate numeric fields
+    if (!isFiniteNumber(run.casesVersion)) {
+      return { valid: false, error: "Invalid run.casesVersion type" };
+    }
+    if (!isFiniteNumber(run.startedAt)) {
+      return { valid: false, error: "Invalid run.startedAt type" };
+    }
+    if (!isFiniteNumber(run.finishedAt)) {
+      return { valid: false, error: "Invalid run.finishedAt type" };
+    }
+
     // Validate summary
     if (!run.summary || typeof run.summary !== "object") {
       return { valid: false, error: "Missing or invalid run.summary" };
@@ -186,6 +228,26 @@ function validatePayload(body: any): {
       }
     }
 
+    // Validate summary numeric fields
+    const numericSummaryFields = [
+      "caseCount",
+      "gradedCount",
+      "errorCount",
+      "meanGroundedness",
+      "meanCoverage",
+      "meanScore",
+      "p50LatencyMs",
+      "p95LatencyMs",
+      "totalInputTokens",
+      "totalOutputTokens",
+    ];
+
+    for (const field of numericSummaryFields) {
+      if (!isFiniteNumber(run.summary[field])) {
+        return { valid: false, error: `Invalid run.summary.${field} type` };
+      }
+    }
+
     // Validate rulePassRate
     if (!run.summary.rulePassRate || typeof run.summary.rulePassRate !== "object") {
       return { valid: false, error: "Missing or invalid run.summary.rulePassRate" };
@@ -196,6 +258,12 @@ function validatePayload(body: any): {
       if (!(key in run.summary.rulePassRate)) {
         return { valid: false, error: `Missing run.summary.rulePassRate.${key}` };
       }
+      if (!isFiniteNumber(run.summary.rulePassRate[key])) {
+        return {
+          valid: false,
+          error: `Invalid run.summary.rulePassRate.${key} type`,
+        };
+      }
     }
 
     // Validate regressions
@@ -205,8 +273,8 @@ function validatePayload(body: any): {
 
     // Validate baselineRunId if present (should be string or null)
     if (run.baselineRunId !== null && run.baselineRunId !== undefined) {
-      if (typeof run.baselineRunId !== "string") {
-        return { valid: false, error: "Invalid run.baselineRunId" };
+      if (!isString(run.baselineRunId)) {
+        return { valid: false, error: "Invalid run.baselineRunId type" };
       }
     }
 
@@ -234,6 +302,36 @@ function validatePayload(body: any): {
         }
       }
 
+      // Validate string fields in result
+      if (!isString(result.caseId)) {
+        return { valid: false, error: `results[${i}] caseId is not a string` };
+      }
+      if (!isString(result.question)) {
+        return { valid: false, error: `results[${i}] question is not a string` };
+      }
+      if (!isString(result.response)) {
+        return { valid: false, error: `results[${i}] response is not a string` };
+      }
+
+      // Validate retrievedUrls is array of strings
+      if (!isStringArray(result.retrievedUrls)) {
+        return {
+          valid: false,
+          error: `results[${i}] retrievedUrls is not an array of strings`,
+        };
+      }
+
+      // Validate numeric fields in result
+      if (!isFiniteNumber(result.latencyMs)) {
+        return { valid: false, error: `results[${i}] latencyMs is not a number` };
+      }
+      if (!isFiniteNumber(result.inputTokens)) {
+        return { valid: false, error: `results[${i}] inputTokens is not a number` };
+      }
+      if (!isFiniteNumber(result.outputTokens)) {
+        return { valid: false, error: `results[${i}] outputTokens is not a number` };
+      }
+
       // Validate rules
       if (!result.rules || typeof result.rules !== "object") {
         return {
@@ -249,15 +347,25 @@ function validatePayload(body: any): {
             error: `results[${i}] rules missing ${key}`,
           };
         }
-        if (typeof result.rules[key] !== "boolean") {
+        if (!isBoolean(result.rules[key])) {
           return {
             valid: false,
-            error: `results[${i}] rules.${key} is not boolean`,
+            error: `results[${i}] rules.${key} is not a boolean`,
           };
         }
       }
 
-      // Validate judge if present
+      // Validate productTag if present (should be string or null)
+      if (result.productTag !== null && result.productTag !== undefined) {
+        if (!isString(result.productTag)) {
+          return {
+            valid: false,
+            error: `results[${i}] productTag is not a string`,
+          };
+        }
+      }
+
+      // Validate judge if present (should be object or null)
       if (result.judge !== null && result.judge !== undefined) {
         if (typeof result.judge !== "object") {
           return {
@@ -274,6 +382,51 @@ function validatePayload(body: any): {
             };
           }
         }
+        // Validate judge numeric scores
+        if (!isFiniteNumber(result.judge.groundedness)) {
+          return {
+            valid: false,
+            error: `results[${i}] judge.groundedness is not a number`,
+          };
+        }
+        if (!isFiniteNumber(result.judge.coverage)) {
+          return {
+            valid: false,
+            error: `results[${i}] judge.coverage is not a number`,
+          };
+        }
+        if (!isStringArray(result.judge.keyPointsMissed)) {
+          return {
+            valid: false,
+            error: `results[${i}] judge.keyPointsMissed is not an array of strings`,
+          };
+        }
+        if (!isString(result.judge.reason)) {
+          return {
+            valid: false,
+            error: `results[${i}] judge.reason is not a string`,
+          };
+        }
+      }
+
+      // Validate judgeError if present (should be string or null)
+      if (result.judgeError !== null && result.judgeError !== undefined) {
+        if (!isString(result.judgeError)) {
+          return {
+            valid: false,
+            error: `results[${i}] judgeError is not a string`,
+          };
+        }
+      }
+
+      // Validate error if present (should be string or null)
+      if (result.error !== null && result.error !== undefined) {
+        if (!isString(result.error)) {
+          return {
+            valid: false,
+            error: `results[${i}] error is not a string`,
+          };
+        }
       }
     }
 
@@ -287,7 +440,8 @@ function validatePayload(body: any): {
 http.route({
   path: "/evals/runs",
   method: "POST",
-  handler: async (ctx, req) => {
+  // @ts-expect-error
+  handler: async (ctx: any, req: any) => {
     // Validate bearer token
     const authHeader = req.headers.get("Authorization");
     if (!validateBearer(authHeader)) {
@@ -316,24 +470,49 @@ http.route({
       });
     }
 
-    const { run: rawRun, results } = validation.payload!;
+    const { run: rawRun, results: rawResults } = validation.payload!;
 
-    // Process the run, removing null baselineRunId
+    // Normalize the run: remove null baselineRunId
     const run: any = { ...rawRun };
     if (run.baselineRunId === null) {
       delete run.baselineRunId;
     }
 
-    // Call internal mutation to ingest the run
-    const runId = await ctx.runMutation(internal.evalsIngest.ingestRun, {
-      run,
-      results,
+    // Normalize results: remove null optional fields
+    const results = rawResults.map((result: any) => {
+      const normalized: any = { ...result };
+      if (normalized.productTag === null) {
+        delete normalized.productTag;
+      }
+      if (normalized.judge === null) {
+        delete normalized.judge;
+      }
+      if (normalized.judgeError === null) {
+        delete normalized.judgeError;
+      }
+      if (normalized.error === null) {
+        delete normalized.error;
+      }
+      return normalized;
     });
 
-    return new Response(JSON.stringify({ runId }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    // Call internal mutation to ingest the run with error handling
+    try {
+      const runId = await ctx.runMutation(internal.evalsIngest.ingestRun, {
+        run,
+        results,
+      });
+
+      return new Response(JSON.stringify({ runId }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ error: "Invalid payload" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   },
 });
 
@@ -341,7 +520,8 @@ http.route({
 http.route({
   path: "/evals/baseline",
   method: "GET",
-  handler: async (ctx, req) => {
+  // @ts-expect-error
+  handler: async (ctx: any, req: any) => {
     // Validate bearer token
     const authHeader = req.headers.get("Authorization");
     if (!validateBearer(authHeader)) {

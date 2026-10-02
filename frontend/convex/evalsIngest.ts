@@ -50,15 +50,12 @@ export const ingestRun = internalMutation({
           retrieval: v.boolean(),
         }),
         judge: v.optional(
-          v.union(
-            v.null(),
-            v.object({
-              groundedness: v.number(),
-              coverage: v.number(),
-              keyPointsMissed: v.array(v.string()),
-              reason: v.string(),
-            })
-          )
+          v.object({
+            groundedness: v.number(),
+            coverage: v.number(),
+            keyPointsMissed: v.array(v.string()),
+            reason: v.string(),
+          })
         ),
         judgeError: v.optional(v.string()),
         latencyMs: v.number(),

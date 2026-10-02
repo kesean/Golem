@@ -1,10 +1,18 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
-import { internal } from "./_generated/server";
+import { expect, test, beforeEach, afterEach } from "vitest";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
+
+// Setup and teardown for EVAL_INGEST_SECRET
+beforeEach(() => {
+  process.env.EVAL_INGEST_SECRET = "test-secret";
+});
+
+afterEach(() => {
+  delete process.env.EVAL_INGEST_SECRET;
+});
 
 // Helper function to create valid payload
 function validPayload() {
@@ -92,7 +100,9 @@ function validPayload() {
   };
 }
 
-test("POST /evals/runs returns 401 with no bearer token", async () => {
+// ── Authorization tests ────────────────────────────────────────────────────
+
+test("POST /evals/runs returns 401 with no bearer header", async () => {
   const t = convexTest(schema, modules);
   const response = await t.fetch("/evals/runs", {
     method: "POST",
@@ -115,9 +125,47 @@ test("POST /evals/runs returns 401 with wrong bearer token", async () => {
   expect(response.status).toBe(401);
 });
 
+test("POST /evals/runs returns 401 when env var unset", async () => {
+  delete process.env.EVAL_INGEST_SECRET;
+  const t = convexTest(schema, modules);
+  const response = await t.fetch("/evals/runs", {
+    method: "POST",
+    body: JSON.stringify(validPayload()),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer test-secret",
+    },
+  });
+  expect(response.status).toBe(401);
+});
+
+test("GET /evals/baseline returns 401 with no bearer header", async () => {
+  const t = convexTest(schema, modules);
+  const response = await t.fetch("/evals/baseline");
+  expect(response.status).toBe(401);
+});
+
+test("GET /evals/baseline returns 401 with wrong bearer token", async () => {
+  const t = convexTest(schema, modules);
+  const response = await t.fetch("/evals/baseline", {
+    headers: { Authorization: "Bearer wrong-secret" },
+  });
+  expect(response.status).toBe(401);
+});
+
+test("GET /evals/baseline returns 401 when env var unset", async () => {
+  delete process.env.EVAL_INGEST_SECRET;
+  const t = convexTest(schema, modules);
+  const response = await t.fetch("/evals/baseline", {
+    headers: { Authorization: "Bearer test-secret" },
+  });
+  expect(response.status).toBe(401);
+});
+
+// ── Payload validation tests ────────────────────────────────────────────────
+
 test("POST /evals/runs returns 400 on missing run.label", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
   const payload = validPayload();
   delete (payload.run as any).label;
 
@@ -132,11 +180,14 @@ test("POST /evals/runs returns 400 on missing run.label", async () => {
   expect(response.status).toBe(400);
   const data = await response.json();
   expect(data.error).toBeDefined();
+
+  // Verify nothing was written
+  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
+  expect(runs.length).toBe(0);
 });
 
 test("POST /evals/runs returns 400 on invalid JSON", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
 
   const response = await t.fetch("/evals/runs", {
     method: "POST",
@@ -149,11 +200,14 @@ test("POST /evals/runs returns 400 on invalid JSON", async () => {
   expect(response.status).toBe(400);
   const data = await response.json();
   expect(data.error).toBeDefined();
+
+  // Verify nothing was written
+  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
+  expect(runs.length).toBe(0);
 });
 
 test("POST /evals/runs returns 400 on invalid regression kind", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
   const payload = validPayload();
   payload.run.regressions = [
     { kind: "invalidKind", foo: "bar" },
@@ -170,11 +224,82 @@ test("POST /evals/runs returns 400 on invalid regression kind", async () => {
   expect(response.status).toBe(400);
   const data = await response.json();
   expect(data.error).toBeDefined();
+
+  // Verify nothing was written
+  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
+  expect(runs.length).toBe(0);
 });
+
+test("POST /evals/runs returns 400 when casesVersion is a string", async () => {
+  const t = convexTest(schema, modules);
+  const payload = validPayload();
+  (payload.run as any).casesVersion = "1";
+
+  const response = await t.fetch("/evals/runs", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer test-secret",
+    },
+  });
+  expect(response.status).toBe(400);
+  const data = await response.json();
+  expect(data.error).toBeDefined();
+
+  // Verify nothing was written
+  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
+  expect(runs.length).toBe(0);
+});
+
+test("POST /evals/runs returns 400 when summary.meanScore is a string", async () => {
+  const t = convexTest(schema, modules);
+  const payload = validPayload();
+  (payload.run.summary as any).meanScore = "4.25";
+
+  const response = await t.fetch("/evals/runs", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer test-secret",
+    },
+  });
+  expect(response.status).toBe(400);
+  const data = await response.json();
+  expect(data.error).toBeDefined();
+
+  // Verify nothing was written
+  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
+  expect(runs.length).toBe(0);
+});
+
+test("POST /evals/runs returns 400 when result.latencyMs is a string", async () => {
+  const t = convexTest(schema, modules);
+  const payload = validPayload();
+  (payload.results[0] as any).latencyMs = "1000";
+
+  const response = await t.fetch("/evals/runs", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer test-secret",
+    },
+  });
+  expect(response.status).toBe(400);
+  const data = await response.json();
+  expect(data.error).toBeDefined();
+
+  // Verify nothing was written
+  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
+  expect(runs.length).toBe(0);
+});
+
+// ── Successful write ────────────────────────────────────────────────────────
 
 test("POST /evals/runs writes 1 run and 2 results on valid payload", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
   const payload = validPayload();
 
   const response = await t.fetch("/evals/runs", {
@@ -209,15 +334,49 @@ test("POST /evals/runs writes 1 run and 2 results on valid payload", async () =>
   expect(results[1].caseId).toBe("case-2");
 });
 
-test("GET /evals/baseline returns 401 with no bearer token", async () => {
+// ── Null field normalization ────────────────────────────────────────────────
+
+test("POST /evals/runs stores docs with null optional fields omitted", async () => {
   const t = convexTest(schema, modules);
-  const response = await t.fetch("/evals/baseline");
-  expect(response.status).toBe(401);
+  const payload = validPayload();
+  payload.run.baselineRunId = null;
+  payload.results[0].productTag = null;
+  payload.results[0].judge = null;
+  payload.results[1].judgeError = null;
+  payload.results[1].error = null;
+
+  const response = await t.fetch("/evals/runs", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer test-secret",
+    },
+  });
+  expect(response.status).toBe(200);
+  const { runId } = await response.json();
+
+  // Verify run doesn't have baselineRunId
+  const run = await t.run(async (ctx) => ctx.db.get(runId));
+  expect(run?.baselineRunId).toBeUndefined();
+
+  // Verify results have null fields omitted
+  const results = await t.run(async (ctx) =>
+    ctx.db
+      .query("evalResults")
+      .withIndex("by_run", (q) => q.eq("runId", runId))
+      .collect()
+  );
+  expect(results[0].productTag).toBeUndefined();
+  expect(results[0].judge).toBeUndefined();
+  expect(results[1].judgeError).toBeUndefined();
+  expect(results[1].error).toBeUndefined();
 });
+
+// ── Baseline endpoint ──────────────────────────────────────────────────────
 
 test("GET /evals/baseline returns null when no runs exist", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
 
   const response = await t.fetch("/evals/baseline", {
     headers: {
@@ -231,12 +390,12 @@ test("GET /evals/baseline returns null when no runs exist", async () => {
 
 test("GET /evals/baseline returns latest completed scheduled run, ignoring manual and errored", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
 
-  // Insert a manual run (should be ignored)
+  // Insert a manual run with high score (newer) - should be ignored
   const manualPayload = validPayload();
   manualPayload.run.label = "manual";
-  manualPayload.run.startedAt = Date.now() - 5000;
+  manualPayload.run.startedAt = Date.now() + 5000;
+  manualPayload.run.summary.meanScore = 5.0;
 
   await t.fetch("/evals/runs", {
     method: "POST",
@@ -247,10 +406,11 @@ test("GET /evals/baseline returns latest completed scheduled run, ignoring manua
     },
   });
 
-  // Insert an errored run (should be ignored)
+  // Insert an errored run with high score (newer) - should be ignored
   const erroredPayload = validPayload();
   erroredPayload.run.status = "errored";
-  erroredPayload.run.startedAt = Date.now() - 3000;
+  erroredPayload.run.startedAt = Date.now() + 3000;
+  erroredPayload.run.summary.meanScore = 4.8;
 
   await t.fetch("/evals/runs", {
     method: "POST",
@@ -261,11 +421,11 @@ test("GET /evals/baseline returns latest completed scheduled run, ignoring manua
     },
   });
 
-  // Insert the baseline scheduled run
+  // Insert the baseline scheduled run (oldest, lowest score)
   const baselinePayload = validPayload();
   baselinePayload.run.label = "scheduled";
   baselinePayload.run.startedAt = Date.now() - 1000;
-  baselinePayload.run.summary.meanScore = 4.5;
+  baselinePayload.run.summary.meanScore = 4.25;
 
   await t.fetch("/evals/runs", {
     method: "POST",
@@ -286,16 +446,18 @@ test("GET /evals/baseline returns latest completed scheduled run, ignoring manua
   expect(data).not.toBeNull();
   expect(data.run.label).toBe("scheduled");
   expect(data.run.status).toBe("completed");
+  expect(data.run.summary.meanScore).toBe(4.25); // Not the manual or errored
   expect(data.results.length).toBe(2);
-  expect(data.recentBestMeanScore).toBe(4.5);
+  // recentBestMeanScore should be 4.25 (the only scheduled run)
+  expect(data.recentBestMeanScore).toBe(4.25);
 });
 
-test("GET /evals/baseline calculates recentBestMeanScore from last 8 runs only", async () => {
+test("GET /evals/baseline limits recentBestMeanScore to last 8 runs", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
 
-  // Insert 9 scheduled runs with different scores
-  const scores = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]; // Last one is best overall
+  // Insert 9 scheduled runs with scores [9,1,2,3,4,3,2,1,2]
+  // The oldest run (score 9) should not be included in the best-of-8
+  const scores = [9, 1, 2, 3, 4, 3, 2, 1, 2]; // oldest to newest
   for (let i = 0; i < scores.length; i++) {
     const payload = validPayload();
     payload.run.startedAt = Date.now() - (scores.length - i) * 1000;
@@ -317,14 +479,13 @@ test("GET /evals/baseline calculates recentBestMeanScore from last 8 runs only",
   });
   expect(response.status).toBe(200);
   const data = await response.json();
-  // The latest run has score 5.0, and the last 8 runs should have scores 1.5-5.0
-  // So the best of the last 8 is 5.0 (not the 9th run with 1.0)
-  expect(data.recentBestMeanScore).toBe(5.0);
+  // Latest run has score 2, the last 8 runs have scores [1,2,3,4,3,2,1,2]
+  // Best of those is 4, not the 9 from the oldest run
+  expect(data.recentBestMeanScore).toBe(4);
 });
 
 test("POST /evals/runs handles baselineRunId normalization", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
 
   // First, create a baseline run
   const baselinePayload = validPayload();
@@ -340,7 +501,7 @@ test("POST /evals/runs handles baselineRunId normalization", async () => {
 
   // Now create a new run with the baseline ID
   const newPayload = validPayload();
-  newPayload.run.startedAt = Date.now();
+  newPayload.run.startedAt = Date.now() + 1000;
   newPayload.run.baselineRunId = baselineRunId;
 
   const response = await t.fetch("/evals/runs", {
@@ -359,32 +520,8 @@ test("POST /evals/runs handles baselineRunId normalization", async () => {
   expect(newRun?.baselineRunId).toBe(baselineRunId);
 });
 
-test("POST /evals/runs handles null baselineRunId", async () => {
-  const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
-
-  const payload = validPayload();
-  payload.run.baselineRunId = null;
-
-  const response = await t.fetch("/evals/runs", {
-    method: "POST",
-    body: JSON.stringify(payload),
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer test-secret",
-    },
-  });
-  expect(response.status).toBe(200);
-  const data = await response.json();
-
-  // Verify the run was created without baselineRunId
-  const run = await t.run(async (ctx) => ctx.db.get(data.runId));
-  expect(run?.baselineRunId).toBeUndefined();
-});
-
 test("POST /evals/runs validates regression meanScoreDrop", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
 
   const payload = validPayload();
   payload.run.regressions = [
@@ -408,7 +545,6 @@ test("POST /evals/runs validates regression meanScoreDrop", async () => {
 
 test("POST /evals/runs validates regression ruleFlip", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
 
   const payload = validPayload();
   payload.run.regressions = [
@@ -432,7 +568,6 @@ test("POST /evals/runs validates regression ruleFlip", async () => {
 
 test("POST /evals/runs rejects invalid rule in ruleFlip", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
 
   const payload = validPayload();
   payload.run.regressions = [
@@ -456,7 +591,6 @@ test("POST /evals/runs rejects invalid rule in ruleFlip", async () => {
 
 test("POST /evals/runs rejects results with missing rules fields", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
 
   const payload = validPayload();
   delete (payload.results[0].rules as any).format;
@@ -472,32 +606,17 @@ test("POST /evals/runs rejects results with missing rules fields", async () => {
   expect(response.status).toBe(400);
   const data = await response.json();
   expect(data.error).toBeDefined();
+
+  // Verify nothing was written
+  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
+  expect(runs.length).toBe(0);
 });
 
-test("POST /evals/runs handles results with optional judge", async () => {
+test("POST /evals/runs handles results with optional error field", async () => {
   const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
 
   const payload = validPayload();
-  payload.results[0].judge = null as any;
-
-  const response = await t.fetch("/evals/runs", {
-    method: "POST",
-    body: JSON.stringify(payload),
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer test-secret",
-    },
-  });
-  expect(response.status).toBe(200);
-});
-
-test("POST /evals/runs handles results with error field", async () => {
-  const t = convexTest(schema, modules);
-  process.env.EVAL_INGEST_SECRET = "test-secret";
-
-  const payload = validPayload();
-  payload.results[0].error = "Some error occurred";
+  (payload.results[0] as any).error = "Some error occurred";
 
   const response = await t.fetch("/evals/runs", {
     method: "POST",
