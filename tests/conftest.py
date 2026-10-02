@@ -17,6 +17,7 @@ import jwt
 # ── Set env vars before importing the Flask app ──────────────────────────────
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-placeholder")
 os.environ.setdefault("CLERK_JWKS_URL", "https://test.clerk.dev/.well-known/jwks.json")
+os.environ.setdefault("DEEPSEEK_API_KEY", "test-deepseek-key-placeholder")
 
 TEST_GUEST_SECRET = "test-guest-secret-placeholder"
 os.environ.setdefault("GUEST_JWT_SECRET", TEST_GUEST_SECRET)
