@@ -5,7 +5,7 @@
       "id": "clerk-auth-sessions-001",
       "question": "How do I manage user sessions in Clerk? When does Clerk create a session after authentication?",
       "expectedProductTag": "Authentication",
-      "keyPoints": ["Clerk automatically creates a session after successful authentication", "Sessions are stored in the session claim of the JWT", "The session object contains session ID and user ID"],
+      "keyPoints": ["Clerk automatically creates a session after successful authentication", "The session token is a short-lived JWT (~60s) stored in the __session cookie and refreshed automatically by the frontend SDK", "Sessions contain the session ID, user ID, and custom claims if configured"],
       "expectedSources": ["clerk"],
       "category": "clerk-auth"
     },
@@ -45,7 +45,7 @@
       "id": "clerk-auth-custom-claims-001",
       "question": "Can I add custom data to a Clerk JWT token? How do I include role or permission information?",
       "expectedProductTag": "Authentication",
-      "keyPoints": ["Use sessionClaims to add custom data to the JWT", "Custom claims are included in the JWT payload and can be accessed in the frontend and backend", "The claims are signed as part of the JWT for integrity"],
+      "keyPoints": ["Configure custom claims in Clerk Dashboard under Sessions → customize session token using templates like {{user.public_metadata}}", "Access custom claims on the backend via the sessionClaims property returned by auth()", "Custom claims are signed as part of the JWT for integrity"],
       "expectedSources": ["clerk"],
       "category": "clerk-auth"
     },
@@ -53,7 +53,7 @@
       "id": "clerk-auth-sign-out-001",
       "question": "How do I revoke a user session programmatically from my backend? What API endpoint should I use?",
       "expectedProductTag": "Authentication",
-      "keyPoints": ["Use the Clerk Backend API to revoke sessions via DELETE /sessions/{sessionId}", "Revoking a session immediately invalidates the JWT token", "You need the session ID and your Clerk API key to revoke"],
+      "keyPoints": ["Use the Clerk Backend API endpoint POST /v1/sessions/{session_id}/revoke or clerkClient.sessions.revokeSession(sessionId)", "Revocation takes effect when the short-lived session token (~60s) expires or refreshes, not immediately", "You need the session ID and your Clerk API key to revoke"],
       "expectedSources": ["clerk"],
       "category": "clerk-auth"
     },
@@ -69,7 +69,7 @@
       "id": "clerk-auth-oauth-001",
       "question": "How do I set up Google OAuth sign-in with Clerk? Do I need to provide OAuth credentials?",
       "expectedProductTag": "Authentication",
-      "keyPoints": ["Development instances use Clerk's shared Google OAuth credentials", "Production instances require configuring your own Google OAuth app with client ID and secret", "Configure OAuth provider settings in Clerk dashboard"],
+      "keyPoints": ["Development instances use Clerk's shared Google OAuth credentials", "Production instances require configuring your own Google OAuth app with client ID and secret", "Configure the redirect/callback URI provided by Clerk in your Google OAuth app console"],
       "expectedSources": ["clerk"],
       "category": "clerk-auth"
     },
@@ -77,7 +77,7 @@
       "id": "clerk-auth-backend-access-001",
       "question": "How do I access the current user in a Clerk backend route handler?",
       "expectedProductTag": "Authentication",
-      "keyPoints": ["Call auth() to get the current session and user", "The auth object contains the user ID, session ID, and decoded JWT claims", "auth() is available in Node.js backend handlers"],
+      "keyPoints": ["Call auth() from @clerk/nextjs/server (Next.js) or getAuth(req) from @clerk/express (Express) to get the current session and user", "The auth object contains the user ID, session ID, organization ID, and sessionClaims", "Returns null if unauthenticated; the auth check can gate protected logic"],
       "expectedSources": ["clerk"],
       "category": "clerk-auth"
     },
@@ -184,9 +184,9 @@
     },
     {
       "id": "limits-keepalive-connections-001",
-      "question": "How do I reuse HTTP connections for multiple requests? What is HTTP keep-alive?",
+      "question": "How do I send analytics or logs to my server when the user closes the page?",
       "expectedProductTag": "Performance",
-      "keyPoints": ["Set keepalive: true in fetch options to reuse connections across requests", "Keep-alive reduces latency by avoiding TCP handshake overhead", "Browser automatically manages persistent connection pooling"],
+      "keyPoints": ["Use fetch with keepalive: true to let the request outlive the page on unload", "The keepalive body has a ~64KiB size limit across all pending requests", "sendBeacon() API is an alternative for small metrics (≤64KiB total)"],
       "category": "limits-config"
     },
     {
