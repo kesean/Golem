@@ -23,12 +23,16 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
   const sharedEntry = useSharedEntry()
   // Once the user starts their own work, a share lookup that resolves late is ignored.
   const [userActed, setUserActed] = useState(false)
-  const sharedView = sharedViewFor(sharedEntry, userActed)
+  const [sharedLoaded, setSharedLoaded] = useState(false)
+  const [sharedDismissed, setSharedDismissed] = useState(false)
+  // Notice stays while a shared answer is on screen, even if the user edits the question.
+  const sharedView = sharedDismissed ? 'none' : sharedLoaded ? 'found' : sharedViewFor(sharedEntry, userActed)
 
   useEffect(() => {
     if (sharedEntry.status !== 'found' || userActed) return
     setQuestion(sharedEntry.question)
     chat.loadFromHistory(sharedEntry.rawXml, sharedEntry.id)
+    setSharedLoaded(true)
     // Runs once per lookup result; chat's functions are not referentially stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sharedEntry.status])
@@ -54,6 +58,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
 
   function handleSubmit() {
     if (!question.trim() || chat.isLoading) return
+    setSharedDismissed(true)
     setUserActed(true)
     chat.ask(question)
     setQuestion('')
@@ -61,6 +66,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
 
   function handlePickSuggestion(q: string) {
     if (chat.isLoading) return
+    setSharedDismissed(true)
     setUserActed(true)
     setQuestion(q)
     chat.ask(q)
@@ -69,12 +75,14 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
   }
 
   function handleHistorySelect(entry: HistoryEntry) {
+    setSharedDismissed(true)
     setUserActed(true)
     setQuestion(entry.question)
     chat.loadFromHistory(entry.rawXml)
   }
 
   function handleNewConversation() {
+    setSharedDismissed(true)
     setUserActed(true)
     setQuestion('')
     chat.reset()
@@ -86,6 +94,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
   }
 
   function handleAskOwn() {
+    setSharedDismissed(true)
     setUserActed(true)
     setQuestion('')
     chat.reset()
