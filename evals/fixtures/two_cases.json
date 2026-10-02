@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "clerk-auth-sessions-test-001",
+      "question": "How do I create a session after a user authenticates in Clerk? I want to manage the session lifecycle in my Express app.",
+      "expectedProductTag": "Authentication",
+      "keyPoints": ["Clerk automatically creates sessions", "Access via user.id in the backend", "Sessions persist across page refreshes"],
+      "expectedSources": ["clerk"],
+      "category": "clerk-auth"
+    },
+    {
+      "id": "web-cors-test-001",
+      "question": "How do I fix CORS errors? What headers do I need to set?",
+      "expectedProductTag": "CORS",
+      "keyPoints": ["Set Access-Control-Allow-Origin header", "Include Access-Control-Allow-Methods for allowed verbs", "Include Access-Control-Allow-Headers for custom headers"],
+      "expectedSources": ["mdn"],
+      "category": "web-platform"
+    }
+  ]
+}
