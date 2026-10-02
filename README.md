@@ -7,7 +7,9 @@ A chatbot integration project, built as hands-on practice.
 | Layer | Tech |
 |-------|------|
 | API | Python · Flask · Anthropic SDK |
-| Frontend | React · TypeScript |
+| Frontend | React · TypeScript · Tailwind · shadcn/ui |
+| Auth | Clerk (signed-in users) · guest JWTs |
+| Data | Convex (history, evals, stats) · Qdrant + Voyage AI (doc retrieval) |
 | CI / Deploy | GitHub Actions · Railway · Vercel · Playwright · axe-core |
 
 ## What it does
@@ -47,6 +49,9 @@ CLERK_SECRET_KEY=...
 CLERK_JWKS_URL=...
 GUEST_JWT_SECRET=...   # generate with: openssl rand -hex 32
 REDIS_URL=...          # optional — without it, rate limits are per-process (a warning is logged at startup)
+QDRANT_URL=...         # optional — with QDRANT_API_KEY and VOYAGE_API_KEY enables doc retrieval;
+QDRANT_API_KEY=...     #   without them, answers skip retrieval
+VOYAGE_API_KEY=...
 ```
 
 On startup the API checks the rate-limit storage and logs whether Redis is reachable. The limiter fails open (a Redis outage won't take `/ask` down), so an unreachable Redis is logged as an error instead of silently disabling limits.
@@ -184,7 +189,7 @@ Branch → environment mapping:
 | Multi-turn conversation with New Conversation button | ✅ Done |
 | Search/filter history sidebar | ✅ Done |
 | Copy response to clipboard | ✅ Done |
-| Shareable links via `?share=` param | ✅ Done |
+| Shareable links via `?share=` param | ✅ Done (lost in the React migration, restored — see Share links) |
 
 ### Phase 8 — Production deployment
 
@@ -301,3 +306,25 @@ Branch → environment mapping:
 | Live region announces "analyzing" and "answer ready" | ✅ Done |
 | axe-core scans in the e2e suite (empty/answered states, phone + desktop, light + dark, tour, history palette) | ✅ Done |
 | History palette: proper dialog name/description, labelled search input, announced empty and no-match states | ✅ Done |
+
+### Security review follow-ups
+
+| Feature | Status |
+|---------|--------|
+| Full-repo security review — no high-confidence vulnerabilities found | ✅ Done |
+| Public `history.getById` takes a typed history ID and no longer returns the owner's user ID | ✅ Done |
+| `stats.increment` stays public for guests; accepted risk documented in code | ✅ Done |
+| Answer markdown sanitized against an allowlist — no forms, images, styles, classes, `aria-*`/`data-*` attributes; links limited to http(s)/mailto and open in a new tab | ✅ Done |
+
+### Share links
+
+| Feature | Status |
+|---------|--------|
+| `?share=<id>` opens the shared question and answer in the normal app (guests and signed-in users) | ✅ Done |
+| Share param stripped from the URL; lookup times out after 8 s so a broken link never loads forever | ✅ Done |
+| Plain-text provenance notice ("Shared by another user…") stays visible while a shared answer is shown, announced to screen readers | ✅ Done |
+| Shared answers hide the product tag and feedback buttons, and never write history, evals, or stats on load | ✅ Done |
+| A late share lookup never overwrites a question the visitor has started; the first-visit tour doesn't cover a shared answer | ✅ Done |
+| Unit tests for the hook, notice, panel, and app flow; e2e for broken links (axe clean, light + dark) | ✅ Done |
+
+Known limitation: a guest who signs in from a shared answer loses it, because the app remounts on sign-in.
