@@ -328,3 +328,16 @@ Branch → environment mapping:
 | Unit tests for the hook, notice, panel, and app flow; e2e for broken links (axe clean, light + dark) | ✅ Done |
 
 Known limitation: a guest who signs in from a shared answer loses it, because the app remounts on sign-in.
+
+---
+
+## V3 — Next steps
+
+Planned phases, built one at a time in this order. Each phase starts with a spec (`spec.md`) and a task list (`tasks.md`).
+
+| Phase | Goal | Status |
+|-------|------|--------|
+| V3a — Eval harness | A versioned set of test questions graded automatically (rule checks plus a low-cost LLM grader for groundedness and coverage), run weekly with run-to-run comparison and an auto-opened GitHub issue on regression, so every later change is measurable | 📝 Spec in progress |
+| V3b — Deeper AI features | Diagnose pasted stack traces and HTTP logs, inline citations linked to the exact retrieved passage, follow-up suggestions, live tool calls | ⏳ Planned |
+| V3c — Agent harness / MCP | Expose Golem as an MCP server or Agent SDK tool so coding agents can get grounded debugging answers, with machine-client auth and per-client usage limits | ⏳ Planned |
+| V3d — Distinctive UI redesign | A visual identity that doesn't look generated: type, colour, and layout for the answer page, plus a landing/demo page | ⏳ Planned |
