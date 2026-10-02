@@ -4,8 +4,24 @@ import { marked } from 'marked'
 import { ExternalLink } from 'lucide-react'
 import { parseDocLink } from '../lib/docLink'
 
+// Answers can be authored by another user (share links), so only plain prose
+// markup survives: no forms, images, styles or classes that could phish,
+// track, or overlay the app's own UI.
+const ALLOWED_TAGS = ['p', 'a', 'code', 'pre', 'strong', 'em', 'del', 'ul', 'ol', 'li', 'blockquote',
+  'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'tr', 'th', 'td']
+const ALLOWED_ATTR = ['href', 'title']
+const SAFE_HREF = /^(https?:|mailto:)/i
+
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName !== 'A') return
+  const href = node.getAttribute('href')
+  if (href !== null && !SAFE_HREF.test(href)) node.removeAttribute('href')
+  node.setAttribute('target', '_blank')
+  node.setAttribute('rel', 'noopener noreferrer')
+})
+
 function safeHtml(markdown: string): string {
-  return DOMPurify.sanitize(marked.parse(markdown) as string)
+  return DOMPurify.sanitize(marked.parse(markdown) as string, { ALLOWED_TAGS, ALLOWED_ATTR })
 }
 
 type NotebookRowProps = {
