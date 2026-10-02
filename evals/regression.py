@@ -113,7 +113,8 @@ def find_regressions(
     baseline_by_case_id = {r.case_id: r for r in baseline_results}
 
     # (a) meanScoreDrop: drop by more than 0.3
-    if summary.mean_score < baseline_summary.mean_score - MEAN_SCORE_DROP:
+    # Use rounded difference to avoid floating-point precision issues
+    if round(baseline_summary.mean_score - summary.mean_score, 9) > MEAN_SCORE_DROP:
         regressions.append(
             MeanScoreDrop(
                 kind="meanScoreDrop",
@@ -122,12 +123,12 @@ def find_regressions(
             )
         )
 
-    # (b) ruleFlip: for graded cases, check if any rule passed in baseline but fails now
-    current_graded = {r.case_id: r for r in current if r.judge is not None}
-    for case_id, current_case in current_graded.items():
+    # (b) ruleFlip: check every case present in both runs, regardless of grading
+    current_by_case_id = {r.case_id: r for r in current}
+    for case_id, current_case in current_by_case_id.items():
         baseline_case = baseline_by_case_id.get(case_id)
-        if baseline_case is None or baseline_case.judge is None:
-            # Case missing from baseline or ungraded in baseline; skip
+        if baseline_case is None:
+            # Case missing from baseline; skip
             continue
 
         # Check each rule
@@ -146,6 +147,7 @@ def find_regressions(
                 )
 
     # (c) caseScoreDrop: for graded cases, check if judge score drops by >= 2
+    current_graded = {r.case_id: r for r in current if r.judge is not None}
     for case_id, current_case in current_graded.items():
         baseline_case = baseline_by_case_id.get(case_id)
         if baseline_case is None or baseline_case.judge is None:
@@ -155,7 +157,7 @@ def find_regressions(
         baseline_score = (baseline_case.judge.groundedness + baseline_case.judge.coverage) / 2
         current_score = (current_case.judge.groundedness + current_case.judge.coverage) / 2
 
-        if baseline_score - current_score >= CASE_SCORE_DROP:
+        if round(baseline_score - current_score, 9) >= CASE_SCORE_DROP:
             regressions.append(
                 CaseScoreDrop(
                     kind="caseScoreDrop",
@@ -178,7 +180,8 @@ def find_regressions(
             )
 
     # (e) recentBestDrop: mean score more than 0.5 below recent_best
-    if recent_best is not None and summary.mean_score < recent_best - RECENT_BEST_DROP:
+    # Use rounded difference to avoid floating-point precision issues
+    if recent_best is not None and round(recent_best - summary.mean_score, 9) > RECENT_BEST_DROP:
         regressions.append(
             RecentBestDrop(
                 kind="recentBestDrop",
