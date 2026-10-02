@@ -1,4 +1,5 @@
 import { httpRouter } from "convex/server";
+import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 const http = httpRouter();
@@ -440,8 +441,7 @@ function validatePayload(body: any): {
 http.route({
   path: "/evals/runs",
   method: "POST",
-  // @ts-expect-error
-  handler: async (ctx: any, req: any) => {
+  handler: httpAction(async (ctx, req) => {
     // Validate bearer token
     const authHeader = req.headers.get("Authorization");
     if (!validateBearer(authHeader)) {
@@ -513,15 +513,14 @@ http.route({
         headers: { "Content-Type": "application/json" },
       });
     }
-  },
+  }),
 });
 
 // GET /evals/baseline
 http.route({
   path: "/evals/baseline",
   method: "GET",
-  // @ts-expect-error
-  handler: async (ctx: any, req: any) => {
+  handler: httpAction(async (ctx, req) => {
     // Validate bearer token
     const authHeader = req.headers.get("Authorization");
     if (!validateBearer(authHeader)) {
@@ -538,7 +537,7 @@ http.route({
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  },
+  }),
 });
 
 export default http;

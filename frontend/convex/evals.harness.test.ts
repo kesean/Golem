@@ -14,6 +14,16 @@ afterEach(() => {
   delete process.env.EVAL_INGEST_SECRET;
 });
 
+// Helper to assert nothing was written on 400 errors
+async function assertNothingWritten(
+  t: any
+): Promise<void> {
+  const runs = await t.run(async (ctx: any) => ctx.db.query("evalRuns").collect());
+  const results = await t.run(async (ctx: any) => ctx.db.query("evalResults").collect());
+  expect(runs.length).toBe(0);
+  expect(results.length).toBe(0);
+}
+
 // Helper function to create valid payload
 function validPayload() {
   return {
@@ -181,9 +191,7 @@ test("POST /evals/runs returns 400 on missing run.label", async () => {
   const data = await response.json();
   expect(data.error).toBeDefined();
 
-  // Verify nothing was written
-  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
-  expect(runs.length).toBe(0);
+  await assertNothingWritten(t);
 });
 
 test("POST /evals/runs returns 400 on invalid JSON", async () => {
@@ -201,9 +209,7 @@ test("POST /evals/runs returns 400 on invalid JSON", async () => {
   const data = await response.json();
   expect(data.error).toBeDefined();
 
-  // Verify nothing was written
-  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
-  expect(runs.length).toBe(0);
+  await assertNothingWritten(t);
 });
 
 test("POST /evals/runs returns 400 on invalid regression kind", async () => {
@@ -225,9 +231,7 @@ test("POST /evals/runs returns 400 on invalid regression kind", async () => {
   const data = await response.json();
   expect(data.error).toBeDefined();
 
-  // Verify nothing was written
-  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
-  expect(runs.length).toBe(0);
+  await assertNothingWritten(t);
 });
 
 test("POST /evals/runs returns 400 when casesVersion is a string", async () => {
@@ -247,9 +251,7 @@ test("POST /evals/runs returns 400 when casesVersion is a string", async () => {
   const data = await response.json();
   expect(data.error).toBeDefined();
 
-  // Verify nothing was written
-  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
-  expect(runs.length).toBe(0);
+  await assertNothingWritten(t);
 });
 
 test("POST /evals/runs returns 400 when summary.meanScore is a string", async () => {
@@ -269,9 +271,7 @@ test("POST /evals/runs returns 400 when summary.meanScore is a string", async ()
   const data = await response.json();
   expect(data.error).toBeDefined();
 
-  // Verify nothing was written
-  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
-  expect(runs.length).toBe(0);
+  await assertNothingWritten(t);
 });
 
 test("POST /evals/runs returns 400 when result.latencyMs is a string", async () => {
@@ -291,9 +291,7 @@ test("POST /evals/runs returns 400 when result.latencyMs is a string", async () 
   const data = await response.json();
   expect(data.error).toBeDefined();
 
-  // Verify nothing was written
-  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
-  expect(runs.length).toBe(0);
+  await assertNothingWritten(t);
 });
 
 // ── Successful write ────────────────────────────────────────────────────────
@@ -587,6 +585,8 @@ test("POST /evals/runs rejects invalid rule in ruleFlip", async () => {
     },
   });
   expect(response.status).toBe(400);
+
+  await assertNothingWritten(t);
 });
 
 test("POST /evals/runs rejects results with missing rules fields", async () => {
@@ -607,9 +607,7 @@ test("POST /evals/runs rejects results with missing rules fields", async () => {
   const data = await response.json();
   expect(data.error).toBeDefined();
 
-  // Verify nothing was written
-  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
-  expect(runs.length).toBe(0);
+  await assertNothingWritten(t);
 });
 
 test("POST /evals/runs handles results with optional error field", async () => {
