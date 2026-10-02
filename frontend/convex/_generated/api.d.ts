@@ -9,6 +9,7 @@
  */
 
 import type * as evals from "../evals.js";
+import type * as evalsIngest from "../evalsIngest.js";
 import type * as history from "../history.js";
 import type * as stats from "../stats.js";
 
@@ -20,6 +21,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   evals: typeof evals;
+  evalsIngest: typeof evalsIngest;
   history: typeof history;
   stats: typeof stats;
 }>;
