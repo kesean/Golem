@@ -1,12 +1,15 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
 
-// Public — no auth required, used for shareable links
+// Public — no auth required, used for shareable links. Takes a typed
+// history ID (rejects IDs from other tables) and returns only the fields a
+// share view needs, never the owner's userId.
 export const getById = query({
-  args: { id: v.string() },
+  args: { id: v.id("history") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id as Id<"history">)
+    const entry = await ctx.db.get(args.id);
+    if (!entry) return null;
+    return { question: entry.question, rawXml: entry.rawXml };
   },
 });
 
