@@ -77,7 +77,7 @@
       "id": "clerk-auth-backend-access-001",
       "question": "How do I access the current user in a Clerk backend route handler?",
       "expectedProductTag": "Authentication",
-      "keyPoints": ["Call auth() from @clerk/nextjs/server (Next.js) or getAuth(req) from @clerk/express (Express) to get the current session and user", "The auth object contains the user ID, session ID, organization ID, and sessionClaims", "Returns null if unauthenticated; the auth check can gate protected logic"],
+      "keyPoints": ["Call auth() from @clerk/nextjs/server (Next.js) or getAuth(req) from @clerk/express (Express) to get the current session and user", "The auth object contains the user ID, session ID, organization ID, and sessionClaims", "userId is null when the request is unauthenticated, so check userId before running protected logic"],
       "expectedSources": ["clerk"],
       "category": "clerk-auth"
     },
