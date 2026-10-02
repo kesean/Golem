@@ -2,8 +2,8 @@
 Pydantic models for the eval harness, matching spec §4.1.
 """
 
-from typing import Literal, Optional, Union
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Annotated, Literal, Optional, Union
+from pydantic import BaseModel, Field, ConfigDict, conlist, constr
 from pydantic.alias_generators import to_camel
 
 # Literal types
@@ -38,15 +38,16 @@ class BaseEvalModel(BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
+        serialize_by_alias=True,
     )
 
 
 class EvalCase(BaseEvalModel):
     """A test case for evaluation."""
     id: str
-    question: str
+    question: constr(max_length=2000)  # type: ignore
     expected_product_tag: ProductTag
-    key_points: list[str]
+    key_points: Annotated[list[str], Field(min_length=2, max_length=4)]
     expected_sources: Optional[list[DocSource]] = None
     category: EvalCategory
 
@@ -65,7 +66,7 @@ class JudgeVerdict(BaseEvalModel):
     groundedness: Literal[1, 2, 3, 4, 5]
     coverage: Literal[1, 2, 3, 4, 5]
     key_points_missed: list[str]
-    reason: str
+    reason: constr(min_length=1)  # type: ignore
 
 
 class CaseResult(BaseEvalModel):
@@ -131,12 +132,15 @@ class RecentBestDrop(BaseEvalModel):
     current: float
 
 
-Regression = Union[
-    MeanScoreDrop,
-    RuleFlip,
-    CaseScoreDrop,
-    ErrorRate,
-    RecentBestDrop,
+Regression = Annotated[
+    Union[
+        MeanScoreDrop,
+        RuleFlip,
+        CaseScoreDrop,
+        ErrorRate,
+        RecentBestDrop,
+    ],
+    Field(discriminator='kind'),
 ]
 
 

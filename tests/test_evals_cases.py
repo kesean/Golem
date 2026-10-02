@@ -8,8 +8,13 @@ from pathlib import Path
 from collections import Counter
 
 import pytest
+from pydantic import ValidationError
 
-from evals.models import CasesFile, EvalCase
+from evals.models import (
+    CasesFile, EvalCase, JudgeVerdict, Regression,
+    MeanScoreDrop, RuleFlip, CaseScoreDrop, ErrorRate, RecentBestDrop,
+    EvalRunPayload, Run, RunSummary, RuleResults, CaseResult,
+)
 
 
 # Load the prompt.py to extract valid product tags
@@ -175,3 +180,201 @@ def test_prompt_tag_line_format(valid_tags):
     ]
     assert set(valid_tags) == set(expected_tags), \
         f"Tags mismatch. Got {set(valid_tags)}, expected {set(expected_tags)}"
+
+
+def test_expected_sources_required_for_categories(cases_file):
+    """Test that clerk-auth and web-platform cases have expectedSources."""
+    for case in cases_file.cases:
+        if case.category == 'clerk-auth':
+            assert case.expected_sources is not None, \
+                f"Case '{case.id}' with clerk-auth category must have expectedSources"
+            assert 'clerk' in case.expected_sources, \
+                f"Case '{case.id}' with clerk-auth category must include 'clerk' source"
+        elif case.category == 'web-platform':
+            assert case.expected_sources is not None, \
+                f"Case '{case.id}' with web-platform category must have expectedSources"
+            assert 'mdn' in case.expected_sources, \
+                f"Case '{case.id}' with web-platform category must include 'mdn' source"
+
+
+def test_two_cases_fixture_loads():
+    """Test that evals/fixtures/two_cases.json loads and validates."""
+    fixtures_file = Path(__file__).parent.parent / "evals" / "fixtures" / "two_cases.json"
+    with open(fixtures_file) as f:
+        data = json.load(f)
+
+    cases_file = CasesFile(**data)
+    assert len(cases_file.cases) == 2, f"Expected 2 fixture cases, got {len(cases_file.cases)}"
+    assert cases_file.version == 1
+
+
+def test_alias_serialization_keys():
+    """Test that models serialize to camelCase by default."""
+    case = EvalCase(
+        id="test-001",
+        question="What is X?",
+        expected_product_tag="Other",
+        key_points=["point 1", "point 2"],
+        category="off-topic",
+    )
+
+    # Serialize with aliases
+    data = case.model_dump()
+
+    # Check camelCase keys are present
+    assert "expectedProductTag" in data, "expectedProductTag not in serialized dict"
+    assert "keyPoints" in data, "keyPoints not in serialized dict"
+    assert "expected_product_tag" not in data, "snake_case field in serialized dict"
+    assert "key_points" not in data, "snake_case field in serialized dict"
+
+
+def test_judge_verdict_rejects_invalid_scores():
+    """Test that JudgeVerdict rejects scores outside 1-5 range."""
+    # Valid verdict should work
+    valid = JudgeVerdict(
+        groundedness=3,
+        coverage=4,
+        key_points_missed=[],
+        reason="Good response"
+    )
+    assert valid.groundedness == 3
+
+    # Score of 0 should fail
+    with pytest.raises(ValidationError):
+        JudgeVerdict(
+            groundedness=0,
+            coverage=4,
+            key_points_missed=[],
+            reason="Good response"
+        )
+
+    # Score of 6 should fail
+    with pytest.raises(ValidationError):
+        JudgeVerdict(
+            groundedness=6,
+            coverage=4,
+            key_points_missed=[],
+            reason="Good response"
+        )
+
+
+def test_judge_verdict_rejects_empty_reason():
+    """Test that JudgeVerdict rejects empty reason."""
+    with pytest.raises(ValidationError):
+        JudgeVerdict(
+            groundedness=3,
+            coverage=4,
+            key_points_missed=[],
+            reason=""
+        )
+
+
+def test_eval_case_rejects_oversized_question():
+    """Test that EvalCase rejects questions over 2000 chars."""
+    long_question = "x" * 2001
+
+    with pytest.raises(ValidationError):
+        EvalCase(
+            id="test-001",
+            question=long_question,
+            expected_product_tag="Other",
+            key_points=["p1", "p2"],
+            category="off-topic",
+        )
+
+
+def test_eval_case_rejects_invalid_key_point_count():
+    """Test that EvalCase rejects 1 or 5+ key points."""
+    # 1 key point should fail
+    with pytest.raises(ValidationError):
+        EvalCase(
+            id="test-001",
+            question="What is X?",
+            expected_product_tag="Other",
+            key_points=["point1"],
+            category="off-topic",
+        )
+
+    # 5 key points should fail
+    with pytest.raises(ValidationError):
+        EvalCase(
+            id="test-001",
+            question="What is X?",
+            expected_product_tag="Other",
+            key_points=["p1", "p2", "p3", "p4", "p5"],
+            category="off-topic",
+        )
+
+
+def test_regression_round_trip_all_kinds():
+    """Test that Regression discriminated union round-trips for all kinds through TypeAdapter."""
+    from pydantic import TypeAdapter
+
+    # Test with camelCase (as it will be serialized)
+    test_cases = [
+        {"kind": "meanScoreDrop", "baseline": 0.8, "current": 0.5},
+        {"kind": "ruleFlip", "caseId": "test-001", "rule": "citations"},
+        {"kind": "caseScoreDrop", "caseId": "test-001", "baseline": 4.0, "current": 2.0},
+        {"kind": "errorRate", "errorCount": 5, "caseCount": 30},
+        {"kind": "recentBestDrop", "recentBest": 4.2, "current": 3.9},
+    ]
+
+    adapter = TypeAdapter(Regression)
+    for data in test_cases:
+        # Parse via TypeAdapter (accepts both snake and camelCase due to populate_by_name)
+        regression = adapter.validate_python(data)
+        assert regression.kind == data["kind"], f"Kind mismatch for {data['kind']}"
+
+        # Serialize and compare (will be in camelCase due to serialize_by_alias)
+        serialized = adapter.dump_python(regression)
+        assert serialized == data, f"Round-trip failed for {data['kind']}"
+
+
+def test_eval_run_payload_from_camel_case_dict():
+    """Test that EvalRunPayload can be built from camelCase JSON dict."""
+    payload_dict = {
+        "run": {
+            "label": "manual",
+            "gitSha": "abc123",
+            "gitRef": "main",
+            "appModel": "claude-sonnet-5",
+            "judgeModel": "deepseek-flash",
+            "casesVersion": 1,
+            "startedAt": 1696000000000,
+            "finishedAt": 1696000060000,
+            "status": "completed",
+            "summary": {
+                "caseCount": 2,
+                "gradedCount": 2,
+                "errorCount": 0,
+                "meanGroundedness": 4.0,
+                "meanCoverage": 4.0,
+                "meanScore": 4.0,
+                "rulePassRate": {
+                    "completed": 1.0,
+                    "format": 1.0,
+                    "productTag": 1.0,
+                    "citations": 1.0,
+                    "retrieval": 1.0,
+                },
+                "p50LatencyMs": 2500.0,
+                "p95LatencyMs": 3000.0,
+                "totalInputTokens": 1000,
+                "totalOutputTokens": 500,
+            },
+            "regressions": [],
+            "baselineRunId": None,
+        },
+        "results": [],
+    }
+
+    # Should parse camelCase dict
+    payload = EvalRunPayload(**payload_dict)
+    assert payload.run.git_sha == "abc123"
+    assert payload.run.app_model == "claude-sonnet-5"
+    assert payload.run.judge_model == "deepseek-flash"
+
+    # Check serialization uses camelCase
+    serialized = payload.model_dump()
+    assert "gitSha" in serialized["run"], "gitSha not in serialized dict"
+    assert "git_sha" not in serialized["run"], "snake_case in serialized dict"
