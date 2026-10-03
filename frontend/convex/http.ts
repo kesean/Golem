@@ -508,8 +508,20 @@ http.route({
         headers: { "Content-Type": "application/json" },
       });
     } catch (err) {
-      return new Response(JSON.stringify({ error: "Invalid payload" }), {
-        status: 400,
+      const message = err instanceof Error ? err.message : String(err);
+      const isValidationError =
+        (err instanceof Error && err.name === "ArgumentValidationError") ||
+        message.includes("ArgumentValidationError") ||
+        message.includes("Validator");
+      if (isValidationError) {
+        return new Response(JSON.stringify({ error: message }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      console.error("evals ingest failed", err);
+      return new Response(JSON.stringify({ error: "Internal error" }), {
+        status: 500,
         headers: { "Content-Type": "application/json" },
       });
     }
