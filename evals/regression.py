@@ -95,12 +95,14 @@ def find_regressions(
 
     Regression kinds:
     (a) meanScoreDrop: mean judge score drops by more than 0.3
-    (b) ruleFlip: a rule check that passed for a case in baseline fails now (graded cases only)
-    (c) caseScoreDrop: a case's judge score drops by >= 2 (graded cases only)
+    (b) ruleFlip: a rule check that passed for a case in baseline fails now. Checks
+        every case present in both runs regardless of grading status.
+    (c) caseScoreDrop: a case's judge score drops by >= 2. Requires both runs graded.
     (d) errorRate: more than 20% of cases error
-    (e) recentBestDrop: mean score is more than 0.5 below recent_best (skipped if recent_best is None)
+    (e) recentBestDrop: mean score is more than 0.5 below recent_best. Skipped if
+        recent_best is None.
 
-    When there is no baseline, regressions are empty.
+    When there is no baseline, regressions are empty, including (d) and (e).
     """
     regressions: list[Regression] = []
 

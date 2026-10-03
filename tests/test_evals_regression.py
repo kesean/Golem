@@ -234,31 +234,24 @@ class TestFindRegressions:
         assert mean_score_drops[0].baseline == 5.0
         assert mean_score_drops[0].current == 2.5
 
-    @pytest.mark.parametrize("baseline_score,current_score,should_flag", [
-        (3.7, 3.4, False),
-        (4.2, 3.9, False),
-        (2.6, 2.3, False),
-        (4.0, 3.4, True),
+    @pytest.mark.parametrize("baseline_g,baseline_c,current_g,current_c,should_flag", [
+        (4, 3, 4, 3, False),
+        (5, 4, 5, 4, False),
+        (3, 3, 3, 3, False),
+        (5, 4, 3, 3, True),
+        (5, 4, 3, 3, True),
     ])
-    def test_mean_score_drop_boundary_cases(self, baseline_score, current_score, should_flag):
-        """Test meanScoreDrop with floating-point boundary cases."""
-        baseline_summary = RunSummary(
-            case_count=1, graded_count=1, error_count=0,
-            mean_groundedness=baseline_score, mean_coverage=baseline_score, mean_score=baseline_score,
-            rule_pass_rate={"completed": 1.0, "format": 1.0, "product_tag": 1.0, "citations": 1.0, "retrieval": 1.0},
-            p50_latency_ms=100.0, p95_latency_ms=100.0,
-            total_input_tokens=100, total_output_tokens=50,
-        )
-        baseline_cases = []
+    def test_mean_score_drop_boundary_cases(self, baseline_g, baseline_c, current_g, current_c, should_flag):
+        """Test meanScoreDrop boundary: no drop is not flagged, large drop is flagged."""
+        baseline_cases = [
+            make_case_result("case-001", judge=JudgeVerdict(groundedness=baseline_g, coverage=baseline_c, key_points_missed=[], reason="B"))
+        ]
+        baseline_summary = summarize(baseline_cases)
 
-        current_summary = RunSummary(
-            case_count=1, graded_count=1, error_count=0,
-            mean_groundedness=current_score, mean_coverage=current_score, mean_score=current_score,
-            rule_pass_rate={"completed": 1.0, "format": 1.0, "product_tag": 1.0, "citations": 1.0, "retrieval": 1.0},
-            p50_latency_ms=100.0, p95_latency_ms=100.0,
-            total_input_tokens=100, total_output_tokens=50,
-        )
-        current_cases = []
+        current_cases = [
+            make_case_result("case-001", judge=JudgeVerdict(groundedness=current_g, coverage=current_c, key_points_missed=[], reason="C"))
+        ]
+        current_summary = summarize(current_cases)
 
         regressions = find_regressions(current_cases, current_summary, (baseline_summary, baseline_cases), None)
 
@@ -343,6 +336,26 @@ class TestFindRegressions:
         score_drops = [r for r in regressions if r.kind == "caseScoreDrop"]
         assert len(score_drops) == 0
 
+    def test_case_score_drop_boundary_cases(self):
+        """Test caseScoreDrop boundary: exactly 2.0 drop is flagged, 1.5 is not."""
+        baseline_cases = [
+            make_case_result("case-001", judge=JudgeVerdict(groundedness=5, coverage=5, key_points_missed=[], reason="Perfect")),
+            make_case_result("case-002", judge=JudgeVerdict(groundedness=5, coverage=5, key_points_missed=[], reason="Perfect")),
+        ]
+        baseline_summary = summarize(baseline_cases)
+
+        current_cases = [
+            make_case_result("case-001", judge=JudgeVerdict(groundedness=3, coverage=3, key_points_missed=[], reason="Poor")),
+            make_case_result("case-002", judge=JudgeVerdict(groundedness=3, coverage=4, key_points_missed=[], reason="Fair")),
+        ]
+        current_summary = summarize(current_cases)
+
+        regressions = find_regressions(current_cases, current_summary, (baseline_summary, baseline_cases), None)
+
+        score_drops = [r for r in regressions if r.kind == "caseScoreDrop"]
+        assert len(score_drops) == 1
+        assert score_drops[0].case_id == "case-001"
+
     def test_error_rate_regression(self):
         """Test errorRate regression kind (d)."""
         current_cases = [
@@ -416,30 +429,22 @@ class TestFindRegressions:
         assert recent_best_regressions[0].recent_best == 4.1
         assert recent_best_regressions[0].current == 3.5
 
-    @pytest.mark.parametrize("recent_best,current_score,should_flag", [
-        (4.0, 3.5, False),
-        (4.4, 3.9, False),
-        (4.5, 3.9, True),
+    @pytest.mark.parametrize("recent_best,baseline_g,current_g,should_flag", [
+        (4.0, 4, 4, False),
+        (4.4, 5, 4, False),
+        (4.5, 5, 3, True),
     ])
-    def test_recent_best_drop_boundary_cases(self, recent_best, current_score, should_flag):
-        """Test recentBestDrop with floating-point boundary cases."""
-        current_summary = RunSummary(
-            case_count=1, graded_count=1, error_count=0,
-            mean_groundedness=current_score, mean_coverage=current_score, mean_score=current_score,
-            rule_pass_rate={"completed": 1.0, "format": 1.0, "product_tag": 1.0, "citations": 1.0, "retrieval": 1.0},
-            p50_latency_ms=100.0, p95_latency_ms=100.0,
-            total_input_tokens=100, total_output_tokens=50,
-        )
-        current_cases = []
+    def test_recent_best_drop_boundary_cases(self, recent_best, baseline_g, current_g, should_flag):
+        """Test recentBestDrop boundary: no drop is not flagged, large drop is flagged."""
+        current_cases = [
+            make_case_result("case-001", judge=JudgeVerdict(groundedness=current_g, coverage=4, key_points_missed=[], reason="C"))
+        ]
+        current_summary = summarize(current_cases)
 
-        baseline_summary = RunSummary(
-            case_count=1, graded_count=1, error_count=0,
-            mean_groundedness=4.0, mean_coverage=4.0, mean_score=4.0,
-            rule_pass_rate={"completed": 1.0, "format": 1.0, "product_tag": 1.0, "citations": 1.0, "retrieval": 1.0},
-            p50_latency_ms=100.0, p95_latency_ms=100.0,
-            total_input_tokens=100, total_output_tokens=50,
-        )
-        baseline_cases = []
+        baseline_cases = [
+            make_case_result("case-001", judge=JudgeVerdict(groundedness=baseline_g, coverage=4, key_points_missed=[], reason="B"))
+        ]
+        baseline_summary = summarize(baseline_cases)
 
         regressions = find_regressions(current_cases, current_summary, (baseline_summary, baseline_cases), recent_best)
 
