@@ -2,12 +2,12 @@
 Tests for eval regression notifier.
 """
 
-import json
 import subprocess
+import sys
 from unittest.mock import Mock
 import pytest
 from evals.models import (
-    EvalRunPayload, Run, RunSummary, CaseResult, RuleResults, JudgeVerdict,
+    EvalRunPayload, Run, RunSummary,
     MeanScoreDrop, RuleFlip, CaseScoreDrop, ErrorRate, RecentBestDrop,
     RulePassRate,
 )
@@ -435,18 +435,20 @@ class TestNotifyCreateIssue:
             dashboard_url="https://example.com/evals/run/456",
         )
 
-        create_call = mock_run.call_args_list[2]
-        argv = create_call[0][0]
+        # Build expected body
+        expected_body = format_body(payload, "https://github.com/repo/actions/runs/123", "https://example.com/evals/run/456")
+        expected_argv = [
+            'gh', 'issue', 'create',
+            '--label', 'eval-regression',
+            '--title', 'Eval regression: abc123d',
+            '--body', expected_body,
+        ]
 
-        # Verify exact argv structure
-        assert argv[0:4] == ['gh', 'issue', 'create', '--label']
-        assert 'eval-regression' in argv
-        assert '--title' in argv
-        assert 'Eval regression: abc123d' in argv
-        assert '--body' in argv
-        # Body should contain the formatted markdown
-        body_idx = argv.index('--body') + 1
-        assert 'Mean Score Drop' in argv[body_idx]
+        create_call = mock_run.call_args_list[2]
+        actual_argv = create_call[0][0]
+
+        # Verify exact argv equality
+        assert actual_argv == expected_argv
 
 
 class TestNotifyCommentOnExistingIssue:
@@ -502,15 +504,19 @@ class TestNotifyCommentOnExistingIssue:
             dashboard_url="https://example.com/evals/run/456",
         )
 
-        comment_call = mock_run.call_args_list[1]
-        argv = comment_call[0][0]
+        # Build expected body
+        expected_body = format_body(payload, "https://github.com/repo/actions/runs/123", "https://example.com/evals/run/456")
+        expected_argv = [
+            'gh', 'issue', 'comment',
+            '42',
+            '--body', expected_body,
+        ]
 
-        # Verify exact argv
-        assert argv[0:3] == ['gh', 'issue', 'comment']
-        assert '42' in argv
-        assert '--body' in argv
-        body_idx = argv.index('--body') + 1
-        assert 'Mean Score Drop' in argv[body_idx]
+        comment_call = mock_run.call_args_list[1]
+        actual_argv = comment_call[0][0]
+
+        # Verify exact argv equality
+        assert actual_argv == expected_argv
 
 
 class TestNotifySubprocessFailures:
@@ -748,28 +754,56 @@ class TestMainCliEntrypoint:
     """Tests for main() CLI entrypoint."""
 
     def test_main_with_all_args(self, monkeypatch, tmp_path):
-        """Test main() CLI entrypoint with all arguments."""
+        """Test main() with all arguments via sys.argv."""
         mock_notify = Mock()
         monkeypatch.setattr('evals.notify.notify', mock_notify)
-        monkeypatch.setattr('__main__.__dict__' if '__main__' in globals() else 'sys.argv', [
+
+        run_file = tmp_path / "run.json"
+        payload = make_payload()
+        run_file.write_text(payload.model_dump_json())
+
+        monkeypatch.setattr('sys.argv', [
             'evals.notify',
-            '--run', '/tmp/run.json',
+            '--run', str(run_file),
             '--run-url', 'https://github.com/repo/actions/runs/123',
             '--dashboard-url', 'https://example.com/evals/run/456',
             '--harness-error',
         ])
 
-        # Can't easily mock sys.argv in test, so just verify the argparse works
-        parser = __import__('argparse').ArgumentParser()
-        parser.add_argument('--run', required=True)
-        parser.add_argument('--run-url', required=True)
-        parser.add_argument('--dashboard-url', default=None)
-        parser.add_argument('--harness-error', action='store_true')
-        args = parser.parse_args(['--run', '/tmp/run.json', '--run-url', 'https://github.com/repo/actions/runs/123', '--harness-error'])
+        main()
 
-        assert args.run == '/tmp/run.json'
-        assert args.run_url == 'https://github.com/repo/actions/runs/123'
-        assert args.harness_error is True
+        # Verify notify was called with correct args
+        mock_notify.assert_called_once()
+        call_kwargs = mock_notify.call_args[1]
+        assert call_kwargs['run_file'] == str(run_file)
+        assert call_kwargs['run_url'] == 'https://github.com/repo/actions/runs/123'
+        assert call_kwargs['dashboard_url'] == 'https://example.com/evals/run/456'
+        assert call_kwargs['harness_error'] is True
+
+    def test_main_with_required_args_only(self, monkeypatch, tmp_path):
+        """Test main() with only required arguments."""
+        mock_notify = Mock()
+        monkeypatch.setattr('evals.notify.notify', mock_notify)
+
+        run_file = tmp_path / "run.json"
+        payload = make_payload()
+        run_file.write_text(payload.model_dump_json())
+
+        monkeypatch.setattr('sys.argv', [
+            'evals.notify',
+            '--run', str(run_file),
+            '--run-url', 'https://github.com/repo/actions/runs/123',
+        ])
+
+        main()
+
+        # Verify notify was called with correct args (defaults for optional args)
+        mock_notify.assert_called_once()
+        call_kwargs = mock_notify.call_args[1]
+        assert call_kwargs['run_file'] == str(run_file)
+        assert call_kwargs['run_url'] == 'https://github.com/repo/actions/runs/123'
+        assert call_kwargs['dashboard_url'] is None
+        assert call_kwargs['harness_error'] is False
 
     def test_main_end_to_end_with_regression(self, monkeypatch, tmp_path):
         """Test main() end to end with stubbed subprocess."""
