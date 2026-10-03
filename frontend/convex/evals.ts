@@ -69,6 +69,8 @@ export const amIAdmin = query({
   },
 });
 
+const MAX_LIST_LIMIT = 60;
+
 /**
  * List eval runs, newest first by startedAt.
  * Only admins can access this query.
@@ -85,28 +87,23 @@ export const listRuns = query({
       throw new Error("Forbidden");
     }
 
-    // Cap limit at 60
-    const limit = args.limit ? Math.min(args.limit, 60) : undefined;
+    // Clamp limit to [1, MAX_LIST_LIMIT]; default to the max when omitted
+    const n = Math.max(1, Math.min(args.limit ?? MAX_LIST_LIMIT, MAX_LIST_LIMIT));
 
-    // Get runs - use index if label is specified
-    const runs = await (args.label
-      ? ctx.db
-          .query("evalRuns")
-          .withIndex("by_label_started", (q) =>
-            q.eq("label", args.label as "scheduled" | "manual")
-          )
-          .collect()
-      : ctx.db.query("evalRuns").collect());
-
-    // Sort by startedAt descending (newest first)
-    const sorted = runs.sort(
-      (a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0)
-    );
-
-    if (limit) {
-      return sorted.slice(0, limit);
+    // Newest first by startedAt, straight off an index
+    if (args.label) {
+      const label = args.label;
+      return await ctx.db
+        .query("evalRuns")
+        .withIndex("by_label_started", (q) => q.eq("label", label))
+        .order("desc")
+        .take(n);
     }
-    return sorted;
+    return await ctx.db
+      .query("evalRuns")
+      .withIndex("by_started")
+      .order("desc")
+      .take(n);
   },
 });
 
@@ -138,31 +135,22 @@ export const getRun = query({
       .withIndex("by_run", (q) => q.eq("runId", args.runId))
       .collect();
 
-    // Find the previous completed scheduled run
+    // Find the prior completed scheduled run (baseline), for scheduled and manual runs alike
     let previous = null;
-    if (run.label === "scheduled") {
-      // Get all scheduled runs using the index
-      const allScheduledRuns = await ctx.db
-        .query("evalRuns")
-        .withIndex("by_label_started", (q) => q.eq("label", "scheduled" as const))
+    const previousRun = await ctx.db
+      .query("evalRuns")
+      .withIndex("by_label_started", (q) =>
+        q.eq("label", "scheduled" as const).lt("startedAt", run.startedAt)
+      )
+      .order("desc")
+      .filter((q) => q.eq(q.field("status"), "completed"))
+      .first();
+    if (previousRun) {
+      const previousResults = await ctx.db
+        .query("evalResults")
+        .withIndex("by_run", (q) => q.eq("runId", previousRun._id))
         .collect();
-
-      // Filter for runs that started before this one and are completed
-      const candidates = allScheduledRuns.filter(
-        (r) => r.startedAt < run.startedAt && r.status === "completed"
-      );
-
-      // Sort by startedAt descending (most recent first)
-      candidates.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0));
-
-      if (candidates.length > 0) {
-        const previousRun = candidates[0];
-        const previousResults = await ctx.db
-          .query("evalResults")
-          .withIndex("by_run", (q) => q.eq("runId", previousRun._id))
-          .collect();
-        previous = { run: previousRun, results: previousResults };
-      }
+      previous = { run: previousRun, results: previousResults };
     }
 
     return { run, results, previous };

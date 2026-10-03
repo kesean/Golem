@@ -514,3 +514,31 @@ test("getRun returns previous results alongside run", async () => {
   expect(result.previous?.results.length).toBe(1);
   expect(result.previous?.results[0].caseId).toBe("case-1");
 });
+
+test("getRun gives a manual run the prior completed scheduled run as previous", async () => {
+  const t = convexTest(schema, modules);
+  const now = Date.now();
+  await insertRun(t, { label: "scheduled", startedAt: now - 5000 });
+  const scheduledId = await insertRun(t, { label: "scheduled", startedAt: now - 3000 });
+  await insertRun(t, { label: "manual", startedAt: now - 2000 });
+  const manualId = await insertRun(t, { label: "manual", startedAt: now });
+  // A later scheduled run must not be picked.
+  await insertRun(t, { label: "scheduled", startedAt: now + 1000 });
+
+  const result = await t
+    .withIdentity({ tokenIdentifier: "admin|user1" })
+    .query(api.evals.getRun, { runId: manualId });
+
+  expect(result.previous?.run._id).toBe(scheduledId);
+});
+
+test("listRuns clamps a non-positive limit to 1", async () => {
+  const t = convexTest(schema, modules);
+  const now = Date.now();
+  for (let i = 0; i < 3; i++) {
+    await insertRun(t, { label: "scheduled", startedAt: now + i * 1000 });
+  }
+  const asAdmin = t.withIdentity({ tokenIdentifier: "admin|user1" });
+  expect((await asAdmin.query(api.evals.listRuns, { limit: 0 })).length).toBe(1);
+  expect((await asAdmin.query(api.evals.listRuns, { limit: -5 })).length).toBe(1);
+});
