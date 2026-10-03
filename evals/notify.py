@@ -10,15 +10,22 @@ GitHub Actions checkout (no --repo needed).
 
 import argparse
 import json
-import sys
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
-from evals.models import EvalRunPayload, Regression
+import pydantic
+
+from evals.models import EvalRunPayload
 
 
-def format_body(payload: EvalRunPayload, run_url: str, dashboard_url: Optional[str] = None) -> str:
+def _sanitize_value(value: str) -> str:
+    """Sanitize value by replacing interior backticks with single quotes."""
+    return value.replace('`', "'")
+
+
+def format_body(payload: EvalRunPayload, run_url: str, dashboard_url: Optional[str] = None, harness_error: bool = False) -> str:
     """
     Format the GitHub issue body with summary table and regressions.
 
@@ -26,6 +33,7 @@ def format_body(payload: EvalRunPayload, run_url: str, dashboard_url: Optional[s
         payload: The eval run payload with run summary and regressions.
         run_url: URL to the workflow run (e.g., GitHub Actions run).
         dashboard_url: Optional URL to the evals dashboard for this run.
+        harness_error: If True, add harness error banner even if status is not errored.
 
     Returns:
         Markdown-formatted body text for the GitHub issue.
@@ -36,12 +44,13 @@ def format_body(payload: EvalRunPayload, run_url: str, dashboard_url: Optional[s
     lines.append("# Eval Regression Detected")
     lines.append("")
 
-    # Check if harness errored
-    if payload.run.status == 'errored':
+    # Check if harness errored or harness_error flag is set
+    if payload.run.status == 'errored' or harness_error:
         lines.append("⚠️ **Harness Error** — The eval harness failed to complete.")
         lines.append("")
-    else:
-        # Add summary table if not errored
+
+    # Add summary table if not errored
+    if payload.run.status != 'errored':
         summary = payload.run.summary
         lines.append("## Summary")
         lines.append("")
@@ -67,11 +76,11 @@ def format_body(payload: EvalRunPayload, run_url: str, dashboard_url: Optional[s
             if regression.kind == 'meanScoreDrop':
                 lines.append(f"- **Mean Score Drop**: {regression.baseline:.2f} → {regression.current:.2f}")
             elif regression.kind == 'ruleFlip':
-                case_id = regression.case_id.strip('`')
-                rule = str(regression.rule).strip('`')
+                case_id = _sanitize_value(regression.case_id)
+                rule = _sanitize_value(str(regression.rule))
                 lines.append(f"- **Rule Flip** (`{rule}`): case `{case_id}`")
             elif regression.kind == 'caseScoreDrop':
-                case_id = regression.case_id.strip('`')
+                case_id = _sanitize_value(regression.case_id)
                 lines.append(f"- **Case Score Drop**: `{case_id}` — {regression.baseline:.2f} → {regression.current:.2f}")
             elif regression.kind == 'errorRate':
                 error_pct = (regression.error_count / regression.case_count * 100) if regression.case_count > 0 else 0
@@ -92,6 +101,31 @@ def format_body(payload: EvalRunPayload, run_url: str, dashboard_url: Optional[s
         lines.append(f"- [Evals Dashboard]({dashboard_url})")
 
     return "\n".join(lines) + "\n\n"
+
+
+def format_body_no_payload(run_url: str, dashboard_url: Optional[str] = None) -> str:
+    """
+    Format the GitHub issue body when there is no valid payload (harness error).
+
+    Args:
+        run_url: URL to the workflow run.
+        dashboard_url: Optional URL to the evals dashboard.
+
+    Returns:
+        Markdown-formatted body text for the GitHub issue.
+    """
+    body_lines = [
+        "# Eval Harness Error",
+        "",
+        "⚠️ **Harness Error** — The eval harness failed to complete.",
+        "",
+        "## Links",
+        "",
+        f"- [Workflow Run]({run_url})",
+    ]
+    if dashboard_url:
+        body_lines.append(f"- [Evals Dashboard]({dashboard_url})")
+    return "\n".join(body_lines) + "\n\n"
 
 
 def notify(
@@ -115,8 +149,6 @@ def notify(
     Raises:
         SystemExit: With non-zero code if subprocess call fails.
     """
-    import pydantic
-
     payload = None
     has_regressions = False
     git_sha = None
@@ -126,11 +158,19 @@ def notify(
         try:
             with open(run_file, 'r') as f:
                 data = json.load(f)
-            # Handle extra 'runId' field if present (but don't use it)
-            data.pop('runId', None)
-            payload = EvalRunPayload.model_validate(data)
-            has_regressions = bool(payload.run.regressions)
-            git_sha = payload.run.git_sha
+
+            # Ensure data is a dict
+            if not isinstance(data, dict):
+                if not harness_error:
+                    print(f"Error: run.json is not a valid object", file=sys.stderr)
+                    sys.exit(1)
+                payload = None
+            else:
+                # Handle extra 'runId' field if present (but don't use it)
+                data.pop('runId', None)
+                payload = EvalRunPayload.model_validate(data)
+                has_regressions = bool(payload.run.regressions)
+                git_sha = payload.run.git_sha
         except json.JSONDecodeError as e:
             if not harness_error:
                 print(f"Error: run.json has invalid JSON: {e}", file=sys.stderr)
@@ -160,27 +200,15 @@ def notify(
 
     # Get or create the body and title
     if payload:
-        body = format_body(payload, run_url, dashboard_url)
-        # Add harness error banner if status is errored but we have payload
-        if payload.run.status == 'errored' and not harness_error:
-            pass  # Already included in format_body
+        body = format_body(payload, run_url, dashboard_url, harness_error=harness_error)
         git_sha = payload.run.git_sha
-        title = f"Eval regression: {git_sha[:7]}"
+        if harness_error:
+            title = "Eval harness error"
+        else:
+            title = f"Eval regression: {git_sha[:7]}"
     else:
         # Harness error without payload
-        body_lines = [
-            "# Eval Harness Error",
-            "",
-            "The eval harness failed to complete.",
-            "",
-            "## Links",
-            "",
-            f"- [Workflow Run]({run_url})",
-        ]
-        if dashboard_url:
-            body_lines.append(f"- [Evals Dashboard]({dashboard_url})")
-        body_lines.append("")
-        body = "\n".join(body_lines)
+        body = format_body_no_payload(run_url, dashboard_url)
         title = "Eval harness error"
 
     # Check for existing open issue
@@ -246,9 +274,6 @@ def notify(
         sys.exit(1)
     except json.JSONDecodeError as e:
         print(f"Error: gh returned invalid JSON: {e}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"Notification failed: {e}", file=sys.stderr)
         sys.exit(1)
 
 

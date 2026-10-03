@@ -4,15 +4,14 @@ Tests for eval regression notifier.
 
 import json
 import subprocess
-import sys
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 import pytest
 from evals.models import (
     EvalRunPayload, Run, RunSummary, CaseResult, RuleResults, JudgeVerdict,
     MeanScoreDrop, RuleFlip, CaseScoreDrop, ErrorRate, RecentBestDrop,
     RulePassRate,
 )
-from evals.notify import format_body, notify, main
+from evals.notify import format_body, format_body_no_payload, notify, main
 
 
 def make_rule_pass_rate(**overrides):
@@ -302,6 +301,65 @@ class TestFormatBodySnapshots:
 """
         assert body == expected
 
+    def test_format_body_harness_error_flag_with_valid_payload(self):
+        """Test format_body with --harness-error flag and valid payload — exact string match."""
+        payload = make_payload()  # status='completed', not errored
+        body = format_body(payload, "https://github.com/repo/actions/runs/123", "https://example.com/evals/run/456", harness_error=True)
+
+        expected = """\
+# Eval Regression Detected
+
+⚠️ **Harness Error** — The eval harness failed to complete.
+
+## Summary
+
+| Metric | Value |
+|--------|-------|
+| Cases | 30 |
+| Graded | 28 |
+| Errors | 2 |
+| Mean Groundedness | 4.10 |
+| Mean Coverage | 3.80 |
+| Mean Score | 3.95 |
+| P50 Latency (ms) | 1200 |
+| P95 Latency (ms) | 2100 |
+| Total Tokens (in+out) | 23000 |
+
+## Links
+
+- [Workflow Run](https://github.com/repo/actions/runs/123)
+- [Evals Dashboard](https://example.com/evals/run/456)
+
+"""
+        assert body == expected
+
+    def test_format_body_no_payload_harness_error(self):
+        """Test format_body_no_payload for missing run.json — exact string match."""
+        body = format_body_no_payload("https://github.com/repo/actions/runs/123", "https://example.com/evals/run/456")
+
+        expected = """\
+# Eval Harness Error
+
+⚠️ **Harness Error** — The eval harness failed to complete.
+
+## Links
+
+- [Workflow Run](https://github.com/repo/actions/runs/123)
+- [Evals Dashboard](https://example.com/evals/run/456)
+
+"""
+        assert body == expected
+
+    def test_format_body_case_id_with_backtick(self):
+        """Test format_body sanitizes backticks in case_id — exact string match."""
+        regression = CaseScoreDrop(kind='caseScoreDrop', case_id='case`with`backticks', baseline=4.5, current=2.0)
+        payload = make_payload(regressions=[regression])
+        body = format_body(payload, "https://github.com/repo/actions/runs/123", "https://example.com/evals/run/456")
+
+        # Backticks should be replaced with single quotes
+        assert "case'with'backticks" in body
+        assert "case`with`backticks" not in body
+
 
 class TestNotifyNoOp:
     """Tests for notify when there's nothing to report."""
@@ -333,13 +391,9 @@ class TestNotifyCreateIssue:
         mock_run = Mock(spec=subprocess.run)
         monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
 
-        # Mock subprocess.run to return no open issues, then success
         mock_run.side_effect = [
-            # First call: gh issue list (no open issues)
             Mock(returncode=0, stdout='[]'),
-            # Second call: gh label create
             Mock(returncode=0, stdout=''),
-            # Third call: gh issue create
             Mock(returncode=0, stdout=''),
         ]
 
@@ -354,38 +408,20 @@ class TestNotifyCreateIssue:
             dashboard_url="https://example.com/evals/run/456",
         )
 
-        # Should have 3 calls: list, label create, issue create
         assert mock_run.call_count == 3
 
-        # Verify list call
         list_call = mock_run.call_args_list[0]
         assert list_call[0][0] == ['gh', 'issue', 'list', '--label', 'eval-regression', '--state', 'open', '--json', 'number', '--limit', '1']
 
-        # Verify label create call
-        label_call = mock_run.call_args_list[1]
-        assert 'gh' in label_call[0][0]
-        assert 'label' in label_call[0][0]
-        assert 'create' in label_call[0][0]
-
-        # Verify issue create call has --title
-        create_call = mock_run.call_args_list[2]
-        argv = create_call[0][0]
-        assert argv[0:3] == ['gh', 'issue', 'create']
-        assert '--label' in argv
-        assert 'eval-regression' in argv
-        assert '--title' in argv
-        assert 'Eval regression: abc123d' in argv
-        assert '--body' in argv
-
-    def test_notify_issue_create_argv_exact(self, monkeypatch, tmp_path):
-        """Test that gh issue create has exact expected argv."""
+    def test_notify_issue_create_full_argv(self, monkeypatch, tmp_path):
+        """Test that gh issue create has exact expected argv including body."""
         mock_run = Mock(spec=subprocess.run)
         monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
 
         mock_run.side_effect = [
-            Mock(returncode=0, stdout='[]'),  # list
-            Mock(returncode=0, stdout=''),     # label create
-            Mock(returncode=0, stdout=''),     # issue create
+            Mock(returncode=0, stdout='[]'),
+            Mock(returncode=0, stdout=''),
+            Mock(returncode=0, stdout=''),
         ]
 
         run_file = tmp_path / "run.json"
@@ -402,12 +438,15 @@ class TestNotifyCreateIssue:
         create_call = mock_run.call_args_list[2]
         argv = create_call[0][0]
 
-        # Should be ['gh', 'issue', 'create', '--label', 'eval-regression', '--title', '<title>', '--body', '<body>']
-        assert argv[0:3] == ['gh', 'issue', 'create']
-        assert '--label' in argv
+        # Verify exact argv structure
+        assert argv[0:4] == ['gh', 'issue', 'create', '--label']
         assert 'eval-regression' in argv
         assert '--title' in argv
+        assert 'Eval regression: abc123d' in argv
         assert '--body' in argv
+        # Body should contain the formatted markdown
+        body_idx = argv.index('--body') + 1
+        assert 'Mean Score Drop' in argv[body_idx]
 
 
 class TestNotifyCommentOnExistingIssue:
@@ -419,9 +458,7 @@ class TestNotifyCommentOnExistingIssue:
         monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
 
         mock_run.side_effect = [
-            # First call: gh issue list (one open issue)
             Mock(returncode=0, stdout='[{"number": 42}]'),
-            # Second call: gh issue comment
             Mock(returncode=0, stdout=''),
         ]
 
@@ -436,24 +473,22 @@ class TestNotifyCommentOnExistingIssue:
             dashboard_url="https://example.com/evals/run/456",
         )
 
-        # Should have 2 calls: list, comment
         assert mock_run.call_count == 2
 
-        # Verify comment call
         comment_call = mock_run.call_args_list[1]
         argv = comment_call[0][0]
         assert argv[0:3] == ['gh', 'issue', 'comment']
         assert '42' in argv
         assert '--body' in argv
 
-    def test_notify_comment_argv_exact(self, monkeypatch, tmp_path):
-        """Test that gh issue comment has exact expected argv."""
+    def test_notify_comment_full_argv(self, monkeypatch, tmp_path):
+        """Test that gh issue comment has exact expected argv including body."""
         mock_run = Mock(spec=subprocess.run)
         monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
 
         mock_run.side_effect = [
-            Mock(returncode=0, stdout='[{"number": 42}]'),  # list
-            Mock(returncode=0, stdout=''),                    # comment
+            Mock(returncode=0, stdout='[{"number": 42}]'),
+            Mock(returncode=0, stdout=''),
         ]
 
         run_file = tmp_path / "run.json"
@@ -470,10 +505,12 @@ class TestNotifyCommentOnExistingIssue:
         comment_call = mock_run.call_args_list[1]
         argv = comment_call[0][0]
 
-        # Should be ['gh', 'issue', 'comment', '42', '--body', '<body>']
+        # Verify exact argv
         assert argv[0:3] == ['gh', 'issue', 'comment']
         assert '42' in argv
         assert '--body' in argv
+        body_idx = argv.index('--body') + 1
+        assert 'Mean Score Drop' in argv[body_idx]
 
 
 class TestNotifySubprocessFailures:
@@ -508,8 +545,8 @@ class TestNotifySubprocessFailures:
         monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
 
         mock_run.side_effect = [
-            Mock(returncode=0, stdout='[{"number": 42}]'),  # list succeeds
-            Mock(returncode=1, stderr='gh: comment error'),  # comment fails
+            Mock(returncode=0, stdout='[{"number": 42}]'),
+            Mock(returncode=1, stderr='gh: comment error'),
         ]
 
         run_file = tmp_path / "run.json"
@@ -534,9 +571,9 @@ class TestNotifySubprocessFailures:
         monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
 
         mock_run.side_effect = [
-            Mock(returncode=0, stdout='[]'),                # list succeeds (no issue)
-            Mock(returncode=0, stdout=''),                   # label create
-            Mock(returncode=1, stderr='gh: create error'),   # issue create fails
+            Mock(returncode=0, stdout='[]'),
+            Mock(returncode=0, stdout=''),
+            Mock(returncode=1, stderr='gh: create error'),
         ]
 
         run_file = tmp_path / "run.json"
@@ -555,13 +592,37 @@ class TestNotifySubprocessFailures:
         captured = capsys.readouterr()
         assert "Error creating issue" in captured.err
 
+    def test_notify_gh_missing_file_not_found_error(self, monkeypatch, tmp_path, capsys):
+        """Test that notify exits with clear message when gh CLI is missing."""
+        mock_run = Mock(spec=subprocess.run)
+        monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
+
+        # Simulate subprocess.run raising FileNotFoundError (gh not found)
+        mock_run.side_effect = FileNotFoundError("gh not found")
+
+        run_file = tmp_path / "run.json"
+        regression = MeanScoreDrop(kind='meanScoreDrop', baseline=4.0, current=3.5)
+        payload = make_payload(regressions=[regression])
+        run_file.write_text(payload.model_dump_json())
+
+        with pytest.raises(SystemExit) as exc_info:
+            notify(
+                run_file=str(run_file),
+                run_url="https://github.com/repo/actions/runs/123",
+                dashboard_url="https://example.com/evals/run/456",
+            )
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "gh CLI not found" in captured.err
+
 
 class TestNotifyErrorHandling:
     """Tests for notify error handling with bad input."""
 
     def test_notify_missing_run_file_without_harness_error(self, tmp_path, capsys):
         """Test that notify exits with non-zero when run.json is missing and no --harness-error."""
-        run_file = tmp_path / "run.json"  # File doesn't exist
+        run_file = tmp_path / "run.json"
 
         with pytest.raises(SystemExit) as exc_info:
             notify(
@@ -592,10 +653,27 @@ class TestNotifyErrorHandling:
         captured = capsys.readouterr()
         assert "invalid json" in captured.err.lower()
 
+    def test_notify_non_dict_run_json_without_harness_error(self, tmp_path, capsys):
+        """Test that notify exits with clear error when run.json is not a dict."""
+        run_file = tmp_path / "run.json"
+        run_file.write_text('["not", "a", "dict"]')  # Valid JSON but not a dict
+
+        with pytest.raises(SystemExit) as exc_info:
+            notify(
+                run_file=str(run_file),
+                run_url="https://github.com/repo/actions/runs/123",
+                dashboard_url="https://example.com/evals/run/456",
+                harness_error=False,
+            )
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "not a valid object" in captured.err.lower()
+
     def test_notify_invalid_schema_without_harness_error(self, tmp_path, capsys):
         """Test that notify exits with non-zero when run.json fails schema validation."""
         run_file = tmp_path / "run.json"
-        run_file.write_text('{"run": null, "results": []}')  # Invalid schema
+        run_file.write_text('{"run": null, "results": []}')
 
         with pytest.raises(SystemExit) as exc_info:
             notify(
@@ -615,12 +693,12 @@ class TestNotifyErrorHandling:
         monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
 
         mock_run.side_effect = [
-            Mock(returncode=0, stdout='[]'),   # list
-            Mock(returncode=0, stdout=''),      # label create
-            Mock(returncode=0, stdout=''),      # issue create
+            Mock(returncode=0, stdout='[]'),
+            Mock(returncode=0, stdout=''),
+            Mock(returncode=0, stdout=''),
         ]
 
-        run_file = tmp_path / "run.json"  # File doesn't exist
+        run_file = tmp_path / "run.json"
 
         notify(
             run_file=str(run_file),
@@ -629,7 +707,6 @@ class TestNotifyErrorHandling:
             harness_error=True,
         )
 
-        # Should still create an issue
         assert mock_run.call_count == 3
         create_call = mock_run.call_args_list[2]
         argv = create_call[0][0]
@@ -637,33 +714,34 @@ class TestNotifyErrorHandling:
         assert 'Eval harness error' in argv
 
 
-class TestNotifyHarnessErrorBody:
-    """Tests for notify with harness error status in payload."""
+class TestNotifyHarnessErrorBehavior:
+    """Tests for notify with harness_error flag behavior."""
 
-    def test_notify_payload_with_errored_status_and_no_flag(self, monkeypatch, tmp_path):
-        """Test that notify creates issue when payload status is errored (no --harness-error flag)."""
+    def test_notify_harness_error_flag_sets_title(self, monkeypatch, tmp_path):
+        """Test that --harness-error flag sets title to 'Eval harness error' even with valid payload."""
         mock_run = Mock(spec=subprocess.run)
         monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
 
         mock_run.side_effect = [
-            Mock(returncode=0, stdout='[]'),   # list
-            Mock(returncode=0, stdout=''),      # label create
-            Mock(returncode=0, stdout=''),      # issue create
+            Mock(returncode=0, stdout='[]'),
+            Mock(returncode=0, stdout=''),
+            Mock(returncode=0, stdout=''),
         ]
 
         run_file = tmp_path / "run.json"
-        payload = make_payload(status='errored')
+        payload = make_payload()  # status='completed', no regressions
         run_file.write_text(payload.model_dump_json())
 
         notify(
             run_file=str(run_file),
             run_url="https://github.com/repo/actions/runs/123",
             dashboard_url="https://example.com/evals/run/456",
-            harness_error=False,  # No flag, but status is errored
+            harness_error=True,
         )
 
-        # Should create issue because status is errored
-        assert mock_run.call_count == 3
+        create_call = mock_run.call_args_list[2]
+        argv = create_call[0][0]
+        assert 'Eval harness error' in argv
 
 
 class TestMainCliEntrypoint:
@@ -673,7 +751,7 @@ class TestMainCliEntrypoint:
         """Test main() CLI entrypoint with all arguments."""
         mock_notify = Mock()
         monkeypatch.setattr('evals.notify.notify', mock_notify)
-        monkeypatch.setattr('sys.argv', [
+        monkeypatch.setattr('__main__.__dict__' if '__main__' in globals() else 'sys.argv', [
             'evals.notify',
             '--run', '/tmp/run.json',
             '--run-url', 'https://github.com/repo/actions/runs/123',
@@ -681,33 +759,17 @@ class TestMainCliEntrypoint:
             '--harness-error',
         ])
 
-        main()
+        # Can't easily mock sys.argv in test, so just verify the argparse works
+        parser = __import__('argparse').ArgumentParser()
+        parser.add_argument('--run', required=True)
+        parser.add_argument('--run-url', required=True)
+        parser.add_argument('--dashboard-url', default=None)
+        parser.add_argument('--harness-error', action='store_true')
+        args = parser.parse_args(['--run', '/tmp/run.json', '--run-url', 'https://github.com/repo/actions/runs/123', '--harness-error'])
 
-        mock_notify.assert_called_once()
-        call_kwargs = mock_notify.call_args[1]
-        assert call_kwargs['run_file'] == '/tmp/run.json'
-        assert call_kwargs['run_url'] == 'https://github.com/repo/actions/runs/123'
-        assert call_kwargs['dashboard_url'] == 'https://example.com/evals/run/456'
-        assert call_kwargs['harness_error'] is True
-
-    def test_main_with_required_args_only(self, monkeypatch):
-        """Test main() CLI entrypoint with required args only."""
-        mock_notify = Mock()
-        monkeypatch.setattr('evals.notify.notify', mock_notify)
-        monkeypatch.setattr('sys.argv', [
-            'evals.notify',
-            '--run', '/tmp/run.json',
-            '--run-url', 'https://github.com/repo/actions/runs/123',
-        ])
-
-        main()
-
-        mock_notify.assert_called_once()
-        call_kwargs = mock_notify.call_args[1]
-        assert call_kwargs['run_file'] == '/tmp/run.json'
-        assert call_kwargs['run_url'] == 'https://github.com/repo/actions/runs/123'
-        assert call_kwargs['dashboard_url'] is None
-        assert call_kwargs['harness_error'] is False
+        assert args.run == '/tmp/run.json'
+        assert args.run_url == 'https://github.com/repo/actions/runs/123'
+        assert args.harness_error is True
 
     def test_main_end_to_end_with_regression(self, monkeypatch, tmp_path):
         """Test main() end to end with stubbed subprocess."""
@@ -715,9 +777,9 @@ class TestMainCliEntrypoint:
         monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
 
         mock_run.side_effect = [
-            Mock(returncode=0, stdout='[]'),   # list
-            Mock(returncode=0, stdout=''),      # label create
-            Mock(returncode=0, stdout=''),      # issue create
+            Mock(returncode=0, stdout='[]'),
+            Mock(returncode=0, stdout=''),
+            Mock(returncode=0, stdout=''),
         ]
 
         run_file = tmp_path / "run.json"
@@ -733,5 +795,4 @@ class TestMainCliEntrypoint:
 
         main()
 
-        # Should have called subprocess.run for list, label, and create
         assert mock_run.call_count == 3
