@@ -33,6 +33,19 @@ const mkResult = (runId: string, g: number, c: number, over: Record<string, unkn
 const runs = [mkRun('r2', Date.UTC(2026, 8, 20), 3.5, [{ kind: 'caseScoreDrop', caseId: 'clerk-401', baseline: 4.5, current: 3.5 }]),
   mkRun('r1', Date.UTC(2026, 8, 13), 4.5)]
 
+function wireDetails(runList: unknown[]) {
+  queryMock.mockImplementation((ref: string, args: unknown) => {
+    if (ref === 'amIAdmin') return true
+    if (args === 'skip') return undefined
+    if (ref === 'listRuns') return runList
+    if (ref === 'getRun') {
+      const id = (args as { runId: string }).runId
+      const run = (runList as { _id: string }[]).find(r => r._id === id)
+      return { run, results: [mkResult(id, 3, 4, { caseId: `case-of-${id}` })], previous: null }
+    }
+  })
+}
+
 function wire(admin: boolean | undefined, runList: unknown[] | undefined = runs) {
   queryMock.mockImplementation((ref: string, args: unknown) => {
     if (ref === 'amIAdmin') return admin
@@ -89,6 +102,60 @@ describe('EvalsApp', () => {
     render(createElement(EvalsApp))
     expect(screen.getByText(/No eval runs yet\./)).toBeTruthy()
     expect(screen.getByText('make eval')).toBeTruthy()
+  })
+})
+
+describe('trend and selection', () => {
+  afterEach(() => window.history.pushState({}, '', '/'))
+
+  it('leaves errored runs out of the trend but keeps them in the run list', () => {
+    const errored = { ...mkRun('r3', Date.UTC(2026, 8, 27), 0), status: 'errored' }
+    wireDetails([errored, ...runs])
+    render(createElement(EvalsApp))
+    const labels = screen.getAllByRole('img').map(i => i.getAttribute('aria-label') ?? '')
+    expect(labels.some(l => /latest 3\.5/.test(l))).toBe(true)
+    expect(labels.some(l => /latest 0/.test(l))).toBe(false)
+    const list = screen.getByRole('table', { name: 'Eval runs' })
+    expect(within(list).getAllByRole('row')).toHaveLength(4)
+    expect(within(list).getByText('scheduled (errored)')).toBeTruthy()
+  })
+
+  it('selects the run named by ?run= when it exists', () => {
+    window.history.pushState({}, '', '/?run=r1')
+    wireDetails(runs)
+    render(createElement(EvalsApp))
+    expect(screen.getByRole('button', { name: /case-of-r1/ })).toBeTruthy()
+  })
+
+  it('falls back to the newest run when ?run= is unknown', () => {
+    window.history.pushState({}, '', '/?run=nope')
+    wireDetails(runs)
+    render(createElement(EvalsApp))
+    expect(screen.getByRole('button', { name: /case-of-r2/ })).toBeTruthy()
+  })
+
+  it('clicking a run row selects it and updates the case table', () => {
+    wireDetails(runs)
+    render(createElement(EvalsApp))
+    expect(screen.getByRole('button', { name: /case-of-r2/ })).toBeTruthy()
+    const list = screen.getByRole('table', { name: 'Eval runs' })
+    const buttons = within(list).getAllByRole('button')
+    expect(buttons[0].getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(buttons[1])
+    expect(buttons[1].getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: /case-of-r1/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /case-of-r2/ })).toBeNull()
+  })
+
+  it('sets aria-controls on a case button only while its row is open', () => {
+    wire(true)
+    render(createElement(EvalsApp))
+    const btn = screen.getByRole('button', { name: /clerk-401/ })
+    expect(btn.hasAttribute('aria-controls')).toBe(false)
+    fireEvent.click(btn)
+    const id = btn.getAttribute('aria-controls')
+    expect(id).toBeTruthy()
+    expect(document.getElementById(id as string)).toBeTruthy()
   })
 })
 

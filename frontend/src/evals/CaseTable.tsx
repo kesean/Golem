@@ -41,7 +41,7 @@ export function CaseTable({ results, previous }: Props) {
                       type="button"
                       className="ev-link"
                       aria-expanded={isOpen}
-                      aria-controls={panelId}
+                      aria-controls={isOpen ? panelId : undefined}
                       onClick={() => toggle(r.caseId)}
                     >
                       <span aria-hidden="true">{isOpen ? '▾' : '▸'} </span>

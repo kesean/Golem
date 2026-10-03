@@ -14,7 +14,9 @@ export function EvalsApp() {
   const scheduled = useRuns(ok, { limit: 26, label: 'scheduled' })
   const all = useRuns(ok, { limit: 60 })
   const [picked, setPicked] = useState<string | null>(null)
-  const selectedId = picked ?? all?.[0]?._id ?? null
+  const linked = new URLSearchParams(window.location.search).get('run')
+  const linkedId = linked && all?.some(r => r._id === linked) ? linked : null
+  const selectedId = picked ?? linkedId ?? all?.[0]?._id ?? null
   const detail = useRunDetail(ok, selectedId)
 
   let body
@@ -27,7 +29,8 @@ export function EvalsApp() {
   } else if (all.length === 0) {
     body = <p className="ev-note">No eval runs yet. Run <code>make eval</code>.</p>
   } else {
-    const trend = [...scheduled].reverse()
+    // Errored runs have no scores (meanScore 0), so keep them out of the [1,5] trend
+    const trend = scheduled.filter(r => r.status === 'completed').reverse()
     body = (
       <>
         <section aria-labelledby="ev-trend-h">
