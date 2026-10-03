@@ -7,7 +7,10 @@ import { ClerkProvider, useAuth } from '@clerk/clerk-react'
 import { TokenContext } from './contexts/TokenContext'
 import { getGuestToken } from './lib/guestAuth'
 import App from './App'
+import { EvalsApp } from './evals/EvalsApp'
 import './globals.css'
+
+const Page = window.location.pathname === '/evals' ? EvalsApp : App
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string)
 
@@ -75,7 +78,7 @@ function AuthRouter() {
     return (
       <ConvexWithClerk client={convex} useAuth={useAuth}>
         <AuthTokenProvider>
-          <App />
+          <Page />
         </AuthTokenProvider>
       </ConvexWithClerk>
     )
@@ -84,7 +87,7 @@ function AuthRouter() {
   return (
     <ConvexProvider client={convex}>
       <GuestTokenProvider>
-        <App />
+        <Page />
       </GuestTokenProvider>
     </ConvexProvider>
   )
@@ -96,7 +99,7 @@ if (import.meta.env.VITE_TEST_BYPASS_AUTH === 'true') {
   root.render(
     <ConvexProvider client={convex}>
       <TokenContext.Provider value={{ getToken: async () => null }}>
-        <App />
+        <Page />
       </TokenContext.Provider>
     </ConvexProvider>
   )
