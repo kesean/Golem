@@ -93,44 +93,55 @@ cd frontend && npm run test:e2e
 Run the V3a eval harness to measure answer quality against a fixed test set. Each case is scored by rule checks and an LLM grader, and compared to the baseline from the latest scheduled run.
 
 ```bash
-# Run all eval cases and print a report to stdout
+# First, set env vars (evals/ does not auto-load .env):
+set -a; source .env; set +a
+
+# Run all eval cases, upload results, and print a report to stdout
+# Requires: DEEPSEEK_API_KEY, CONVEX_SITE_URL, EVAL_INGEST_SECRET
 make eval
 
 # Run offline (stubbed pipeline and grader, no uploads)
-python -m evals.run --cases evals/fixtures/two_cases.json --no-upload --dry-judge EVAL_FAKE_PIPELINE=1
+EVAL_FAKE_PIPELINE=1 python -m evals.run --cases evals/fixtures/two_cases.json --no-upload --dry-judge
 
 # Run without uploading to Convex
+# If CONVEX_SITE_URL or EVAL_INGEST_SECRET are not set, skips baseline fetch and continues
 python -m evals.run --no-upload
 
 # Exit codes
-#   0: no regressions
-#   1: harness error
-#   2: regressions detected
+#   0: clean run, no regressions
+#   1: harness error (missing env vars, judge failure, upload failure, etc.)
+#   2: regressions detected (CI job succeeds but opens a regression issue)
+#
+# Weekly workflow: exit codes other than 0 or 2 fail the job and open a harness-error issue
 ```
 
 **One-time setup for evals** (after cloning):
 
 Set GitHub secrets for the weekly eval workflow (`.github/workflows/eval-weekly.yml`):
 - `DEEPSEEK_API_KEY` — for the LLM grader (DeepSeek Flash)
-- `CONVEX_SITE_URL` — your Convex deployment URL
+- `CONVEX_SITE_URL` — HTTP Actions URL shown in the Convex dashboard deployment settings (format: `https://<deployment>.convex.site`)
 - `EVAL_INGEST_SECRET` — for authenticating uploads to Convex; generate with `openssl rand -hex 32`
 - Plus the existing secrets: `ANTHROPIC_API_KEY`, `QDRANT_URL`, `QDRANT_API_KEY`, `VOYAGE_API_KEY`
 
-Set Convex environment variables:
+Set GitHub repository variables (Settings → Variables):
+- `EVALS_DASHBOARD_URL` (optional) — link added to regression issues; e.g., `https://your-golem-app.vercel.app/evals`
+
+Set Convex environment variables (use `--prod` for the deployment the weekly CI run uploads to):
 
 ```bash
 # Set the eval ingest secret (same value as the GitHub secret)
-npx convex env set EVAL_INGEST_SECRET <generated-secret>
+npx convex env set --prod EVAL_INGEST_SECRET <generated-secret>
 
-# Set the admin user list — comma-separated Clerk tokenIdentifiers
-# Find your tokenIdentifier in the Convex dashboard (Logs → click a function call → look for "auth.tokenIdentifier")
-# or check the Clerk dashboard or issue a test Convex function and inspect the identity
-npx convex env set EVAL_ADMIN_IDS user_abc123,user_def456
+# Set the admin user list — comma-separated Clerk tokenIdentifiers in the format: <issuer URL>|<user id>
+# Example: https://your-app.clerk.accounts.dev|user_2abc...
+# To find your tokenIdentifier: temporarily add console.log((await ctx.auth.getUserIdentity())?.tokenIdentifier)
+# to a Convex query, sign in, and check the Convex dashboard Logs tab
+npx convex env set --prod EVAL_ADMIN_IDS "https://your-app.clerk.accounts.dev|user_abc123,https://your-app.clerk.accounts.dev|user_def456"
 ```
 
 **Notes:**
 
-- Measured cost per run (weekly at off-peak): about **$0.44** per 30-case run ≈ **$1.90/month** (estimate; to be updated after first real run).
+- Estimated cost per run (weekly at off-peak): about **$0.44** per 30-case run ≈ **$1.90/month** (to be updated after first real run).
 - GitHub disables scheduled workflows on public repos after 60 days of no repo activity. Check workflow status with `gh workflow view eval-weekly.yml` and re-enable if needed: `gh workflow enable eval-weekly.yml`.
 
 ## Deploying
