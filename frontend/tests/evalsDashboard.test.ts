@@ -92,6 +92,26 @@ describe('EvalsApp', () => {
   })
 })
 
+describe('ungraded delta text', () => {
+  it('says "not graded" when a previous case exists but is ungraded, "no baseline" when absent', () => {
+    queryMock.mockImplementation((ref: string, args: unknown) => {
+      if (ref === 'amIAdmin') return true
+      if (args === 'skip') return undefined
+      if (ref === 'listRuns') return runs
+      if (ref === 'getRun') {
+        return {
+          run: runs[0],
+          results: [mkResult('r2', 3, 4), mkResult('r2', 3, 4, { _id: 'b', caseId: 'other' })],
+          previous: { run: runs[1], results: [mkResult('r1', 3, 4, { judge: undefined })] },
+        }
+      }
+    })
+    render(createElement(EvalsApp))
+    expect(screen.getByText('not graded')).toBeTruthy()
+    expect(screen.getByText('no baseline')).toBeTruthy()
+  })
+})
+
 describe('format', () => {
   it('computes case score and delta', () => {
     expect(caseScore(mkResult('x', 3, 4) as never)).toBe(3.5)

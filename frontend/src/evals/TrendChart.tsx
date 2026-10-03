@@ -14,7 +14,7 @@ type Props = {
   eps: number
 }
 
-const W = 640, H = 150, L = 40, R = 56, T = 12, B = 22
+const W = 640, H = 150, L = 56, R = 56, T = 12, B = 22
 
 export function TrendChart({ title, unitLabel, points, domain, ticks, fmt, color, selectedId, eps }: Props) {
   const [lo, hi] = domain

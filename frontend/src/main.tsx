@@ -10,7 +10,7 @@ import App from './App'
 import { EvalsApp } from './evals/EvalsApp'
 import './globals.css'
 
-const Page = window.location.pathname === '/evals' ? EvalsApp : App
+const Page = /^\/evals\/?$/.test(window.location.pathname) ? EvalsApp : App
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string)
 

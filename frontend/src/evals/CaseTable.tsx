@@ -49,7 +49,7 @@ export function CaseTable({ results, previous }: Props) {
                     </button>
                   </th>
                   <td className="ev-num">{score === null ? (r.error ? 'error' : 'ungraded') : score.toFixed(1)}</td>
-                  <td>{previous ? formatDelta(delta.score) : 'no baseline'}</td>
+                  <td>{prevBy.has(r.caseId) ? formatDelta(delta.score) : 'no baseline'}</td>
                   <td>{passed} of {RULE_NAMES.length}</td>
                 </tr>
                 {isOpen && (

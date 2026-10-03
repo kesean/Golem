@@ -24,7 +24,7 @@ export function caseDelta(current: EvalResult, previous: EvalResult | undefined)
 }
 
 export function formatDelta(d: number | null): string {
-  if (d === null) return 'no baseline'
+  if (d === null) return 'not graded'
   if (Math.abs(d) < 0.05) return '● no change'
   return `${d > 0 ? '▲ +' : '▼ −'}${Math.abs(d).toFixed(1)}`
 }
