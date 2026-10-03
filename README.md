@@ -88,6 +88,51 @@ cd frontend && npm test
 cd frontend && npm run test:e2e
 ```
 
+**5. Running evals** (optional)
+
+Run the V3a eval harness to measure answer quality against a fixed test set. Each case is scored by rule checks and an LLM grader, and compared to the baseline from the latest scheduled run.
+
+```bash
+# Run all eval cases and print a report to stdout
+make eval
+
+# Run offline (stubbed pipeline and grader, no uploads)
+python -m evals.run --cases evals/fixtures/two_cases.json --no-upload --dry-judge EVAL_FAKE_PIPELINE=1
+
+# Run without uploading to Convex
+python -m evals.run --no-upload
+
+# Exit codes
+#   0: no regressions
+#   1: harness error
+#   2: regressions detected
+```
+
+**One-time setup for evals** (after cloning):
+
+Set GitHub secrets for the weekly eval workflow (`.github/workflows/eval-weekly.yml`):
+- `DEEPSEEK_API_KEY` — for the LLM grader (DeepSeek Flash)
+- `CONVEX_SITE_URL` — your Convex deployment URL
+- `EVAL_INGEST_SECRET` — for authenticating uploads to Convex; generate with `openssl rand -hex 32`
+- Plus the existing secrets: `ANTHROPIC_API_KEY`, `QDRANT_URL`, `QDRANT_API_KEY`, `VOYAGE_API_KEY`
+
+Set Convex environment variables:
+
+```bash
+# Set the eval ingest secret (same value as the GitHub secret)
+npx convex env set EVAL_INGEST_SECRET <generated-secret>
+
+# Set the admin user list — comma-separated Clerk tokenIdentifiers
+# Find your tokenIdentifier in the Convex dashboard (Logs → click a function call → look for "auth.tokenIdentifier")
+# or check the Clerk dashboard or issue a test Convex function and inspect the identity
+npx convex env set EVAL_ADMIN_IDS user_abc123,user_def456
+```
+
+**Notes:**
+
+- Measured cost per run (weekly at off-peak): about **$0.44** per 30-case run ≈ **$1.90/month** (estimate; to be updated after first real run).
+- GitHub disables scheduled workflows on public repos after 60 days of no repo activity. Check workflow status with `gh workflow view eval-weekly.yml` and re-enable if needed: `gh workflow enable eval-weekly.yml`.
+
 ## Deploying
 
 The frontend deploys to Vercel. All deployment operations are managed from the repo root via `make`.
@@ -337,7 +382,22 @@ Planned phases, built one at a time in this order. Each phase starts with a spec
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| V3a — Eval harness | A versioned set of test questions graded automatically (rule checks plus a low-cost LLM grader for groundedness and coverage), run weekly with run-to-run comparison and an auto-opened GitHub issue on regression, so every later change is measurable | 📝 Spec in progress |
+| V3a — Eval harness | A versioned set of test questions graded automatically (rule checks plus a low-cost LLM grader for groundedness and coverage), run weekly with run-to-run comparison and an auto-opened GitHub issue on regression, so every later change is measurable | ✅ Done |
 | V3b — Deeper AI features | Diagnose pasted stack traces and HTTP logs, inline citations linked to the exact retrieved passage, follow-up suggestions, live tool calls | ⏳ Planned |
 | V3c — Agent harness / MCP | Expose Golem as an MCP server or Agent SDK tool so coding agents can get grounded debugging answers, with machine-client auth and per-client usage limits | ⏳ Planned |
 | V3d — Distinctive UI redesign | A visual identity that doesn't look generated: type, colour, and layout for the answer page, plus a landing/demo page | ⏳ Planned |
+
+### V3a — Eval harness
+
+| Feature | Status |
+|---------|--------|
+| Test set: 30 hand-written cases covering Clerk auth, web platform (CORS/fetch/streaming), rate limits, injection defense | ✅ Done |
+| Run all cases through the production pipeline (`chat.stream_run` in-process, no `/ask` rate limit) | ✅ Done |
+| Rule checks: completed, format, product tag, citations, retrieval | ✅ Done |
+| LLM grader (DeepSeek Flash): groundedness and coverage (1–5), with retry on invalid JSON | ✅ Done |
+| Regression detection: mean score drop (>0.3), rule flips, case score drop (≥2), error rate (>20%), slow 8-week decline | ✅ Done |
+| Convex storage: `evalRuns` and `evalResults` tables with authenticated HTTP POST and GET endpoints | ✅ Done |
+| Local run: `make eval` with `--no-upload`, `--dry-judge`, `EVAL_FAKE_PIPELINE=1` for offline testing | ✅ Done |
+| Scheduled run: weekly cron (Sunday 06:00 UTC) with `workflow_dispatch` trigger; stored and artifacted | ✅ Done |
+| GitHub alerting: auto-open or comment on `eval-regression` issue with summary and regression details | ✅ Done |
+| Admin dashboard (`/evals`): trend chart (26 weeks), run list, case details with grader reason and score deltas | ✅ Done |
