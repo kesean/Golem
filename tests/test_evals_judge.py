@@ -283,6 +283,34 @@ class TestJudgeCaseErrors:
         assert verdict is None
         assert error == "http_error: RequestError"
 
+    def test_invalid_url_returns_http_error(self, sample_case, sample_chunks, sample_response, monkeypatch):
+        """httpx.InvalidURL is not an HTTPError but must still yield a judge error."""
+        monkeypatch.setenv("JUDGE_BASE_URL", "http://bad host")
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "secret-key-123")
+
+        def handler(req):
+            raise httpx.InvalidURL("bad url")
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            verdict, error = judge_case(sample_case, sample_response, sample_chunks, client=client)
+
+        assert verdict is None
+        assert error == "http_error: InvalidURL"
+        assert "secret-key-123" not in error
+
+    def test_non_dict_chunks_do_not_raise(self, sample_case, sample_response, valid_verdict_json):
+        """Non-dict chunks are skipped rather than raising AttributeError."""
+        def handler(req):
+            return make_api_response(valid_verdict_json)
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            verdict, error = judge_case(
+                sample_case, sample_response, [None, "text", {"text": "ok"}], client=client
+            )
+
+        assert error is None
+        assert verdict is not None
+
     def test_missing_api_key(self, sample_case, sample_chunks, sample_response, monkeypatch):
         """Test that missing API key returns missing_api_key error without making request."""
         monkeypatch.delenv("DEEPSEEK_API_KEY")

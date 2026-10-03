@@ -47,7 +47,10 @@ def judge_case(
 
     # Build the prompt with tagged sections
     chunk_elements = "\n".join(
-        [f'<chunk n="{i + 1}">{chunk.get("text", "")}</chunk>' for i, chunk in enumerate(chunks)]
+        [
+            f'<chunk n="{i + 1}">{chunk.get("text", "") if isinstance(chunk, dict) else ""}</chunk>'
+            for i, chunk in enumerate(chunks)
+        ]
     )
     key_points_text = "\n".join([f"- {kp}" for kp in case.key_points])
 
@@ -133,7 +136,7 @@ Respond ONLY with valid JSON."""
                     # First failure: retry (loop continues)
                     continue
 
-            except httpx.HTTPError as e:
+            except (httpx.HTTPError, httpx.InvalidURL) as e:
                 # Transport errors (no retry)
                 return None, f"http_error: {e.__class__.__name__}"
 
