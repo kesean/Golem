@@ -109,7 +109,7 @@ python -m evals.run --no-upload
 
 # Exit codes
 #   0: clean run, no regressions
-#   1: harness error (missing env vars, judge failure, upload failure, etc.)
+#   1: harness error (no case could be graded, upload failure, crash)
 #   2: regressions detected (CI job succeeds but opens a regression issue)
 #
 # Weekly workflow: exit codes other than 0 or 2 fail the job and open a harness-error issue
