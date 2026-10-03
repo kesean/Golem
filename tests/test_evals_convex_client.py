@@ -537,3 +537,34 @@ class TestUpload:
                     run_id = upload(payload)
 
         assert run_id is None
+
+
+class TestTrailingSlashUrl:
+    """CONVEX_SITE_URL with a trailing slash must not produce a double slash."""
+
+    def test_fetch_baseline_strips_trailing_slash(self):
+        from evals.convex_client import fetch_baseline
+
+        resp = Mock()
+        resp.status_code = 200
+        resp.json.return_value = None
+        env = {"CONVEX_SITE_URL": "https://test.convex.site/", "EVAL_INGEST_SECRET": "s"}
+        with patch.dict(os.environ, env):
+            with patch("httpx.Client.get", return_value=resp) as mock_get:
+                fetch_baseline()
+        assert mock_get.call_args[0][0] == "https://test.convex.site/evals/baseline"
+
+    def test_upload_strips_trailing_slash(self):
+        from evals.convex_client import upload
+        from evals.models import EvalRunPayload
+
+        resp = Mock()
+        resp.status_code = 200
+        resp.json.return_value = {"runId": "r1"}
+        env = {"CONVEX_SITE_URL": "https://test.convex.site//", "EVAL_INGEST_SECRET": "s"}
+        payload = Mock(spec=EvalRunPayload)
+        payload.model_dump.return_value = {}
+        with patch.dict(os.environ, env):
+            with patch("httpx.Client.post", return_value=resp) as mock_post:
+                assert upload(payload) == "r1"
+        assert mock_post.call_args[0][0] == "https://test.convex.site/evals/runs"

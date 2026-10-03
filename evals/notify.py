@@ -14,6 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 import pydantic
 
@@ -23,6 +24,16 @@ from evals.models import EvalRunPayload
 def _sanitize_value(value: str) -> str:
     """Sanitize value by replacing interior backticks with single quotes."""
     return value.replace('`', "'")
+
+
+def _dashboard_link(dashboard_url: Optional[str], run_id: Optional[str]) -> Optional[str]:
+    """Append ?run=<id> (URL-encoded) to the dashboard URL when both are present."""
+    if not dashboard_url:
+        return dashboard_url
+    if not run_id:
+        return dashboard_url
+    sep = '&' if '?' in dashboard_url else '?'
+    return f"{dashboard_url}{sep}run={quote(str(run_id), safe='')}"
 
 
 def format_body(payload: EvalRunPayload, run_url: str, dashboard_url: Optional[str] = None, harness_error: bool = False) -> str:
@@ -40,12 +51,14 @@ def format_body(payload: EvalRunPayload, run_url: str, dashboard_url: Optional[s
     """
     lines = []
 
+    # Check if harness errored or harness_error flag is set
+    is_harness_error = payload.run.status == 'errored' or harness_error
+
     # Title/header
-    lines.append("# Eval Regression Detected")
+    lines.append("# Eval Harness Error" if is_harness_error else "# Eval Regression Detected")
     lines.append("")
 
-    # Check if harness errored or harness_error flag is set
-    if payload.run.status == 'errored' or harness_error:
+    if is_harness_error:
         lines.append("⚠️ **Harness Error** — The eval harness failed to complete.")
         lines.append("")
 
@@ -152,6 +165,7 @@ def notify(
     payload = None
     has_regressions = False
     git_sha = None
+    run_id = None
 
     # Load payload from file
     if Path(run_file).exists():
@@ -166,8 +180,10 @@ def notify(
                     sys.exit(1)
                 payload = None
             else:
-                # Handle extra 'runId' field if present (but don't use it)
-                data.pop('runId', None)
+                # run.py writes the Convex run id at run.runId (ignored by the model)
+                run_data = data.get('run')
+                if isinstance(run_data, dict):
+                    run_id = run_data.get('runId')
                 payload = EvalRunPayload.model_validate(data)
                 has_regressions = bool(payload.run.regressions)
                 git_sha = payload.run.git_sha
@@ -197,6 +213,8 @@ def notify(
 
     if not should_notify:
         return  # Nothing to notify about
+
+    dashboard_url = _dashboard_link(dashboard_url, run_id)
 
     # Get or create the body and title
     if payload:

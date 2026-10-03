@@ -76,7 +76,11 @@ def generate_report(
             lines.extend(_format_regression(regression))
             lines.append("")
     else:
-        if baseline:
+        if run.status == "errored":
+            lines.append("## Run Errored")
+            lines.append("Run errored — no cases graded, regression check skipped.")
+            lines.append("")
+        elif baseline:
             lines.append("## No Regressions ✓")
             lines.append("")
         else:
@@ -101,7 +105,7 @@ def generate_report(
             score = (result.judge.groundedness + result.judge.coverage) / 2
             lines.append(f"### {idx}. {result.case_id}")
             lines.append(f"**Score**: {score:.1f} (G:{result.judge.groundedness} C:{result.judge.coverage})")
-            lines.append(f"**Question**: {result.question[:80]}...")
+            lines.append(f"**Question**: {result.question[:80]}{'...' if len(result.question) > 80 else ''}")
             lines.append(f"**Reason**: {result.judge.reason}")
             lines.append(f"**Missed Key Points**: {', '.join(result.judge.key_points_missed) if result.judge.key_points_missed else 'None'}")
             lines.append("")

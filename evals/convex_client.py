@@ -2,7 +2,7 @@
 Convex client for fetching baseline and uploading eval runs.
 
 Provides:
-- fetch_baseline() -> (RunSummary, list[CaseResult], recent_best) | None
+- fetch_baseline() -> (RunSummary, list[CaseResult], recent_best, baseline_run_id) | None
 - upload(payload: EvalRunPayload) -> runId
 """
 
@@ -26,7 +26,7 @@ def fetch_baseline() -> Optional[tuple[RunSummary, list[CaseResult], Optional[fl
 
     Logs a warning and returns None if fetch fails or endpoint is not configured.
     """
-    convex_url = os.getenv("CONVEX_SITE_URL")
+    convex_url = (os.getenv("CONVEX_SITE_URL") or "").rstrip("/")
     secret = os.getenv("EVAL_INGEST_SECRET")
 
     if not convex_url or not secret:
@@ -74,7 +74,7 @@ def fetch_baseline() -> Optional[tuple[RunSummary, list[CaseResult], Optional[fl
             # Extract baseline run ID (_id is the Convex doc ID)
             baseline_run_id = run.get("_id")
 
-            # Strip Convex system fields (_id, _creationTime) and deserialize
+            # Convex system fields (_id, _creationTime) are ignored when deserializing
             baseline_summary = _deserialize_run_summary(run.get("summary", {}))
             baseline_results = [_deserialize_case_result(r) for r in results]
 
@@ -84,9 +84,6 @@ def fetch_baseline() -> Optional[tuple[RunSummary, list[CaseResult], Optional[fl
             )
             return baseline_summary, baseline_results, recent_best, baseline_run_id
 
-    except httpx.HTTPError as e:
-        logger.warning(f"Baseline fetch HTTP error: {e}")
-        return None
     except Exception as e:
         logger.warning(f"Baseline fetch failed: {e}")
         return None
@@ -102,9 +99,9 @@ def upload(payload: EvalRunPayload) -> Optional[str]:
     Returns:
         runId string on success, or None on failure.
 
-    Logs a warning and returns None if upload fails or endpoint is not configured.
+    Logs an error if the upload fails, or a warning if the endpoint is not configured; returns None in both cases.
     """
-    convex_url = os.getenv("CONVEX_SITE_URL")
+    convex_url = (os.getenv("CONVEX_SITE_URL") or "").rstrip("/")
     secret = os.getenv("EVAL_INGEST_SECRET")
 
     if not convex_url or not secret:
@@ -143,9 +140,6 @@ def upload(payload: EvalRunPayload) -> Optional[str]:
             logger.info(f"Uploaded run: {run_id}")
             return run_id
 
-    except httpx.HTTPError as e:
-        logger.error(f"Upload HTTP error: {e}")
-        return None
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         return None

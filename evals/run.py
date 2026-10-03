@@ -148,8 +148,8 @@ def main(
             exit_code = 2  # Override clean exit if regressions found
 
     # Get git info
-    git_sha = os.getenv("GITHUB_SHA") or _git_rev_parse("HEAD")
-    git_ref = os.getenv("GITHUB_REF_NAME") or _git_rev_parse("--abbrev-ref", "HEAD")
+    git_sha = _git_rev_parse("HEAD") or os.getenv("GITHUB_SHA") or "unknown"
+    git_ref = _git_rev_parse("--abbrev-ref", "HEAD") or os.getenv("GITHUB_REF_NAME") or "unknown"
 
     logger.info(f"Git: SHA={git_sha}, REF={git_ref}")
 
@@ -159,7 +159,7 @@ def main(
         git_sha=git_sha,
         git_ref=git_ref,
         app_model=chat.MODEL,
-        judge_model=os.getenv("JUDGE_MODEL", "deepseek-flash"),
+        judge_model=os.getenv("JUDGE_MODEL") or "deepseek-flash",
         cases_version=cases_file_obj.version,
         started_at=started_at,
         finished_at=finished_at,
@@ -384,8 +384,8 @@ def _fake_pipeline_response(case: EvalCase) -> str:
 {sources_text}"""
 
 
-def _git_rev_parse(*args) -> str:
-    """Run git rev-parse and return the output."""
+def _git_rev_parse(*args) -> Optional[str]:
+    """Run git rev-parse and return the output, or None if git fails or prints nothing."""
     try:
         result = subprocess.run(
             ["git", "rev-parse", *args],
@@ -393,10 +393,10 @@ def _git_rev_parse(*args) -> str:
             text=True,
             check=True,
         )
-        return result.stdout.strip()
+        return result.stdout.strip() or None
     except Exception as e:
         logger.warning(f"git rev-parse {args} failed: {e}")
-        return "unknown"
+        return None
 
 
 if __name__ == "__main__":

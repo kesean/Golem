@@ -2,8 +2,8 @@
 Tests for eval regression notifier.
 """
 
+import json
 import subprocess
-import sys
 from unittest.mock import Mock
 import pytest
 from evals.models import (
@@ -289,7 +289,7 @@ class TestFormatBodySnapshots:
         body = format_body(payload, "https://github.com/repo/actions/runs/123", "https://example.com/evals/run/456")
 
         expected = """\
-# Eval Regression Detected
+# Eval Harness Error
 
 ⚠️ **Harness Error** — The eval harness failed to complete.
 
@@ -307,7 +307,7 @@ class TestFormatBodySnapshots:
         body = format_body(payload, "https://github.com/repo/actions/runs/123", "https://example.com/evals/run/456", harness_error=True)
 
         expected = """\
-# Eval Regression Detected
+# Eval Harness Error
 
 ⚠️ **Harness Error** — The eval harness failed to complete.
 
@@ -830,3 +830,38 @@ class TestMainCliEntrypoint:
         main()
 
         assert mock_run.call_count == 3
+
+
+class TestDashboardDeepLink:
+    """R9: run.json's run.runId is appended to the dashboard URL as ?run=<id>."""
+
+    def _run_notify(self, monkeypatch, tmp_path, run_id, dashboard_url):
+        mock_run = Mock(spec=subprocess.run)
+        monkeypatch.setattr('evals.notify.subprocess.run', mock_run)
+        mock_run.side_effect = [
+            Mock(returncode=0, stdout='[]'),
+            Mock(returncode=0, stdout=''),
+            Mock(returncode=0, stdout=''),
+        ]
+        data = make_payload(regressions=[RecentBestDrop(kind='recentBestDrop', recent_best=4.2, current=3.5)]).model_dump(by_alias=True)
+        if run_id is not None:
+            data["run"]["runId"] = run_id
+        run_file = tmp_path / "run.json"
+        run_file.write_text(json.dumps(data))
+        notify(run_file=str(run_file), run_url="https://gh/run/1", dashboard_url=dashboard_url)
+        return mock_run.call_args_list[2][0][0]
+
+    def test_run_id_appended_and_encoded(self, monkeypatch, tmp_path):
+        argv = self._run_notify(monkeypatch, tmp_path, "abc/12 3", "https://example.com/evals")
+        body = argv[argv.index('--body') + 1]
+        assert "[Evals Dashboard](https://example.com/evals?run=abc%2F12%203)" in body
+
+    def test_no_run_id_leaves_url_untouched(self, monkeypatch, tmp_path):
+        argv = self._run_notify(monkeypatch, tmp_path, None, "https://example.com/evals")
+        body = argv[argv.index('--body') + 1]
+        assert "[Evals Dashboard](https://example.com/evals)" in body
+
+    def test_existing_query_uses_ampersand(self, monkeypatch, tmp_path):
+        argv = self._run_notify(monkeypatch, tmp_path, "r1", "https://example.com/evals?x=1")
+        body = argv[argv.index('--body') + 1]
+        assert "https://example.com/evals?x=1&run=r1" in body

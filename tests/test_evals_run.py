@@ -7,13 +7,11 @@ No network calls to real endpoints.
 
 import json
 import os
-import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
-import httpx
-from evals.models import EvalRunPayload, CaseResult, RunSummary, RulePassRate
+from evals.models import CaseResult, RunSummary, RulePassRate
 
 
 @pytest.fixture
@@ -101,10 +99,13 @@ class TestOfflineRun:
 class TestPipelineException:
     """Exception handling during case execution."""
 
-    def test_case_exception_recorded(self, two_cases_file, tmp_path):
+    def test_case_exception_recorded(self, two_cases_file, monkeypatch, tmp_path):
         """When a case raises an exception, it's recorded and run continues."""
+        # Real pipeline path (mocked below), but never touch the network
+        monkeypatch.delenv("EVAL_FAKE_PIPELINE", raising=False)
+        monkeypatch.delenv("CONVEX_SITE_URL", raising=False)
+        monkeypatch.delenv("EVAL_INGEST_SECRET", raising=False)
         from evals.run import main
-        from unittest.mock import patch, MagicMock
 
         # Create a mock that raises for the first case
         call_count = [0]
@@ -255,7 +256,8 @@ class TestUploadCall:
         }
 
         with patch.dict(os.environ, env, clear=False):
-            with patch("evals.run.convex_client.upload", return_value=None):
+            with patch("evals.run.convex_client.fetch_baseline", return_value=None), \
+                    patch("evals.run.convex_client.upload", return_value=None):
                 exit_code = main(
                     label="manual",
                     cases_file=str(two_cases_file),
@@ -554,7 +556,7 @@ class TestReportRulePassRates:
     def test_report_distinct_rule_pass_rates(self, offline_env, tmp_path):
         """Report correctly renders all five rule pass rates with distinct values."""
         from evals import report
-        from evals.models import Run, JudgeVerdict
+        from evals.models import Run
 
         summary = RunSummary(
             case_count=10,
@@ -712,3 +714,91 @@ class TestWorst5Ordering:
         # Sorted by score: score 1 (idx 4), score 2 (idx 3), score 2 (idx 5), score 3 (idx 2), score 4 (idx 1), score 5 (idx 0)
         # Worst 5 (lowest 5) in ascending score order: [4, 3, 5, 2, 1]
         assert worst_cases == [4, 3, 5, 2, 1]
+
+
+def _report_fixture(status="completed", question="Short question", judged=True):
+    from evals.models import Run
+
+    summary = RunSummary(
+        case_count=1, graded_count=1 if judged else 0, error_count=0 if judged else 1,
+        mean_groundedness=3.0, mean_coverage=3.0, mean_score=3.0 if judged else 0.0,
+        rule_pass_rate=RulePassRate(completed=1.0, format=1.0, product_tag=1.0, citations=1.0, retrieval=1.0),
+        p50_latency_ms=1.0, p95_latency_ms=1.0, total_input_tokens=1, total_output_tokens=1,
+    )
+    run = Run(
+        label="manual", git_sha="abc1234", git_ref="main", app_model="m", judge_model="j",
+        cases_version=1, started_at=1, finished_at=2, status=status, summary=summary, regressions=[],
+    )
+    results = [
+        CaseResult(
+            case_id="c1", question=question, response="r", product_tag="Other", retrieved_urls=[],
+            rules={"completed": True, "format": True, "product_tag": True, "citations": True, "retrieval": True},
+            judge={"groundedness": 3, "coverage": 3, "key_points_missed": [], "reason": "OK"},
+            latency_ms=1, input_tokens=1, output_tokens=1,
+        )
+    ]
+    return run, results
+
+
+class TestReportPolish:
+    def test_ellipsis_only_for_long_questions(self):
+        from evals import report
+
+        run, results = _report_fixture(question="Short question")
+        assert "**Question**: Short question\n" in report.generate_report(run, results)
+
+        run, results = _report_fixture(question="x" * 81)
+        assert f"**Question**: {'x' * 80}...\n" in report.generate_report(run, results)
+
+        run, results = _report_fixture(question="y" * 80)
+        text = report.generate_report(run, results)
+        assert f"**Question**: {'y' * 80}\n" in text
+
+    def test_errored_run_shows_errored_note_not_no_baseline(self):
+        from evals import report
+
+        run, results = _report_fixture(status="errored", judged=False)
+        text = report.generate_report(run, [])
+        assert "Run errored — no cases graded, regression check skipped" in text
+        assert "No Baseline" not in text
+
+    def test_completed_run_without_baseline_still_says_no_baseline(self):
+        from evals import report
+
+        run, results = _report_fixture()
+        assert "No Baseline" in report.generate_report(run, results)
+
+
+class TestEnvAndGitFallbacks:
+    def test_empty_judge_model_falls_back(self, two_cases_file, offline_env, monkeypatch, tmp_path):
+        from evals.run import main
+
+        monkeypatch.setenv("JUDGE_MODEL", "")
+        main(label="manual", cases_file=str(two_cases_file), out_dir=str(tmp_path),
+             no_upload=True, dry_judge=True, concurrency=1)
+        with open(tmp_path / "run.json") as f:
+            assert json.load(f)["run"]["judgeModel"] == "deepseek-flash"
+
+    def test_git_preferred_over_github_env(self, two_cases_file, offline_env, monkeypatch, tmp_path):
+        from evals.run import main
+
+        monkeypatch.setenv("GITHUB_SHA", "envsha")
+        monkeypatch.setenv("GITHUB_REF_NAME", "envref")
+        with patch("evals.run._git_rev_parse", side_effect=lambda *a: "gitsha" if a == ("HEAD",) else "gitref"):
+            main(label="manual", cases_file=str(two_cases_file), out_dir=str(tmp_path),
+                 no_upload=True, dry_judge=True, concurrency=1)
+        with open(tmp_path / "run.json") as f:
+            run = json.load(f)["run"]
+        assert (run["gitSha"], run["gitRef"]) == ("gitsha", "gitref")
+
+    def test_github_env_used_when_git_fails(self, two_cases_file, offline_env, monkeypatch, tmp_path):
+        from evals.run import main
+
+        monkeypatch.setenv("GITHUB_SHA", "envsha")
+        monkeypatch.setenv("GITHUB_REF_NAME", "envref")
+        with patch("evals.run._git_rev_parse", return_value=None):
+            main(label="manual", cases_file=str(two_cases_file), out_dir=str(tmp_path),
+                 no_upload=True, dry_judge=True, concurrency=1)
+        with open(tmp_path / "run.json") as f:
+            run = json.load(f)["run"]
+        assert (run["gitSha"], run["gitRef"]) == ("envsha", "envref")
