@@ -239,7 +239,6 @@ class TestFindRegressions:
         (5, 4, 5, 4, False),
         (3, 3, 3, 3, False),
         (5, 4, 3, 3, True),
-        (5, 4, 3, 3, True),
     ])
     def test_mean_score_drop_boundary_cases(self, baseline_g, baseline_c, current_g, current_c, should_flag):
         """Test meanScoreDrop boundary: no drop is not flagged, large drop is flagged."""
@@ -545,3 +544,47 @@ class TestFindRegressions:
             else:
                 recent_best_drops = [r for r in regressions if r.kind == "recentBestDrop"]
                 assert len(recent_best_drops) == 1, f"Week {week_idx}: (e) should fire; recent_best={recent_best:.2f}, current={current_summary.mean_score:.2f}"
+
+    def test_mean_score_drop_exactly_0_3_not_flagged(self):
+        """Test that a mean drop of exactly 0.3 is NOT flagged (exercises round guard)."""
+        # Build baseline: 10 cases all with (5,4) → score=4.5, mean=4.5
+        baseline_cases = [
+            make_case_result(f"case-{i:03d}", judge=JudgeVerdict(groundedness=5, coverage=4, key_points_missed=[], reason="G"))
+            for i in range(1, 11)
+        ]
+        baseline_summary = summarize(baseline_cases)
+        assert baseline_summary.mean_score == 4.5
+
+        # Build current: 8 cases (5,4)=4.5, 2 cases (2,4)=3.0 → mean=4.2, drop=0.3
+        current_cases = [
+            make_case_result(f"case-{i:03d}", judge=JudgeVerdict(groundedness=5, coverage=4, key_points_missed=[], reason="G") if i <= 8 else JudgeVerdict(groundedness=2, coverage=4, key_points_missed=[], reason="C"))
+            for i in range(1, 11)
+        ]
+        current_summary = summarize(current_cases)
+        assert current_summary.mean_score == 4.2
+
+        regressions = find_regressions(current_cases, current_summary, (baseline_summary, baseline_cases), None)
+        mean_score_drops = [r for r in regressions if r.kind == "meanScoreDrop"]
+        assert len(mean_score_drops) == 0, "Mean drop of exactly 0.3 should NOT be flagged"
+
+    def test_recent_best_drop_exactly_0_5_not_flagged(self):
+        """Test that a drop exactly 0.5 below recent_best is NOT flagged (exercises round guard)."""
+        # Build current: 10 cases all with (4,5) → score=4.5, mean=4.5
+        current_cases = [
+            make_case_result(f"case-{i:03d}", judge=JudgeVerdict(groundedness=4, coverage=5, key_points_missed=[], reason="G"))
+            for i in range(1, 11)
+        ]
+        current_summary = summarize(current_cases)
+        assert current_summary.mean_score == 4.5
+
+        # Build baseline: 10 cases all with (5,5) → score=5.0, mean=5.0
+        baseline_cases = [
+            make_case_result(f"case-{i:03d}", judge=JudgeVerdict(groundedness=5, coverage=5, key_points_missed=[], reason="G"))
+            for i in range(1, 11)
+        ]
+        baseline_summary = summarize(baseline_cases)
+
+        recent_best = 5.0
+        regressions = find_regressions(current_cases, current_summary, (baseline_summary, baseline_cases), recent_best)
+        recent_best_drops = [r for r in regressions if r.kind == "recentBestDrop"]
+        assert len(recent_best_drops) == 0, "Recent best drop of exactly 0.5 should NOT be flagged"
