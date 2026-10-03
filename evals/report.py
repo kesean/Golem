@@ -61,14 +61,10 @@ def generate_report(
 
     # Rule pass rates
     lines.append("### Rule Pass Rates")
-    # Access rule_pass_rate fields using getattr (works for both dict and model)
+    # Access rule_pass_rate fields using getattr (RulePassRate model)
     rule_names = ["completed", "format", "product_tag", "citations", "retrieval"]
     for rule_name in rule_names:
-        if isinstance(summary.rule_pass_rate, dict):
-            rate = summary.rule_pass_rate.get(rule_name, 0.0)
-        else:
-            # It's a RulePassRate model; use getattr with snake_case field name
-            rate = getattr(summary.rule_pass_rate, rule_name, 0.0)
+        rate = getattr(summary.rule_pass_rate, rule_name, 0.0)
         lines.append(f"- **{rule_name}**: {rate * 100:.1f}%")
     lines.append("")
 

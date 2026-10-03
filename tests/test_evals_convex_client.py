@@ -9,13 +9,10 @@ Tests fetch_baseline and upload with mocked httpx, covering:
 - Upload with proper bearer token
 """
 
-import json
-import logging
 import os
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
-import httpx
 from evals.models import RulePassRate
 
 
@@ -110,6 +107,71 @@ def convex_baseline_doc():
             },
         ],
         "recentBestMeanScore": 4.5,
+    }
+
+
+@pytest.fixture
+def convex_baseline_doc_omitted_fields():
+    """A Convex baseline response with omitted optional fields (judge, productTag, judgeError)."""
+    return {
+        "run": {
+            "_id": "baseline-doc-id-omitted",
+            "_creationTime": 1696262400000,
+            "label": "scheduled",
+            "gitSha": "abc123",
+            "gitRef": "main",
+            "appModel": "claude-sonnet-5",
+            "judgeModel": "deepseek-flash",
+            "casesVersion": 1,
+            "startedAt": 1696262400000,
+            "finishedAt": 1696262430000,
+            "status": "completed",
+            "summary": {
+                "caseCount": 1,
+                "gradedCount": 0,
+                "errorCount": 1,
+                "meanGroundedness": 0.0,
+                "meanCoverage": 0.0,
+                "meanScore": 0.0,
+                "rulePassRate": {
+                    "completed": 0.0,
+                    "format": 0.0,
+                    "productTag": 0.0,
+                    "citations": 0.0,
+                    "retrieval": 0.0,
+                },
+                "p50LatencyMs": 500.0,
+                "p95LatencyMs": 500.0,
+                "totalInputTokens": 50,
+                "totalOutputTokens": 25,
+            },
+            "regressions": [],
+        },
+        "results": [
+            {
+                "_id": "result-omitted",
+                "runId": "baseline-doc-id-omitted",
+                "caseId": "case-error",
+                "question": "Test question",
+                "response": "",
+                # productTag omitted
+                "retrievedUrls": [],
+                "rules": {
+                    "completed": False,
+                    "format": False,
+                    "productTag": False,
+                    "citations": False,
+                    "retrieval": False,
+                },
+                # judge omitted
+                # judgeError omitted
+                "latencyMs": 500,
+                "inputTokens": 50,
+                "outputTokens": 25,
+                "error": "Pipeline error",
+            }
+        ],
+        "recentBestMeanScore": 0.0,
     }
 
 
@@ -296,6 +358,33 @@ class TestFetchBaseline:
         assert summary.mean_groundedness == 3.5
         assert summary.p50_latency_ms == 800.0
         assert summary.total_input_tokens == 1000
+
+    def test_fetch_baseline_omitted_optional_fields(self, convex_baseline_doc_omitted_fields):
+        """When judge, productTag, judgeError are omitted from Convex doc, they deserialize to None."""
+        from evals.convex_client import fetch_baseline
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = convex_baseline_doc_omitted_fields
+
+        env = {
+            "CONVEX_SITE_URL": "https://test.convex.cloud",
+            "EVAL_INGEST_SECRET": "test-secret",
+        }
+
+        with patch.dict(os.environ, env):
+            with patch("httpx.Client.get", return_value=mock_response):
+                result = fetch_baseline()
+
+        assert result is not None
+        summary, results, recent_best, baseline_run_id = result
+
+        # Check that omitted fields deserialize to None
+        assert len(results) == 1
+        assert results[0].product_tag is None
+        assert results[0].judge is None
+        assert results[0].judge_error is None
+        assert results[0].error == "Pipeline error"
 
 
 class TestUpload:
