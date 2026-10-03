@@ -117,30 +117,35 @@ def main(
         logger.error("No cases were graded (grader failure?). Marking run as errored.")
         status = "errored"
         exit_code = 1
+        # Skip regression detection for ungraded runs
+        baseline_summary = None
+        baseline_results = None
+        recent_best = None
+        baseline_run_id = None
+        regressions = []
     else:
         status = "completed"
         exit_code = 0
 
-    # Fetch baseline
-    baseline_info = convex_client.fetch_baseline()
-    baseline_run_id = None
+        # Fetch baseline
+        baseline_info = convex_client.fetch_baseline()
 
-    if baseline_info:
-        baseline_summary, baseline_results, recent_best = baseline_info
-        baseline_run_id = _extract_baseline_run_id(baseline_info)
-    else:
-        baseline_summary = None
-        baseline_results = None
-        recent_best = None
-        logger.info("No baseline available")
+        if baseline_info:
+            baseline_summary, baseline_results, recent_best, baseline_run_id = baseline_info
+        else:
+            baseline_summary = None
+            baseline_results = None
+            recent_best = None
+            baseline_run_id = None
+            logger.info("No baseline available")
 
-    # Detect regressions
-    baseline = (baseline_summary, baseline_results) if baseline_summary else None
-    regressions = find_regressions(results, summary, baseline, recent_best)
+        # Detect regressions
+        baseline = (baseline_summary, baseline_results) if baseline_summary else None
+        regressions = find_regressions(results, summary, baseline, recent_best)
 
-    if regressions:
-        logger.warning(f"Detected {len(regressions)} regression(s)")
-        exit_code = 2  # Override clean exit if regressions found
+        if regressions:
+            logger.warning(f"Detected {len(regressions)} regression(s)")
+            exit_code = 2  # Override clean exit if regressions found
 
     # Get git info
     git_sha = os.getenv("GITHUB_SHA") or _git_rev_parse("HEAD")
@@ -185,10 +190,8 @@ def main(
                 json.dump(payload_dict, f, indent=2)
             logger.info(f"Updated run.json with runId: {run_id}")
         else:
-            logger.warning("Upload failed; run not sent to Convex")
-            if status == "completed":
-                # Upload failure does not change exit code for completed runs
-                pass
+            logger.error("Upload failed; run not sent to Convex")
+            exit_code = 1  # Upload failure is a harness error
 
     # Generate and write report
     report_text = report.generate_report(
@@ -313,19 +316,13 @@ def _run_single_case(case: EvalCase, dry_judge: bool) -> CaseResult:
 
             error = None
         except Exception as e:
-            try:
-                logger.warning(f"Case {case.id} failed: {e}")
-            except:
-                pass
+            logger.warning(f"Case {case.id} failed: {e}")
             response_text = ""
             input_tokens = 0
             output_tokens = 0
             latency_ms = 0
             chunks = []
-            try:
-                error = str(e)
-            except:
-                error = "Unknown error"
+            error = str(e)
 
     # Evaluate rules
     rules = evaluate_rules(case, response_text, chunks, error)
@@ -385,20 +382,6 @@ def _fake_pipeline_response(case: EvalCase) -> str:
 <root_cause>This is a stub response</root_cause>
 <debug_steps>Not applicable in offline mode</debug_steps>
 {sources_text}"""
-
-
-def _extract_baseline_run_id(baseline_info: tuple) -> Optional[str]:
-    """Extract the baseline run ID from the fetch_baseline result."""
-    # The baseline_info is (summary, results, recent_best)
-    # We need to extract the run ID from the baseline results' _id field
-    # But that's not directly accessible from the results list.
-    # The spec says: "The baseline run's `_id` is the baselineRunId for the new payload."
-    # Since we get results from the Convex fetch_baseline endpoint, the runId should be
-    # carried through the response somehow. For now, return None and let the baseline
-    # be resolved by case ID matching in regression detection.
-    # TODO: When convex_client.fetch_baseline is updated to include the run ID,
-    # extract it here.
-    return None
 
 
 def _git_rev_parse(*args) -> str:

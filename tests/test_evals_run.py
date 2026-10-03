@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 import httpx
-from evals.models import EvalRunPayload, CaseResult, RunSummary
+from evals.models import EvalRunPayload, CaseResult, RunSummary, RulePassRate
 
 
 @pytest.fixture
@@ -70,7 +70,9 @@ class TestOfflineRun:
         report_file = tmp_path / "report.md"
         assert report_file.exists()
         report_text = report_file.read_text()
-        assert "Eval Run Report" in report_text or "Summary" in report_text.lower()
+        assert "# Eval Run Report" in report_text
+        assert "## Summary" in report_text
+        assert "Mean Score" in report_text
 
     def test_offline_run_writes_files(self, two_cases_file, offline_env, tmp_path):
         """Offline run writes both run.json and report.md."""
@@ -205,14 +207,12 @@ class TestUploadCall:
         """When --no-upload is passed, upload is not called."""
         from evals.run import main
 
-        mock_post = Mock()
-
         env = {
             "EVAL_FAKE_PIPELINE": "1",
         }
 
         with patch.dict(os.environ, env, clear=False):
-            with patch("httpx.Client.post", mock_post) as patched:
+            with patch("evals.run.convex_client.upload") as mock_upload:
                 exit_code = main(
                     label="manual",
                     cases_file=str(two_cases_file),
@@ -223,9 +223,33 @@ class TestUploadCall:
                 )
 
                 # Should not be called
-                assert not patched.called
+                assert not mock_upload.called
 
         assert exit_code == 0
+
+    def test_upload_failure_exits_1(self, two_cases_file, offline_env, tmp_path):
+        """When upload is requested but fails, exit code is 1."""
+        from evals.run import main
+
+        env = {
+            "EVAL_FAKE_PIPELINE": "1",
+            "CONVEX_SITE_URL": "https://fake.convex.cloud",
+            "EVAL_INGEST_SECRET": "fake-secret",
+        }
+
+        with patch.dict(os.environ, env, clear=False):
+            with patch("evals.run.convex_client.upload", return_value=None):
+                exit_code = main(
+                    label="manual",
+                    cases_file=str(two_cases_file),
+                    out_dir=str(tmp_path),
+                    no_upload=False,
+                    dry_judge=True,
+                    concurrency=1,
+                )
+
+        # Should exit with 1 (harness error) due to upload failure
+        assert exit_code == 1
 
 
 class TestRegressionDetection:
@@ -276,13 +300,13 @@ class TestRegressionDetection:
             mean_groundedness=5.0,
             mean_coverage=5.0,
             mean_score=5.0,
-            rule_pass_rate={
-                "completed": 1.0,
-                "format": 1.0,
-                "product_tag": 1.0,
-                "citations": 1.0,
-                "retrieval": 1.0,
-            },
+            rule_pass_rate=RulePassRate(
+                completed=1.0,
+                format=1.0,
+                product_tag=1.0,
+                citations=1.0,
+                retrieval=1.0,
+            ),
             p50_latency_ms=1000.0,
             p95_latency_ms=1000.0,
             total_input_tokens=100,
@@ -292,7 +316,7 @@ class TestRegressionDetection:
         with patch.dict(os.environ, env, clear=False):
             with patch(
                 "evals.run.convex_client.fetch_baseline",
-                return_value=(fake_baseline_summary, fake_baseline_results, 5.0),
+                return_value=(fake_baseline_summary, fake_baseline_results, 5.0, "fake-baseline-run-id"),
             ):
                 exit_code = main(
                     label="manual",
@@ -343,3 +367,79 @@ class TestUngradedRun:
             payload = json.load(f)
         assert payload["run"]["status"] == "errored"
         assert payload["run"]["summary"]["gradedCount"] == 0
+
+    def test_exit_1_ungraded_skips_regressions(self, two_cases_file, offline_env, tmp_path):
+        """When graded_count == 0, skip regression detection (regressions should be empty)."""
+        from evals.run import main
+        from unittest.mock import patch
+
+        env = {
+            "EVAL_FAKE_PIPELINE": "1",
+            "CONVEX_SITE_URL": "https://fake.convex.cloud",
+            "EVAL_INGEST_SECRET": "fake-secret",
+        }
+
+        # Mock judge_case to always fail
+        def mock_judge_case(*args, **kwargs):
+            return None, "simulated_error"
+
+        # Mock fetch_baseline to return a high-score baseline (would normally cause regression)
+        fake_baseline_summary = RunSummary(
+            case_count=1,
+            graded_count=1,
+            error_count=0,
+            mean_groundedness=5.0,
+            mean_coverage=5.0,
+            mean_score=5.0,
+            rule_pass_rate=RulePassRate(
+                completed=1.0,
+                format=1.0,
+                product_tag=1.0,
+                citations=1.0,
+                retrieval=1.0,
+            ),
+            p50_latency_ms=1000.0,
+            p95_latency_ms=1000.0,
+            total_input_tokens=100,
+            total_output_tokens=50,
+        )
+
+        fake_baseline_results = [
+            CaseResult(
+                case_id="clerk-auth-sessions-test-001",
+                question="How do I create a session?",
+                response="stub",
+                product_tag="Authentication",
+                retrieved_urls=["https://clerk.com"],
+                rules={"completed": True, "format": True, "product_tag": True, "citations": True, "retrieval": True},
+                judge={"groundedness": 5, "coverage": 5, "key_points_missed": [], "reason": "Perfect."},
+                latency_ms=1000,
+                input_tokens=100,
+                output_tokens=50,
+            )
+        ]
+
+        with patch.dict(os.environ, env, clear=False):
+            with patch("evals.run.judge_case", side_effect=mock_judge_case):
+                with patch(
+                    "evals.run.convex_client.fetch_baseline",
+                    return_value=(fake_baseline_summary, fake_baseline_results, 5.0, "fake-baseline-id"),
+                ):
+                    exit_code = main(
+                        label="manual",
+                        cases_file=str(two_cases_file),
+                        out_dir=str(tmp_path),
+                        no_upload=True,
+                        dry_judge=False,
+                        concurrency=1,
+                    )
+
+        # Should exit with 1 (ungraded, not 2 from regressions)
+        assert exit_code == 1
+
+        # Check that regressions list is empty (regression detection skipped)
+        run_file = tmp_path / "run.json"
+        with open(run_file) as f:
+            payload = json.load(f)
+        assert payload["run"]["status"] == "errored"
+        assert payload["run"]["regressions"] == []

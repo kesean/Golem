@@ -11,17 +11,18 @@ import os
 from typing import Optional
 
 import httpx
-from evals.models import EvalRunPayload, RunSummary, CaseResult
+from evals.models import EvalRunPayload, RunSummary, CaseResult, RulePassRate
 
 logger = logging.getLogger(__name__)
 
 
-def fetch_baseline() -> Optional[tuple[RunSummary, list[CaseResult], Optional[float]]]:
+def fetch_baseline() -> Optional[tuple[RunSummary, list[CaseResult], Optional[float], Optional[str]]]:
     """
     Fetch the latest scheduled baseline run from Convex.
 
     Returns:
-        (baseline_summary, baseline_results, recent_best_mean_score) or None if no baseline.
+        (baseline_summary, baseline_results, recent_best_mean_score, baseline_run_id) or None if no baseline.
+        baseline_run_id is the Convex doc's _id (used for baselineRunId in new run).
 
     Logs a warning and returns None if fetch fails or endpoint is not configured.
     """
@@ -70,6 +71,9 @@ def fetch_baseline() -> Optional[tuple[RunSummary, list[CaseResult], Optional[fl
                 logger.warning("Baseline response missing run field")
                 return None
 
+            # Extract baseline run ID (_id is the Convex doc ID)
+            baseline_run_id = run.get("_id")
+
             # Strip Convex system fields (_id, _creationTime) and deserialize
             baseline_summary = _deserialize_run_summary(run.get("summary", {}))
             baseline_results = [_deserialize_case_result(r) for r in results]
@@ -78,7 +82,7 @@ def fetch_baseline() -> Optional[tuple[RunSummary, list[CaseResult], Optional[fl
                 f"Fetched baseline: {len(baseline_results)} results, "
                 f"mean score {baseline_summary.mean_score:.2f}"
             )
-            return baseline_summary, baseline_results, recent_best
+            return baseline_summary, baseline_results, recent_best, baseline_run_id
 
     except httpx.HTTPError as e:
         logger.warning(f"Baseline fetch HTTP error: {e}")
@@ -148,8 +152,18 @@ def upload(payload: EvalRunPayload) -> Optional[str]:
 
 
 def _deserialize_run_summary(data: dict) -> RunSummary:
-    """Deserialize a run summary from Convex JSON (snake_case to snake_case)."""
+    """Deserialize a run summary from Convex JSON (camelCase to snake_case)."""
     # Convex returns camelCase; pydantic model expects snake_case
+    rule_pass_rate_data = data.get("rulePassRate", {})
+    # Convert camelCase rulePassRate dict to RulePassRate model
+    rule_pass_rate = RulePassRate(
+        completed=float(rule_pass_rate_data.get("completed", 0.0)),
+        format=float(rule_pass_rate_data.get("format", 0.0)),
+        product_tag=float(rule_pass_rate_data.get("productTag", 0.0)),
+        citations=float(rule_pass_rate_data.get("citations", 0.0)),
+        retrieval=float(rule_pass_rate_data.get("retrieval", 0.0)),
+    )
+
     return RunSummary(
         case_count=int(data.get("caseCount", 0)),
         graded_count=int(data.get("gradedCount", 0)),
@@ -157,7 +171,7 @@ def _deserialize_run_summary(data: dict) -> RunSummary:
         mean_groundedness=float(data.get("meanGroundedness", 0.0)),
         mean_coverage=float(data.get("meanCoverage", 0.0)),
         mean_score=float(data.get("meanScore", 0.0)),
-        rule_pass_rate=data.get("rulePassRate", {}),
+        rule_pass_rate=rule_pass_rate,
         p50_latency_ms=float(data.get("p50LatencyMs", 0.0)),
         p95_latency_ms=float(data.get("p95LatencyMs", 0.0)),
         total_input_tokens=int(data.get("totalInputTokens", 0)),
