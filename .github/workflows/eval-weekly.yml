@@ -20,10 +20,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -51,22 +53,26 @@ jobs:
           path: eval-out/
           if-no-files-found: warn
 
-      - name: Notify on regression
-        if: steps.run.outputs.exit_code == '2' || steps.run.outputs.exit_code == '1'
+      - name: Notify on regression or error
+        if: steps.run.outputs.exit_code != '0'
         run: |
           ARGS=(
             --run eval-out/run.json
             --run-url "$RUN_URL"
           )
-          if [ "$EXIT_CODE" = "1" ]; then
+          if [ "$EXIT_CODE" != "2" ]; then
             ARGS+=(--harness-error)
+          fi
+          if [ -n "$DASHBOARD_URL" ]; then
+            ARGS+=(--dashboard-url "$DASHBOARD_URL")
           fi
           python -m evals.notify "${ARGS[@]}"
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           EXIT_CODE: ${{ steps.run.outputs.exit_code }}
+          DASHBOARD_URL: ${{ vars.EVALS_DASHBOARD_URL }}
 
       - name: Fail on harness error
-        if: steps.run.outputs.exit_code == '1'
+        if: steps.run.outputs.exit_code != '0' && steps.run.outputs.exit_code != '2'
         run: exit 1
