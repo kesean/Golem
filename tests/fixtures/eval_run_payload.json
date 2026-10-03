@@ -1,0 +1,136 @@
+{
+  "run": {
+    "label": "manual",
+    "gitSha": "abc123",
+    "gitRef": "refs/heads/main",
+    "appModel": "claude-sonnet-5",
+    "judgeModel": "deepseek-flash",
+    "casesVersion": 1,
+    "startedAt": 1700000000000,
+    "finishedAt": 1700000001000,
+    "status": "completed",
+    "summary": {
+      "caseCount": 3,
+      "gradedCount": 1,
+      "errorCount": 1,
+      "meanGroundedness": 4.0,
+      "meanCoverage": 3.0,
+      "meanScore": 3.5,
+      "rulePassRate": {
+        "completed": 0.3333333333333333,
+        "format": 0.3333333333333333,
+        "productTag": 1.0,
+        "citations": 0.3333333333333333,
+        "retrieval": 0.3333333333333333
+      },
+      "p50LatencyMs": 106.0,
+      "p95LatencyMs": 106.0,
+      "totalInputTokens": 30,
+      "totalOutputTokens": 15
+    },
+    "regressions": [
+      {
+        "kind": "meanScoreDrop",
+        "baseline": 4.0,
+        "current": 3.5
+      },
+      {
+        "kind": "ruleFlip",
+        "caseId": "case-a",
+        "rule": "productTag"
+      },
+      {
+        "kind": "caseScoreDrop",
+        "caseId": "case-a",
+        "baseline": 4.5,
+        "current": 2.5
+      },
+      {
+        "kind": "errorRate",
+        "errorCount": 1,
+        "caseCount": 3
+      },
+      {
+        "kind": "recentBestDrop",
+        "recentBest": 4.5,
+        "current": 3.5
+      }
+    ],
+    "baselineRunId": null
+  },
+  "results": [
+    {
+      "caseId": "case-a",
+      "question": "Q case-a",
+      "response": "A",
+      "productTag": "Authentication",
+      "retrievedUrls": [
+        "https://clerk.com/docs"
+      ],
+      "rules": {
+        "completed": true,
+        "format": true,
+        "productTag": true,
+        "citations": true,
+        "retrieval": true
+      },
+      "judge": {
+        "groundedness": 4,
+        "coverage": 3,
+        "keyPointsMissed": [
+          "x"
+        ],
+        "reason": "ok"
+      },
+      "judgeError": null,
+      "latencyMs": 106,
+      "inputTokens": 10,
+      "outputTokens": 5,
+      "error": null
+    },
+    {
+      "caseId": "case-b",
+      "question": "Q case-b",
+      "response": "A",
+      "productTag": null,
+      "retrievedUrls": [
+        "https://clerk.com/docs"
+      ],
+      "rules": {
+        "completed": false,
+        "format": false,
+        "productTag": true,
+        "citations": false,
+        "retrieval": false
+      },
+      "judge": null,
+      "judgeError": null,
+      "latencyMs": 106,
+      "inputTokens": 10,
+      "outputTokens": 5,
+      "error": null
+    },
+    {
+      "caseId": "case-c",
+      "question": "Q case-c",
+      "response": "A",
+      "productTag": null,
+      "retrievedUrls": [
+        "https://clerk.com/docs"
+      ],
+      "rules": {
+        "completed": false,
+        "format": false,
+        "productTag": true,
+        "citations": false,
+        "retrieval": false
+      },
+      "judge": null,
+      "judgeError": null,
+      "latencyMs": 106,
+      "inputTokens": 10,
+      "outputTokens": 5,
+      "error": "Timeout"
+    }
+  ]
+}

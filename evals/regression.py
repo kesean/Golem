@@ -4,7 +4,7 @@ Summary computation and regression detection for eval runs.
 
 import math
 from evals.models import (
-    CaseResult, RunSummary, Regression,
+    CaseResult, RunSummary, Regression, RuleResults, RulePassRate,
     MeanScoreDrop, RuleFlip, CaseScoreDrop, ErrorRate, RecentBestDrop,
 )
 
@@ -13,6 +13,11 @@ MEAN_SCORE_DROP = 0.3
 CASE_SCORE_DROP = 2
 MAX_ERROR_RATE = 0.2
 RECENT_BEST_DROP = 0.5
+
+# (python field name, camelCase wire name) derived once from RuleResults
+_RULES: dict[str, str] = {
+    name: (info.alias or name) for name, info in RuleResults.model_fields.items()
+}
 
 
 def summarize(results: list[CaseResult]) -> RunSummary:
@@ -41,8 +46,7 @@ def summarize(results: list[CaseResult]) -> RunSummary:
 
     # Compute rule pass rates over all cases
     rule_pass_rate = {}
-    rule_names = ["completed", "format", "product_tag", "citations", "retrieval"]
-    for rule_name in rule_names:
+    for rule_name in _RULES:
         passes = sum(1 for r in results if getattr(r.rules, rule_name, False))
         rate = passes / case_count if case_count > 0 else 0.0
         rule_pass_rate[rule_name] = rate
@@ -76,7 +80,7 @@ def summarize(results: list[CaseResult]) -> RunSummary:
         mean_groundedness=mean_groundedness,
         mean_coverage=mean_coverage,
         mean_score=mean_score,
-        rule_pass_rate=rule_pass_rate,
+        rule_pass_rate=RulePassRate(**rule_pass_rate),
         p50_latency_ms=p50_latency_ms,
         p95_latency_ms=p95_latency_ms,
         total_input_tokens=total_input_tokens,
@@ -94,13 +98,16 @@ def find_regressions(
     Detect regressions in the current run compared to the baseline.
 
     Regression kinds:
-    (a) meanScoreDrop: mean judge score drops by more than 0.3
+    (a) meanScoreDrop: mean judge score drops by more than 0.3. Skipped when the
+        current or baseline run has no graded cases (mean 0.0 is not a real score).
     (b) ruleFlip: a rule check that passed for a case in baseline fails now. Checks
-        every case present in both runs regardless of grading status.
+        every case present in both runs regardless of grading status. If the
+        current case errored, only the 'completed' rule is reported (an error
+        forces all rules false). Rule values are camelCase wire names.
     (c) caseScoreDrop: a case's judge score drops by >= 2. Requires both runs graded.
     (d) errorRate: more than 20% of cases error
     (e) recentBestDrop: mean score is more than 0.5 below recent_best. Skipped if
-        recent_best is None.
+        recent_best is None or the current run has no graded cases.
 
     When there is no baseline, regressions are empty, including (d) and (e).
     """
@@ -116,7 +123,11 @@ def find_regressions(
 
     # (a) meanScoreDrop: drop by more than 0.3
     # Use rounded difference to avoid floating-point precision issues
-    if round(baseline_summary.mean_score - summary.mean_score, 9) > MEAN_SCORE_DROP:
+    if (
+        summary.graded_count > 0
+        and baseline_summary.graded_count > 0
+        and round(baseline_summary.mean_score - summary.mean_score, 9) > MEAN_SCORE_DROP
+    ):
         regressions.append(
             MeanScoreDrop(
                 kind="meanScoreDrop",
@@ -134,8 +145,9 @@ def find_regressions(
             continue
 
         # Check each rule
-        rule_names = ["completed", "format", "product_tag", "citations", "retrieval"]
-        for rule_name in rule_names:
+        # An errored case short-circuits every rule to false; report only 'completed'
+        rules_to_check = ["completed"] if current_case.error is not None else list(_RULES)
+        for rule_name in rules_to_check:
             baseline_passed = getattr(baseline_case.rules, rule_name, False)
             current_passed = getattr(current_case.rules, rule_name, False)
 
@@ -144,7 +156,7 @@ def find_regressions(
                     RuleFlip(
                         kind="ruleFlip",
                         case_id=case_id,
-                        rule=rule_name,
+                        rule=_RULES[rule_name],
                     )
                 )
 
@@ -183,7 +195,7 @@ def find_regressions(
 
     # (e) recentBestDrop: mean score more than 0.5 below recent_best
     # Use rounded difference to avoid floating-point precision issues
-    if recent_best is not None and round(recent_best - summary.mean_score, 9) > RECENT_BEST_DROP:
+    if recent_best is not None and summary.graded_count > 0 and round(recent_best - summary.mean_score, 9) > RECENT_BEST_DROP:
         regressions.append(
             RecentBestDrop(
                 kind="recentBestDrop",

@@ -61,6 +61,18 @@ class RuleResults(BaseEvalModel):
     retrieval: bool
 
 
+RuleName = Literal['completed', 'format', 'productTag', 'citations', 'retrieval']
+
+
+class RulePassRate(BaseEvalModel):
+    """Per-rule pass rates (same fields as RuleResults, so aliases apply)."""
+    completed: float
+    format: float
+    product_tag: float
+    citations: float
+    retrieval: float
+
+
 class JudgeVerdict(BaseEvalModel):
     """LLM grader output."""
     groundedness: Literal[1, 2, 3, 4, 5]
@@ -93,7 +105,7 @@ class RunSummary(BaseEvalModel):
     mean_groundedness: float
     mean_coverage: float
     mean_score: float
-    rule_pass_rate: dict[str, float]
+    rule_pass_rate: RulePassRate
     p50_latency_ms: float
     p95_latency_ms: float
     total_input_tokens: int
@@ -110,7 +122,7 @@ class MeanScoreDrop(BaseEvalModel):
 class RuleFlip(BaseEvalModel):
     kind: Literal['ruleFlip']
     case_id: str
-    rule: str
+    rule: RuleName
 
 
 class CaseScoreDrop(BaseEvalModel):

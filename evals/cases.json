@@ -183,7 +183,7 @@
       "category": "limits-config"
     },
     {
-      "id": "limits-keepalive-connections-001",
+      "id": "limits-page-unload-analytics-001",
       "question": "How do I send analytics or logs to my server when the user closes the page?",
       "expectedProductTag": "Performance",
       "keyPoints": ["Use fetch with keepalive: true to let the request outlive the page on unload", "The keepalive body has a ~64KiB size limit across all pending requests", "sendBeacon() API is an alternative for small metrics (≤64KiB total)"],

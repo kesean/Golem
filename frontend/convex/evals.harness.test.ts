@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { expect, test, beforeEach, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -634,4 +636,31 @@ test("POST /evals/runs handles results with optional error field", async () => {
       .collect()
   );
   expect(results[0].error).toBe("Some error occurred");
+});
+
+// ── Python contract ────────────────────────────────────────────────────────
+
+test("POST /evals/runs accepts the Python-generated contract fixture", async () => {
+  const t = convexTest(schema, modules);
+  const fixturePath = resolve(__dirname, "../../tests/fixtures/eval_run_payload.json");
+  const raw = readFileSync(fixturePath, "utf-8");
+  const fixture = JSON.parse(raw);
+
+  const response = await t.fetch("/evals/runs", {
+    method: "POST",
+    body: raw,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer test-secret",
+    },
+  });
+  expect(response.status).toBe(200);
+
+  const runs = await t.run(async (ctx) => ctx.db.query("evalRuns").collect());
+  const results = await t.run(async (ctx) => ctx.db.query("evalResults").collect());
+  expect(runs.length).toBe(1);
+  expect(results.length).toBe(fixture.results.length);
+  expect(runs[0].summary.rulePassRate.productTag).toBe(
+    fixture.run.summary.rulePassRate.productTag
+  );
 });

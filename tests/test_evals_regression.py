@@ -4,7 +4,7 @@ Tests for regression detection and summary computation.
 
 import pytest
 from evals.models import (
-    CaseResult, JudgeVerdict, RuleResults, RunSummary,
+    CaseResult, JudgeVerdict, RuleResults, RulePassRate, RunSummary,
     MeanScoreDrop, RuleFlip, CaseScoreDrop, ErrorRate, RecentBestDrop,
 )
 from evals.regression import summarize, find_regressions
@@ -92,12 +92,12 @@ class TestSummarize:
         assert summary.p95_latency_ms == 150.0
         assert summary.total_input_tokens == 100
         assert summary.total_output_tokens == 50
-        assert summary.rule_pass_rate == {
-            "completed": 1.0,
-            "format": 1.0,
-            "product_tag": 1.0,
-            "citations": 1.0,
-            "retrieval": 1.0,
+        assert summary.rule_pass_rate == RulePassRate(
+            completed=1.0, format=1.0, product_tag=1.0, citations=1.0, retrieval=1.0,
+        )
+        dumped = summary.model_dump(by_alias=True, mode="json")
+        assert set(dumped["rulePassRate"]) == {
+            "completed", "format", "productTag", "citations", "retrieval",
         }
 
     def test_multiple_graded_cases(self):
@@ -150,11 +150,11 @@ class TestSummarize:
 
         summary = summarize(cases)
 
-        assert summary.rule_pass_rate["completed"] == 1.0
-        assert summary.rule_pass_rate["format"] == 2.0 / 3.0
-        assert summary.rule_pass_rate["product_tag"] == 1.0
-        assert summary.rule_pass_rate["citations"] == 2.0 / 3.0
-        assert summary.rule_pass_rate["retrieval"] == 1.0
+        assert summary.rule_pass_rate.completed == 1.0
+        assert summary.rule_pass_rate.format == 2.0 / 3.0
+        assert summary.rule_pass_rate.product_tag == 1.0
+        assert summary.rule_pass_rate.citations == 2.0 / 3.0
+        assert summary.rule_pass_rate.retrieval == 1.0
 
     def test_all_errors(self):
         """Test summarize with all cases errored."""
@@ -415,7 +415,7 @@ class TestFindRegressions:
         baseline_summary = RunSummary(
             case_count=1, graded_count=1, error_count=0,
             mean_groundedness=4.0, mean_coverage=4.0, mean_score=4.0,
-            rule_pass_rate={"completed": 1.0, "format": 1.0, "product_tag": 1.0, "citations": 1.0, "retrieval": 1.0},
+            rule_pass_rate=RulePassRate(completed=1.0, format=1.0, product_tag=1.0, citations=1.0, retrieval=1.0),
             p50_latency_ms=100.0, p95_latency_ms=100.0,
             total_input_tokens=100, total_output_tokens=50,
         )
@@ -463,7 +463,7 @@ class TestFindRegressions:
         baseline_summary = RunSummary(
             case_count=1, graded_count=1, error_count=0,
             mean_groundedness=4.0, mean_coverage=4.0, mean_score=4.0,
-            rule_pass_rate={"completed": 1.0, "format": 1.0, "product_tag": 1.0, "citations": 1.0, "retrieval": 1.0},
+            rule_pass_rate=RulePassRate(completed=1.0, format=1.0, product_tag=1.0, citations=1.0, retrieval=1.0),
             p50_latency_ms=100.0, p95_latency_ms=100.0,
             total_input_tokens=100, total_output_tokens=50,
         )
@@ -588,3 +588,44 @@ class TestFindRegressions:
         regressions = find_regressions(current_cases, current_summary, (baseline_summary, baseline_cases), recent_best)
         recent_best_drops = [r for r in regressions if r.kind == "recentBestDrop"]
         assert len(recent_best_drops) == 0, "Recent best drop of exactly 0.5 should NOT be flagged"
+
+
+GOOD = dict(groundedness=4, coverage=4, key_points_missed=[], reason="Good")
+
+
+class TestFinalReviewFixes:
+    def test_rule_flip_uses_camel_case_name(self):
+        current = [make_case_result("c1", rules=make_rule_results(product_tag=False), judge=JudgeVerdict(**GOOD))]
+        baseline = [make_case_result("c1", judge=JudgeVerdict(**GOOD))]
+        regs = find_regressions(current, summarize(current), (summarize(baseline), baseline), None)
+        flips = [r for r in regs if r.kind == "ruleFlip"]
+        assert [f.rule for f in flips] == ["productTag"]
+        assert flips[0].model_dump(by_alias=True, mode="json")["rule"] == "productTag"
+
+    def test_errored_case_emits_only_completed_flip(self):
+        current = [make_case_result(
+            "c1",
+            rules=make_rule_results(completed=False, format=False, product_tag=False, citations=False, retrieval=False),
+            error="Timeout", judge=None,
+        )]
+        baseline = [make_case_result("c1", judge=JudgeVerdict(**GOOD))]
+        regs = find_regressions(current, summarize(current), (summarize(baseline), baseline), None)
+        assert [r.rule for r in regs if r.kind == "ruleFlip"] == ["completed"]
+
+    def test_ungraded_current_run_skips_mean_score_drop_and_recent_best(self):
+        current = [make_case_result("c1").model_copy(update={"judge": None})]
+        current_summary = summarize(current)
+        assert current_summary.graded_count == 0
+        baseline = [make_case_result("c1", judge=JudgeVerdict(**GOOD))]
+        regs = find_regressions(current, current_summary, (summarize(baseline), baseline), 4.5)
+        kinds = {r.kind for r in regs}
+        assert "meanScoreDrop" not in kinds
+        assert "recentBestDrop" not in kinds
+
+    def test_ungraded_baseline_skips_mean_score_drop(self):
+        current = [make_case_result("c1", judge=JudgeVerdict(groundedness=1, coverage=1, key_points_missed=[], reason="Bad"))]
+        baseline = [make_case_result("c1").model_copy(update={"judge": None})]
+        baseline_summary = summarize(baseline)
+        assert baseline_summary.graded_count == 0
+        regs = find_regressions(current, summarize(current), (baseline_summary, baseline), None)
+        assert "meanScoreDrop" not in {r.kind for r in regs}
