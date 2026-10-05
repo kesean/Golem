@@ -88,6 +88,62 @@ cd frontend && npm test
 cd frontend && npm run test:e2e
 ```
 
+**5. Running evals** (optional)
+
+Run the V3a eval harness to measure answer quality against a fixed test set. Each case is scored by rule checks and an LLM grader, and compared to the baseline from the latest scheduled run.
+
+```bash
+# First, set env vars (evals/ does not auto-load .env):
+set -a; source .env; set +a
+
+# Run all eval cases, upload results, and print a report to stdout
+# Requires: DEEPSEEK_API_KEY, CONVEX_SITE_URL, EVAL_INGEST_SECRET
+make eval
+
+# Run offline (stubbed pipeline and grader, no uploads)
+EVAL_FAKE_PIPELINE=1 python -m evals.run --cases evals/fixtures/two_cases.json --no-upload --dry-judge
+
+# Run without uploading to Convex
+# If CONVEX_SITE_URL or EVAL_INGEST_SECRET are not set, skips baseline fetch and continues
+python -m evals.run --no-upload
+
+# Exit codes
+#   0: clean run, no regressions
+#   1: harness error (no case could be graded, upload failure, crash)
+#   2: regressions detected (CI job succeeds but opens a regression issue)
+#
+# Weekly workflow: exit codes other than 0 or 2 fail the job and open a harness-error issue
+```
+
+**One-time setup for evals** (after cloning):
+
+Set GitHub secrets for the weekly eval workflow (`.github/workflows/eval-weekly.yml`):
+- `DEEPSEEK_API_KEY` — for the LLM grader (DeepSeek Flash)
+- `CONVEX_SITE_URL` — HTTP Actions URL shown in the Convex dashboard deployment settings (format: `https://<deployment>.convex.site`)
+- `EVAL_INGEST_SECRET` — for authenticating uploads to Convex; generate with `openssl rand -hex 32`
+- Plus the existing secrets: `ANTHROPIC_API_KEY`, `QDRANT_URL`, `QDRANT_API_KEY`, `VOYAGE_API_KEY`
+
+Set GitHub repository variables (Settings → Variables):
+- `EVALS_DASHBOARD_URL` (optional) — link added to regression issues; e.g., `https://your-golem-app.vercel.app/evals`
+
+Set Convex environment variables (use `--prod` for the deployment the weekly CI run uploads to):
+
+```bash
+# Set the eval ingest secret (same value as the GitHub secret)
+npx convex env set --prod EVAL_INGEST_SECRET <generated-secret>
+
+# Set the admin user list — comma-separated Clerk tokenIdentifiers in the format: <issuer URL>|<user id>
+# Example: https://your-app.clerk.accounts.dev|user_2abc...
+# To find your tokenIdentifier: temporarily add console.log((await ctx.auth.getUserIdentity())?.tokenIdentifier)
+# to a Convex query, sign in, and check the Convex dashboard Logs tab
+npx convex env set --prod EVAL_ADMIN_IDS "https://your-app.clerk.accounts.dev|user_abc123,https://your-app.clerk.accounts.dev|user_def456"
+```
+
+**Notes:**
+
+- Estimated cost per run (weekly at off-peak): about **$0.44** per 30-case run ≈ **$1.90/month** (to be updated after first real run).
+- GitHub disables scheduled workflows on public repos after 60 days of no repo activity. Check workflow status with `gh workflow view eval-weekly.yml` and re-enable if needed: `gh workflow enable eval-weekly.yml`.
+
 ## Deploying
 
 The frontend deploys to Vercel. All deployment operations are managed from the repo root via `make`.
@@ -337,7 +393,22 @@ Planned phases, built one at a time in this order. Each phase starts with a spec
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| V3a — Eval harness | A versioned set of test questions graded automatically (rule checks plus a low-cost LLM grader for groundedness and coverage), run weekly with run-to-run comparison and an auto-opened GitHub issue on regression, so every later change is measurable | 📝 Spec in progress |
+| V3a — Eval harness | A versioned set of test questions graded automatically (rule checks plus a low-cost LLM grader for groundedness and coverage), run weekly with run-to-run comparison and an auto-opened GitHub issue on regression, so every later change is measurable | ✅ Done |
 | V3b — Deeper AI features | Diagnose pasted stack traces and HTTP logs, inline citations linked to the exact retrieved passage, follow-up suggestions, live tool calls | ⏳ Planned |
 | V3c — Agent harness / MCP | Expose Golem as an MCP server or Agent SDK tool so coding agents can get grounded debugging answers, with machine-client auth and per-client usage limits | ⏳ Planned |
 | V3d — Distinctive UI redesign | A visual identity that doesn't look generated: type, colour, and layout for the answer page, plus a landing/demo page | ⏳ Planned |
+
+### V3a — Eval harness
+
+| Feature | Status |
+|---------|--------|
+| Test set: 30 hand-written cases covering Clerk auth, web platform (CORS/fetch/streaming), rate limits, injection defense | ✅ Done |
+| Run all cases through the production pipeline (`chat.stream_run` in-process, no `/ask` rate limit) | ✅ Done |
+| Rule checks: completed, format, product tag, citations, retrieval | ✅ Done |
+| LLM grader (DeepSeek Flash): groundedness and coverage (1–5), with retry on invalid JSON | ✅ Done |
+| Regression detection: mean score drop (>0.3), rule flips, case score drop (≥2), error rate (>20%), slow 8-week decline | ✅ Done |
+| Convex storage: `evalRuns` and `evalResults` tables with authenticated HTTP POST and GET endpoints | ✅ Done |
+| Local run: `make eval` with `--no-upload`, `--dry-judge`, `EVAL_FAKE_PIPELINE=1` for offline testing | ✅ Done |
+| Scheduled run: weekly cron (Sunday 06:00 UTC) with `workflow_dispatch` trigger; stored and artifacted | ✅ Done |
+| GitHub alerting: auto-open or comment on `eval-regression` issue with summary and regression details | ✅ Done |
+| Admin dashboard (`/evals`): trend chart (26 weeks), run list, case details with grader reason and score deltas | ✅ Done |
