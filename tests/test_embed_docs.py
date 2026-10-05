@@ -91,3 +91,25 @@ def test_check_canonical_urls_flags_unmappable_paths():
 def test_check_canonical_urls_all_real_sources_map():
     from scripts.embed_docs import SOURCES, check_canonical_urls
     assert check_canonical_urls(SOURCES) == []
+
+
+# --- invoked as a script (how CI and the docstring run it) ---
+
+def test_validate_only_runs_by_path_from_another_cwd(tmp_path):
+    """`python scripts/embed_docs.py` must resolve repo-root imports like `retrieval`.
+
+    In-process tests put the repo root on sys.path, which hid this once already.
+    Network calls are forced to fail fast via a dead proxy; only imports matter here.
+    """
+    import subprocess
+
+    script = os.path.join(os.path.dirname(__file__), "..", "scripts", "embed_docs.py")
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    env.update(HTTPS_PROXY="http://127.0.0.1:9", HTTP_PROXY="http://127.0.0.1:9", GITHUB_TOKEN="x")
+    result = subprocess.run(
+        [sys.executable, script, "--validate-only"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60,
+    )
+    output = result.stdout + result.stderr
+    assert "No module named" not in output
+    assert "No canonical URL" not in output

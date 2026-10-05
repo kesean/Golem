@@ -14,9 +14,9 @@ jobs:
       ANTHROPIC_API_KEY: test-key-placeholder
       CLERK_JWKS_URL: https://test.clerk.dev/.well-known/jwks.json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -30,15 +30,19 @@ jobs:
     name: Frontend (vitest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        run: npx tsc --noEmit
 
       - name: Run tests
         working-directory: frontend
