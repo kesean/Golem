@@ -22,6 +22,11 @@ import uuid
 import base64
 import hashlib
 import logging
+from pathlib import Path
+
+# Running as `python scripts/embed_docs.py` puts scripts/ on sys.path, not the
+# repo root — add it so `from retrieval import ...` resolves.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx
 from dotenv import load_dotenv
