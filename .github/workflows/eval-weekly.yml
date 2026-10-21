@@ -1,0 +1,78 @@
+name: Weekly Eval Run
+
+on:
+  schedule:
+    - cron: "0 6 * * 0"  # Sunday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency: eval-weekly
+
+jobs:
+  eval:
+    name: Run harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run evals
+        run: |
+          set +e
+          python -m evals.run --label scheduled
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+        id: run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          CONVEX_SITE_URL: ${{ secrets.CONVEX_SITE_URL }}
+          EVAL_INGEST_SECRET: ${{ secrets.EVAL_INGEST_SECRET }}
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-out
+          path: eval-out/
+          if-no-files-found: warn
+
+      - name: Notify on regression or error
+        if: steps.run.outputs.exit_code != '0'
+        run: |
+          ARGS=(
+            --run eval-out/run.json
+            --run-url "$RUN_URL"
+          )
+          if [ "$EXIT_CODE" != "2" ]; then
+            ARGS+=(--harness-error)
+          fi
+          if [ -n "$DASHBOARD_URL" ]; then
+            ARGS+=(--dashboard-url "$DASHBOARD_URL")
+          fi
+          python -m evals.notify "${ARGS[@]}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EXIT_CODE: ${{ steps.run.outputs.exit_code }}
+          DASHBOARD_URL: ${{ vars.EVALS_DASHBOARD_URL }}
+
+      - name: Fail on harness error
+        if: steps.run.outputs.exit_code != '0' && steps.run.outputs.exit_code != '2'
+        run: exit 1

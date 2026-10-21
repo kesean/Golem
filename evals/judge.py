@@ -42,8 +42,8 @@ def judge_case(
     if not api_key:
         return None, "missing_api_key"
 
-    judge_model = os.getenv("JUDGE_MODEL", "deepseek-flash")
-    judge_base_url = os.getenv("JUDGE_BASE_URL", "https://api.deepseek.com")
+    judge_model = os.getenv("JUDGE_MODEL") or "deepseek-flash"
+    judge_base_url = os.getenv("JUDGE_BASE_URL") or "https://api.deepseek.com"
 
     # Build the prompt with tagged sections
     chunk_elements = "\n".join(

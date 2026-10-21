@@ -1,4 +1,4 @@
-.PHONY: deploy-dev deploy-pre deploy-prod status logs open
+.PHONY: deploy-dev deploy-pre deploy-prod status logs open eval
 
 deploy-dev:
 	vercel deploy
@@ -17,3 +17,6 @@ logs:
 
 open:
 	vercel open
+
+eval:
+	python -m evals.run --label manual

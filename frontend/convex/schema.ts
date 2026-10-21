@@ -50,7 +50,8 @@ export default defineSchema({
     }),
     regressions: v.array(v.any()),
     baselineRunId: v.optional(v.id("evalRuns")),
-  }).index("by_label_started", ["label", "startedAt"]),
+  }).index("by_label_started", ["label", "startedAt"])
+    .index("by_started", ["startedAt"]),
   evalResults: defineTable({
     runId: v.id("evalRuns"),
     caseId: v.string(),
