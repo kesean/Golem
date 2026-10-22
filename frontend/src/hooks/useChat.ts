@@ -5,6 +5,7 @@ import { useToken } from '../contexts/TokenContext'
 import { useHistory } from './useHistory'
 import { parseResponse } from '../lib/parseResponse'
 import { parseSSEChunk } from '../lib/parseSSE'
+import { clearGuestToken } from '../lib/guestAuth'
 import type { ParsedResponse, ChatMessage, UseChatReturn, RetrievedChunk } from '../types'
 
 const MAX_HISTORY = 20
@@ -48,22 +49,35 @@ export function useChat(isGuest = false): UseChatReturn {
     ].slice(-MAX_HISTORY)
 
     try {
-      const token = await getToken()
+      const post = (token: string | null) =>
+        fetch(`${import.meta.env.VITE_API_URL ?? ''}/ask`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            question,
+            history: conversationHistory.current.slice(0, -1),
+          }),
+          signal: controller.signal,
+        })
+
+      let token = await getToken()
       if (isGuest && token === null) {
         throw new Error('GUEST_UNAVAILABLE')
       }
-      const res = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/ask`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          question,
-          history: conversationHistory.current.slice(0, -1),
-        }),
-        signal: controller.signal,
-      })
+      let res = await post(token)
+      // A guest token cached before a secret rotation is rejected with 401.
+      // Drop it and retry once with a freshly fetched token.
+      if (res.status === 401 && isGuest) {
+        clearGuestToken()
+        token = await getToken()
+        if (token === null) {
+          throw new Error('GUEST_UNAVAILABLE')
+        }
+        res = await post(token)
+      }
 
       if (!res.ok) {
         throw new Error(res.status === 429 ? '429' : 'SERVER_ERROR')

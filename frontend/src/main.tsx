@@ -21,12 +21,11 @@ function AuthTokenProvider({ children }: { children: React.ReactNode }) {
 }
 
 function GuestTokenProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     getGuestToken()
-      .then(t => { setToken(t); setReady(true) })
+      .then(() => setReady(true))
       .catch(() => setReady(true))
   }, [])
 
@@ -61,7 +60,7 @@ function GuestTokenProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <TokenContext.Provider value={{ getToken: async () => token }}>
+    <TokenContext.Provider value={{ getToken: () => getGuestToken().catch(() => null) }}>
       {children}
     </TokenContext.Provider>
   )
