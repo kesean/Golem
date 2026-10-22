@@ -1,0 +1,12 @@
+frontend/
+tests/
+evals/
+docs/
+scripts/
+venv/
+.venv/
+.github/
+.claude/
+.superpowers/
+.pytest_cache/
+__pycache__/
