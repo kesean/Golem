@@ -17,6 +17,10 @@ async function fetchGuestToken(): Promise<string> {
   return data.token as string
 }
 
+export function clearGuestToken(): void {
+  localStorage.removeItem(GUEST_TOKEN_KEY)
+}
+
 export async function getGuestToken(): Promise<string> {
   const stored = localStorage.getItem(GUEST_TOKEN_KEY)
   if (stored && !isTokenExpired(stored)) return stored
