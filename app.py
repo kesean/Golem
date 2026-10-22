@@ -13,7 +13,6 @@ from functools import wraps
 from flask import Flask, request, jsonify, g, Response, stream_with_context
 from flask_cors import CORS
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 import jwt
 from chat import stream_run as chat_run
@@ -45,9 +44,18 @@ CORS(
     methods=["POST", "OPTIONS"],
 )
 
+
+def client_ip() -> str:
+    # Vercel overwrites X-Forwarded-For with the real client IP, so it is only trusted there.
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if os.getenv("VERCEL") and forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.remote_addr or "127.0.0.1"
+
+
 _redis_url = os.getenv("REDIS_URL")
 limiter = Limiter(
-    get_remote_address,
+    client_ip,
     app=app,
     default_limits=[],
     storage_uri=_redis_url if _redis_url else "memory://",
@@ -147,15 +155,15 @@ def _user_key() -> str:
     """
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
-        return get_remote_address()
+        return client_ip()
     try:
         payload = jwt.decode(
             auth.split(" ", 1)[1],
             options={"verify_signature": False},
         )
-        return payload.get("sub") or get_remote_address()
+        return payload.get("sub") or client_ip()
     except Exception:
-        return get_remote_address()
+        return client_ip()
 
 
 def require_auth(f):
