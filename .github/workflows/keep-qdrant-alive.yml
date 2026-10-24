@@ -12,7 +12,11 @@ jobs:
     steps:
       - name: Health check
         run: |
-          response=$(curl -sf \
+          status=$(curl -s -o response.txt -w "%{http_code}" \
             -H "api-key: ${{ secrets.QDRANT_API_KEY }}" \
             "${{ secrets.QDRANT_URL }}/healthz")
-          echo "Response: $response"
+          echo "HTTP $status: $(cat response.txt)"
+          if [ "$status" -ge 400 ]; then
+            echo "::error::Qdrant health check failed with HTTP $status (401/403 = bad API key, 404 = wrong URL or deleted cluster, 5xx = cluster down)"
+            exit 1
+          fi
