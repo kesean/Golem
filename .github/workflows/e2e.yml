@@ -5,9 +5,11 @@ on:
 
 jobs:
   e2e:
+    # Vercel names the environment 'Preview – golem' now that golem-api shares the repo.
     if: >
       github.event.deployment_status.state == 'success' &&
-      github.event.deployment.environment == 'Preview'
+      (github.event.deployment.environment == 'Preview' ||
+       github.event.deployment.environment == 'Preview – golem')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
