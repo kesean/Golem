@@ -10,7 +10,7 @@ A chatbot integration project, built as hands-on practice.
 | Frontend | React · TypeScript · Tailwind · shadcn/ui |
 | Auth | Clerk (signed-in users) · guest JWTs |
 | Data | Convex (history, evals, stats) · Qdrant + Voyage AI (doc retrieval) |
-| CI / Deploy | GitHub Actions · Railway · Vercel · Playwright · axe-core |
+| CI / Deploy | GitHub Actions · Vercel · Playwright · axe-core |
 
 ## What it does
 
@@ -146,33 +146,34 @@ npx convex env set --prod EVAL_ADMIN_IDS "https://your-app.clerk.accounts.dev|us
 
 ## Deploying
 
-The frontend deploys to Vercel. All deployment operations are managed from the repo root via `make`.
+Everything runs on Vercel as two projects, both connected to this GitHub repo:
+
+| Project | Root directory | What it serves | URL |
+|---------|----------------|----------------|-----|
+| `golem` | `frontend` | React app (Vite build, Convex deploy) | https://golem-support.vercel.app |
+| `golem-api` | `.` | Flask API as one Python function (`app.py`), rate limits in Upstash Redis | https://golem-api.vercel.app |
+
+Pushing to `main` deploys both projects to production. Pull requests get a `golem` preview, and the e2e tests run against it. `golem-api` skips preview builds (its ignored build step is `[ "$VERCEL_ENV" != "production" ]`), so frontend previews call the production API, which allows them through `PREVIEW_ORIGIN_REGEX`.
+
+Environment variables live in Vercel (`vercel env ls`). `golem` holds `VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_CONVEX_URL` and `CONVEX_DEPLOY_KEY`. `golem-api` holds the API keys from step 2 of *Running locally*, plus `FRONTEND_ORIGIN` and `PREVIEW_ORIGIN_REGEX`. Local development leaves `VITE_API_URL` unset, so Vite proxies `/ask` to the Flask server on port 5001.
 
 **One-time setup** (after cloning, requires [Vercel CLI](https://vercel.com/docs/cli)):
 
 ```bash
 npm i -g vercel
-vercel link    # when prompted, set Root Directory → frontend
+vercel link                   # repo root → golem-api
+cd frontend && vercel link    # frontend → golem
 ```
 
-**Deploy commands:**
+**Manual deploy commands** (run from the repo root, so they act on `golem-api`):
 
 | Command | What it does |
 |---------|-------------|
-| `make deploy-dev` | Deploy preview from `dev` branch |
-| `make deploy-pre` | Deploy preview from `preview` branch |
-| `make deploy-prod` | Deploy to production (from `main`) |
+| `make deploy-dev` / `make deploy-pre` | Deploy a preview |
+| `make deploy-prod` | Deploy to production |
 | `make status` | List recent deployments |
 | `make logs URL=<url>` | Tail logs for a specific deployment |
 | `make open` | Open the Vercel project dashboard |
-
-Branch → environment mapping:
-
-| Branch | Vercel environment |
-|--------|--------------------|
-| `dev` | Preview |
-| `preview` | Preview |
-| `main` | Production |
 
 ## Project phases
 
@@ -256,7 +257,8 @@ Branch → environment mapping:
 | Global daily cap: 70 requests/day across all users | ✅ Done |
 | CORS scoped to Vercel frontend origin | ✅ Done |
 | CORS allowed for Vercel preview deployments via `PREVIEW_ORIGIN_REGEX` | ✅ Done |
-| Flask backend deployed to Railway (with Redis add-on) | ✅ Done |
+| Flask backend deployed to Railway (with Redis add-on) | ✅ Done (moved to Vercel, see below) |
+| Flask backend moved from Railway to Vercel (`golem-api` project, Upstash Redis); Railway retired | ✅ Done |
 | Frontend deployed to Vercel — Dev / Pre / Prod environments | ✅ Done |
 | Makefile targets for terminal-driven deployments (`deploy-dev`, `deploy-pre`, `deploy-prod`, `status`, `logs`, `open`) | ✅ Done |
 | Production environment variables configured (no secrets in code) | ✅ Done |

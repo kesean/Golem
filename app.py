@@ -19,7 +19,7 @@ from chat import stream_run as chat_run
 
 load_dotenv()
 
-# Root handler so WARNING+ reaches stderr under gunicorn. Without it,
+# Root handler so WARNING+ reaches stderr in the Vercel function logs. Without it,
 # flask-limiter's own logger (which only has a NullHandler) swallows storage
 # failures silently — that is how a dead Redis went unnoticed.
 logging.basicConfig(level=logging.WARNING)
@@ -74,7 +74,7 @@ def check_limiter_storage() -> bool:
     if not _redis_url:
         logger.warning(
             "REDIS_URL not set: rate limits use per-process memory, so each "
-            "gunicorn worker counts separately and limits are not enforced globally"
+            "function instance counts separately and limits are not enforced globally"
         )
         return False
     try:
