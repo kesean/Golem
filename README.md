@@ -353,7 +353,7 @@ cd frontend && vercel link    # frontend → golem
 | Feature | Status |
 |---------|--------|
 | Startup rate-limit storage check — logs when Redis is missing or unreachable | ✅ Done |
-| Limiter storage errors visible in logs (root log handler under gunicorn) | ✅ Done |
+| Limiter storage errors visible in logs (root log handler, so they reach the Vercel function logs) | ✅ Done |
 | Console warning when the global stats increment fails | ✅ Done |
 
 ### Accessibility
