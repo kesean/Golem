@@ -153,7 +153,7 @@ Everything runs on Vercel as two projects, both connected to this GitHub repo:
 | `golem` | `frontend` | React app (Vite build, Convex deploy) | https://golem-support.vercel.app |
 | `golem-api` | `.` | Flask API as one Python function (`app.py`), rate limits in Upstash Redis | https://golem-api.vercel.app |
 
-Pushing to `main` deploys both projects to production. Pull requests get a `golem` preview, and the e2e tests run against it. `golem-api` skips preview builds (its ignored build step is `[ "$VERCEL_ENV" != "production" ]`), so frontend previews call the production API, which allows them through `PREVIEW_ORIGIN_REGEX`.
+Pushing to `main` deploys both projects to production. Pull requests get a `golem` preview, and the e2e tests run against it. `golem-api` skips preview builds (its ignored build step is `[ "$VERCEL_GIT_COMMIT_REF" != "main" ]`), so frontend previews call the production API, which allows them through `PREVIEW_ORIGIN_REGEX`.
 
 Environment variables live in Vercel (`vercel env ls`). `golem` holds `VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_CONVEX_URL` and `CONVEX_DEPLOY_KEY`. `golem-api` holds the API keys from step 2 of *Running locally*, plus `FRONTEND_ORIGIN` and `PREVIEW_ORIGIN_REGEX`. Local development leaves `VITE_API_URL` unset, so Vite proxies `/ask` to the Flask server on port 5001.
 
