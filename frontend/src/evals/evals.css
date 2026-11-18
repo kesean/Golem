@@ -32,7 +32,8 @@
 .ev-state {
   margin-top: 24px; padding: 20px; background: var(--bg-card); border: 1px solid var(--border-color);
   border-radius: 12px; color: var(--text-secondary); font-size: 14px; line-height: 1.55;
-}.ev-scroll { overflow-x: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; }
+}
+.ev-scroll { overflow-x: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; }
 .ev-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 520px; }
 .ev-table th, .ev-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-subtle); vertical-align: top; font-weight: 400; }
 .ev-table thead th { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
