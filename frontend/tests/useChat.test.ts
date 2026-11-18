@@ -225,6 +225,23 @@ describe('useChat conversation history', () => {
     expect(sentHistory(fetchMock, 1)).toEqual([])
   })
 
+  it('once the window is full, the sent history still starts with a user turn', async () => {
+    // A fresh Response per call: a body can only be read once
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(sseResponse()))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useChat(false))
+
+    for (let i = 1; i <= 11; i++) {
+      await act(async () => {
+        await result.current.ask(`q${i}`)
+      })
+    }
+
+    const history = sentHistory(fetchMock, 10)
+    expect(history).toHaveLength(18)
+    expect(history[0]).toEqual({ role: 'user', content: 'q2' })
+  })
+
   it('a successful ask adds the question and answer pair to the next request history', async () => {
     const fetchMock = vi
       .fn()

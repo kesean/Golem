@@ -45,7 +45,9 @@ export function useChat(isGuest = false): UseChatReturn {
 
     // Prior turns only. The question joins history with its answer on success,
     // so a failed or aborted ask never leaves an orphan user turn behind.
-    const history = conversationHistory.current.slice(-(MAX_HISTORY - 1))
+    // History is stored in whole Q/A pairs, so keep an even count: an odd cut
+    // would send an assistant turn first once the window is full.
+    const history = conversationHistory.current.slice(-(MAX_HISTORY - 2))
 
     try {
       const post = (token: string | null) =>
