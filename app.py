@@ -98,18 +98,45 @@ GUEST_JWT_SECRET = os.getenv("GUEST_JWT_SECRET", "")
 
 _jwks_cache: dict | None = None
 _jwks_cached_at: float = 0.0
+_jwks_last_attempt_at: float = 0.0
 JWKS_TTL = 3600  # 1 hour
+JWKS_MIN_FETCH_INTERVAL = 60  # network attempts are spaced at least this far apart
 
 
-def _fetch_jwks() -> dict:
-    """Fetch Clerk's public JWKS, cached for JWKS_TTL seconds."""
-    global _jwks_cache, _jwks_cached_at
-    if _jwks_cache and time.time() - _jwks_cached_at < JWKS_TTL:
-        return _jwks_cache
+def _download_jwks() -> dict:
     with urllib.request.urlopen(CLERK_JWKS_URL, timeout=5) as resp:
-        _jwks_cache = json.loads(resp.read())
-        _jwks_cached_at = time.time()
+        return json.loads(resp.read())
+
+
+def _fetch_jwks(force: bool = False) -> dict:
+    """Return Clerk's public JWKS, refreshing it from the network when needed.
+
+    The cache is used until JWKS_TTL expires, or until `force` asks for a
+    refresh. Network attempts are at least JWKS_MIN_FETCH_INTERVAL apart, so
+    tokens with unknown kids cannot turn into a flood of requests to Clerk.
+    If a refresh fails and a cache exists, the stale cache is served.
+    """
+    global _jwks_cache, _jwks_cached_at, _jwks_last_attempt_at
+    now = time.time()
+    if _jwks_cache is not None:
+        fresh = now - _jwks_cached_at < JWKS_TTL and not force
+        throttled = now - _jwks_last_attempt_at < JWKS_MIN_FETCH_INTERVAL
+        if fresh or throttled:
+            return _jwks_cache
+
+    _jwks_last_attempt_at = now
+    try:
+        _jwks_cache = _download_jwks()
+        _jwks_cached_at = now
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        if _jwks_cache is None:
+            raise
+        logger.warning("JWKS refresh failed, serving stale cache: %s", e)
     return _jwks_cache
+
+
+def _find_jwk(jwks: dict, kid) -> dict | None:
+    return next((k for k in jwks["keys"] if k.get("kid") == kid), None)
 
 
 def verify_clerk_token(token: str) -> dict:
@@ -117,12 +144,14 @@ def verify_clerk_token(token: str) -> dict:
     if not CLERK_JWKS_URL:
         raise RuntimeError("CLERK_JWKS_URL is not configured")
 
-    jwks = _fetch_jwks()
     header = jwt.get_unverified_header(token)
     kid = header.get("kid")
 
-    key_data = next((k for k in jwks["keys"] if k["kid"] == kid), None)
-    if not key_data:
+    key_data = _find_jwk(_fetch_jwks(), kid)
+    if key_data is None:
+        # Clerk rotates signing keys, so a kid missing from the cache may be new.
+        key_data = _find_jwk(_fetch_jwks(force=True), kid)
+    if key_data is None:
         raise ValueError("No matching JWK found for kid: " + str(kid))
 
     public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key_data))
@@ -188,7 +217,7 @@ def require_auth(f):
         else:
             try:
                 g.clerk_payload = verify_clerk_token(token)
-            except urllib.error.URLError as e:
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
                 logging.error("JWKS fetch failed: %s", e)
                 return jsonify({"error": "Auth service unavailable"}), 503
             except jwt.ExpiredSignatureError:
