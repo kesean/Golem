@@ -523,7 +523,10 @@ http.route({
         message.includes("ArgumentValidationError") ||
         message.includes("Validator");
       if (isValidationError) {
-        return new Response(JSON.stringify({ error: message }), {
+        // Convex's message names internal fields and validator shapes. Keep it
+        // in the logs; the caller gets a generic 400.
+        console.error("evals ingest validator rejected payload", message);
+        return new Response(JSON.stringify({ error: "Invalid payload" }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
         });
