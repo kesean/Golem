@@ -49,6 +49,9 @@ export function useChat(isGuest = false): UseChatReturn {
     setCanRetry(false)
     setParsedResponse(null)
     setChunks([])
+    // The previous answer's eval and history ids must not follow the new answer
+    setEvalId(null)
+    setHistoryId(null)
 
     // Prior turns only. The question joins history with its answer on success,
     // so a failed or aborted ask never leaves an orphan user turn behind.

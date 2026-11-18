@@ -440,6 +440,41 @@ describe('useChat retry', () => {
   })
 })
 
+describe('useChat per-answer ids', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('a new ask clears the previous answer ids, so feedback cannot target the old answer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(sseFor('first')).mockResolvedValueOnce(sseFor('second')),
+    )
+    const { result } = renderHook(() => useChat(false))
+
+    await act(async () => {
+      await result.current.ask('first question')
+    })
+    await vi.waitFor(() => expect(result.current.evalId).toBe('eval-id'))
+    expect(result.current.historyId).toBe('history-id')
+
+    // The second answer's save and eval records are still in flight when it renders
+    createEvalMock.mockImplementationOnce(() => new Promise<string>(() => {}))
+    saveMock.mockImplementationOnce(() => new Promise<string>(() => {}))
+    await act(async () => {
+      await result.current.ask('second question')
+    })
+
+    expect(result.current.parsedResponse?.summary).toBe('second')
+    expect(result.current.evalId).toBeNull()
+    expect(result.current.historyId).toBeNull()
+  })
+})
+
 describe('useChat loadFromHistory', () => {
   it('sets historyId when one is given, and leaves evalId null', () => {
     const { result } = renderHook(() => useChat(false))
