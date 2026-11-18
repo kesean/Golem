@@ -49,21 +49,21 @@ def set_api_headers(response):
     return response
 
 def _load_preview_origin_pattern(raw: str):
-    """Compile PREVIEW_ORIGIN_REGEX, or refuse it (returns None).
+    """Compile PREVIEW_ORIGIN_REGEX so it must match the whole origin (None if unusable).
 
-    An unanchored pattern would match any origin containing the fragment, so it
-    is refused rather than trusted. Refused or invalid values disable preview
-    CORS and log an error; the rest of the app still starts.
+    The value is wrapped as \\A(?:...)\\Z, so an alternation such as `^a|b$` cannot
+    match only part of an origin. An unanchored value still works, but it is
+    logged as normalised. An invalid regex disables preview CORS and logs an error;
+    the rest of the app still starts.
     """
     if not raw:
         return None
     if not (raw.startswith("^") and raw.endswith("$")):
-        logger.error(
-            "PREVIEW_ORIGIN_REGEX must start with ^ and end with $; refusing it, preview CORS origins are DISABLED"
+        logger.warning(
+            "PREVIEW_ORIGIN_REGEX does not start with ^ and end with $; it is normalised to match the whole origin"
         )
-        return None
     try:
-        return re.compile(raw)
+        return re.compile(rf"\A(?:{raw})\Z")
     except re.error as e:
         logger.error("PREVIEW_ORIGIN_REGEX is not a valid regex (%s); preview CORS origins are DISABLED", e)
         return None
