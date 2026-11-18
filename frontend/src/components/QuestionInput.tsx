@@ -11,6 +11,9 @@ type QuestionInputProps = {
   hero?: boolean
 }
 
+const isApplePlatform =
+  typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
+
 export function QuestionInput({ value, onChange, onSubmit, isLoading, hero = false }: QuestionInputProps) {
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -49,14 +52,16 @@ export function QuestionInput({ value, onChange, onSubmit, isLoading, hero = fal
       />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* Hidden on touch screens by the .submit-hint media query in globals.css */}
         <span
+          className="submit-hint"
           style={{
             fontFamily: "'DM Sans', sans-serif",
             fontSize: '11px',
             color: 'var(--text-muted)',
           }}
         >
-          Ctrl + Enter to submit
+          {isApplePlatform ? '⌘ + Enter' : 'Ctrl + Enter'} to submit
         </span>
         <Button
           id="ask-btn"
