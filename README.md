@@ -10,6 +10,7 @@ A chatbot integration project, built as hands-on practice.
 | Frontend | React · TypeScript · Tailwind · shadcn/ui |
 | Auth | Clerk (signed-in users) · guest JWTs |
 | Data | Convex (history, evals, stats) · Qdrant + Voyage AI (doc retrieval) |
+| Security | CSP and security headers (`frontend/vercel.json`) · Vercel WAF rate limit · Flask-Limiter on Redis |
 | CI / Deploy | GitHub Actions · Vercel · Playwright · axe-core |
 
 ## What it does
@@ -22,7 +23,7 @@ I built Golem as practice wiring a full application together across services: au
 
 ## Running locally
 
-**Prerequisites:** Python 3, Node 18+, an [Anthropic API key](https://console.anthropic.com).
+**Prerequisites:** Python 3.12 (pinned in `.python-version`), Node 24 (what CI uses), an [Anthropic API key](https://console.anthropic.com).
 
 **1. Clone and install**
 
@@ -109,8 +110,13 @@ pytest tests/
 cd frontend && npm test
 
 # End-to-end + accessibility tests (Playwright + axe-core)
+cd frontend && npx playwright install chromium   # once
 cd frontend && npm run test:e2e
 ```
+
+Locally, Playwright starts the dev server itself with `VITE_TEST_BYPASS_AUTH=true` (a signed-in test seam that only exists in non-production builds) and mocks `/ask`, so no keys are needed. Set `BASE_URL` to run the same specs against a deployed preview; specs that need the local seam skip themselves in that case. For a protected preview, set `VERCEL_BYPASS_TOKEN`: the specs send it only to the `BASE_URL` origin (`e2e/fixtures.ts`), never to Clerk, Convex or the API.
+
+The e2e suite covers the answer flow, feedback, share links, the history palette, the first-visit tour, the evals dashboard, a 360px phone layout, dark mode, reduced motion, the error and retry state, and a CSP spec that fails on any `securitypolicyviolation`. The backend uses Python 3.12 in CI; if your local virtualenv is older or newer, recreate it with `uv venv --python 3.12`.
 
 **5. Running evals** (optional)
 
@@ -167,6 +173,28 @@ npx convex env set --prod EVAL_ADMIN_IDS "https://your-app.clerk.accounts.dev|us
 
 - Estimated cost per run (weekly at off-peak): about **$0.44** per 30-case run ≈ **$1.90/month** (to be updated after first real run).
 - GitHub disables scheduled workflows on public repos after 60 days of no repo activity. Check workflow status with `gh workflow view eval-weekly.yml` and re-enable if needed: `gh workflow enable eval-weekly.yml`.
+
+## Security
+
+What is enforced today, and where to change it.
+
+**Request validation (`app.py`).** `/ask` needs a JSON object body. `question` is a string of at most 2000 characters. `history` is a list of at most 20 turns, each `{role: user|assistant, content: string}` with non-empty content of at most 2000 characters (user) or 12000 (assistant, because turns carry the raw XML answer). Bodies over 512 KB get a JSON 413. Errors sent to the client are generic; the detail is logged server-side. The Flask debugger runs only with `FLASK_DEBUG=1`.
+
+**Auth.** Clerk JWTs and guest JWTs are verified on every `/ask`. The Clerk JWKS is cached for an hour, refetched at most once a minute when a token carries an unknown key id, and the stale copy is served if Clerk is unreachable. An upstream failure returns 503, not 401.
+
+**Prompt injection.** `<` and `>` are escaped in the question and in user history turns, and the retrieved-docs sentinels are stripped (Unicode dashes, zero-width characters and case variants included). The `<docs>` block in the final answer is filtered to URLs that were actually retrieved. It fails closed, so an unclosed block is dropped. Streamed text is not filtered while it arrives; the answer the UI keeps once the stream ends is the filtered one.
+
+**Response headers.** The API sends `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`. The frontend sends a CSP, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy`, all set in `frontend/vercel.json` (Vercel adds HSTS itself). `script-src` has no `unsafe-inline` or `unsafe-eval`; the one inline script (the pre-paint theme script in `index.html`) is allowed by hash, and `tests/security-headers.test.ts` fails if the script changes without the hash being updated. Clerk telemetry is turned off in `main.tsx` because the CSP does not allow `clerk-telemetry.com`. When you add a third-party origin, add it to `connect-src` (or the relevant directive) and run the CSP spec.
+
+**Edge.** One Vercel WAF rule on `golem-api` covers `/ask` and `/guest-token`: 30 requests per 60 seconds per IP. It is in `log` mode; check the firewall traffic page, then switch it to `deny`. The plan allows one rate-limit rule, so both routes share it. Manage it with `vercel firewall rules list` and `vercel firewall publish`.
+
+**Shared answers.** `?share=` answers are user-written, so doc links are limited to `https` URLs on `clerk.com` subdomains and `developer.mozilla.org`. Other links render as plain text, `mailto:` links are dropped, and the notice says the answer is not verified by Golem. A deleted or evicted share shows "may have been deleted by its owner or removed to make room".
+
+**Convex.** Reads and writes are bounded: a user's history list returns at most 100 rows and stores at most 200 (the oldest is evicted), question and answer sizes are capped, a user can create at most 200 eval entries per 24 hours, and eval ingest is idempotent on `gitSha` plus `startedAt`. Convex validator errors on ingest return a generic "Invalid payload".
+
+**CI and config.** Every workflow runs with a read-only `GITHUB_TOKEN` (the weekly eval job also gets `issues: write`). The e2e job runs only for deployments of a commit that is the head of a branch in this repo, and `VERCEL_BYPASS_TOKEN` is passed to that job alone. Doc sources for retrieval are pinned to commit SHAs in `scripts/embed_docs.py` (override with `CLERK_DOCS_REF` and `MDN_CONTENT_REF`; the `validate-doc-sources` workflow checks the pins). `PREVIEW_ORIGIN_REGEX` is compiled as a full match (`\A(?:…)\Z`), and an unanchored value logs a warning. `.claude/settings.local.json` is not tracked.
+
+**Known gaps.** There is no CAPTCHA or bot check on `/guest-token` or `/ask` (Turnstile or BotID would need keys). The CSP uses wildcards for the Convex and Clerk hosts because preview deployments use other hosts. Streamed deltas reach the client before filtering. The Clerk sign-in modal is not covered by CI e2e because Vercel previews build with `VITE_TEST_BYPASS_AUTH=true`. `npm audit` still reports findings that need breaking upgrades (vitest, vite).
 
 ## Deploying
 
@@ -288,6 +316,29 @@ cd frontend && vercel link    # frontend → golem
 | Production environment variables configured (no secrets in code) | ✅ Done |
 | GitHub Actions: unit tests, e2e (Playwright), doc-source validation | ✅ Done |
 | E2E tests gate PRs — run against Vercel Preview on every deployment | ✅ Done |
+
+### Phase 9 — Audit hardening (November 2026)
+
+Findings came from a debug audit, a design review and a security review. Details of each control are in *Security* and *Rate limits* above.
+
+| Feature | Status |
+|---------|--------|
+| `/ask` body and history validation, 512 KB body cap, generic client errors | ✅ Done |
+| JWKS refetch on unknown key, stale-cache fallback, 503 on upstream failure | ✅ Done |
+| Per-IP limits before auth, atomic quota charging, guest limits keyed on IP | ✅ Done |
+| Separate global bucket for preview origins; `PREVIEW_ORIGIN_REGEX` normalised to a full match | ✅ Done |
+| Doc-citation filter fails closed; prompt sentinels and angle brackets neutralised | ✅ Done |
+| Eval judge input escaping; error-rate regression checked without a baseline; pinned doc sources | ✅ Done |
+| Convex reads and writes bounded; ingest idempotent; stats increment race closed | ✅ Done |
+| Shared answers: doc-host allowlist, markdown links sanitised, "not verified" notice | ✅ Done |
+| CSP and security headers, hash-pinned theme script, CSP e2e spec; Clerk telemetry off | ✅ Done |
+| Vercel WAF rate-limit rule on `/ask` and `/guest-token` (log mode) | ✅ Done |
+| Workflows on read-only tokens; e2e guard; bypass token scoped to the preview origin | ✅ Done |
+| `useChat` fixes: stale asks cannot overwrite newer ones, history keeps whole Q/A pairs, retry on error | ✅ Done |
+| UI: dialog rebuilt on shared dialog, control and dark-mode contrast, reduced motion, pre-paint theme, 44px targets, phone header wrap | ✅ Done |
+| Unused Preview secrets removed from `golem-api` | ✅ Done |
+| WAF rule switched from `log` to `deny` | ⏳ After reviewing traffic |
+| CAPTCHA or bot check on `/guest-token` and `/ask` (Turnstile, BotID) | ⏳ Needs keys |
 
 ---
 
