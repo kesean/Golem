@@ -8,6 +8,16 @@ import {
   CommandItem,
   CommandList,
 } from './ui/command'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog'
+import { Button } from './ui/button'
 import { useHistory } from '../hooks/useHistory'
 import type { HistoryEntry } from '../hooks/useHistory'
 
@@ -33,82 +43,48 @@ export function HistoryPalette({ open, onOpenChange, onSelect, isGuest }: Histor
   }, [onOpenChange])
 
   if (isGuest) {
-    if (!open) return null
+    // Same focus trap, Escape and focus return as TourDialog, from ui/dialog.
     return (
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="History unavailable"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 50,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        }}
-        onClick={() => onOpenChange(false)}
-      >
-        <div
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          showCloseButton={false}
           style={{
-            backgroundColor: 'var(--bg)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '32px',
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '8px',
             maxWidth: '400px',
             width: '90%',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
           }}
-          onClick={e => e.stopPropagation()}
         >
-          <p
-            style={{
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: '15px',
-              color: 'var(--text)',
-              margin: 0,
-            }}
-          >
-            Chat history requires an account. Sign in to save your conversations.
-          </p>
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button
-              onClick={() => onOpenChange(false)}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '6px',
-                border: '1px solid var(--border)',
-                backgroundColor: 'transparent',
-                color: 'var(--text-secondary)',
-                fontFamily: "'DM Sans', sans-serif",
-                fontSize: '14px',
-                cursor: 'pointer',
-              }}
+          <DialogHeader>
+            <DialogTitle style={{ color: 'var(--text-primary)' }}>History unavailable</DialogTitle>
+            <DialogDescription style={{ color: 'var(--text-secondary)' }}>
+              Chat history requires an account. Sign in to save your conversations.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose
+              render={
+                <Button
+                  variant="outline"
+                  className="min-h-11"
+                  style={{ borderColor: 'var(--border-strong)', color: 'var(--text-secondary)' }}
+                />
+              }
             >
               Close
-            </button>
+            </DialogClose>
             <SignInButton mode="modal">
-              <button
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  backgroundColor: 'var(--accent)',
-                  color: '#fff',
-                  fontFamily: "'DM Sans', sans-serif",
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                }}
+              <Button
+                className="min-h-11"
+                style={{ backgroundColor: 'var(--accent)', color: 'var(--btn-text)' }}
               >
                 Sign in
-              </button>
+              </Button>
             </SignInButton>
-          </div>
-        </div>
-      </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     )
   }
 
