@@ -56,6 +56,11 @@ describe('security headers (vercel.json)', () => {
     expect(d.get('frame-ancestors')).toEqual(["'none'"])
   })
 
+  it('never allows unsafe-eval, and script-src never allows unsafe-inline', () => {
+    expect(csp).not.toContain("'unsafe-eval'")
+    expect(d.get('script-src')).not.toContain("'unsafe-inline'")
+  })
+
   it('has exactly one inline script in index.html and its sha256 hash is allowed in script-src', () => {
     const inline = inlineScripts(indexHtml)
     expect(inline, 'index.html must have exactly one inline script; update the CSP hash if it changes').toHaveLength(1)
