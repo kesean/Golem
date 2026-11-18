@@ -54,13 +54,17 @@ def test_anchored_pattern_matches_only_previews():
 
 
 def test_invalid_preview_leaves_frontend_origin_only():
-    origins = app_module._cors_origins_from_env("https://golem.example", "https://golem-(")
+    origins = app_module._cors_origins_from_env(
+        "https://golem.example", app_module._load_preview_origin_pattern("https://golem-(")
+    )
     assert origins == ["https://golem.example"]
 
 
 @pytest.mark.parametrize("raw", [r"^https://golem-.*\.vercel\.app$", r"https://golem-.*\.vercel\.app"])
 def test_valid_preview_is_added_after_frontend_origin(raw):
-    origins = app_module._cors_origins_from_env("https://golem.example", raw)
+    origins = app_module._cors_origins_from_env(
+        "https://golem.example", app_module._load_preview_origin_pattern(raw)
+    )
     assert origins[0] == "https://golem.example"
     assert len(origins) == 2
     assert origins[1].match("https://golem-x.vercel.app")

@@ -69,22 +69,26 @@ def _load_preview_origin_pattern(raw: str):
         return None
 
 
-def _cors_origins_from_env(frontend_origin: str, preview_regex: str) -> list:
+def _cors_origins_from_env(frontend_origin: str, pattern) -> list:
     origins: list = []
     if frontend_origin:
         origins.append(frontend_origin)
-    pattern = _load_preview_origin_pattern(preview_regex)
     if pattern is not None:
         origins.append(pattern)
     return origins
 
 
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
-_preview_regex = os.getenv("PREVIEW_ORIGIN_REGEX", "")
+_preview_origin_pattern = _load_preview_origin_pattern(os.getenv("PREVIEW_ORIGIN_REGEX", ""))
+if not _frontend_origin and _preview_origin_pattern is not None:
+    logger.warning(
+        "FRONTEND_ORIGIN is unset while PREVIEW_ORIGIN_REGEX is set: the prod frontend's Origin "
+        "may match the regex and be charged to the preview bucket. Set FRONTEND_ORIGIN to the exact prod origin."
+    )
 
 CORS(
     app,
-    origins=_cors_origins_from_env(_frontend_origin, _preview_regex),
+    origins=_cors_origins_from_env(_frontend_origin, _preview_origin_pattern),
     allow_headers=["Authorization", "Content-Type"],
     methods=["POST", "OPTIONS"],
 )
@@ -360,6 +364,55 @@ GLOBAL_DAILY_LIMIT = parse("70 per day")
 GUEST_IP_DAILY_LIMIT = parse("10 per day")  # guests only
 SIGNED_IN_IP_BACKSTOP = parse("200 per day")  # loose: signed-in users are capped per user
 
+PREVIEW_GLOBAL_DAILY_DEFAULT = 20
+
+
+def _preview_global_daily_limit():
+    """PREVIEW_GLOBAL_DAILY_LIMIT as a limits item. A bad value logs and uses the default."""
+    raw = os.getenv("PREVIEW_GLOBAL_DAILY_LIMIT", "").strip()
+    if not raw:
+        return parse(f"{PREVIEW_GLOBAL_DAILY_DEFAULT} per day")
+    try:
+        count = int(raw)
+        if count < 1:
+            raise ValueError("must be at least 1")
+    except ValueError as e:
+        logger.error(
+            "PREVIEW_GLOBAL_DAILY_LIMIT=%r is invalid (%s); using %d",
+            raw, e, PREVIEW_GLOBAL_DAILY_DEFAULT,
+        )
+        return parse(f"{PREVIEW_GLOBAL_DAILY_DEFAULT} per day")
+    prod_cap = GLOBAL_DAILY_LIMIT.amount
+    if count > prod_cap:
+        logger.warning(
+            "PREVIEW_GLOBAL_DAILY_LIMIT=%d exceeds the prod cap (%d); clamping to %d",
+            count, prod_cap, prod_cap,
+        )
+        count = prod_cap
+    return parse(f"{count} per day")
+
+
+PREVIEW_GLOBAL_DAILY_LIMIT = _preview_global_daily_limit()
+
+
+def _origin_class() -> str:
+    """Classify the request's Origin as "preview" or "prod" for the global budget.
+
+    "preview" needs a full match of PREVIEW_ORIGIN_REGEX and a different value from
+    FRONTEND_ORIGIN. A missing, empty or invalid Origin counts as "prod".
+
+    Tradeoff: Origin is client-controlled. A non-browser caller can send a preview
+    Origin to charge the preview bucket instead of prod. That only moves its spend
+    into the small preview cap. Worst-case total global spend per day is
+    GLOBAL_DAILY_LIMIT (70) + PREVIEW_GLOBAL_DAILY_LIMIT (20 by default).
+    """
+    origin = request.headers.get("Origin", "")
+    if not origin or origin == _frontend_origin:
+        return "prod"
+    if _preview_origin_pattern is not None and _preview_origin_pattern.match(origin):
+        return "preview"
+    return "prod"
+
 
 def charge_quota():
     """Charge the daily budgets for an authenticated request, most specific first.
@@ -370,7 +423,8 @@ def charge_quota():
     chain, so a request refused early never uses a later budget:
       1. per-IP daily: 10 for guests, 200 backstop for signed-in users
       2. per-user daily: 5 (guests share one bucket per IP)
-      3. global daily: 70
+      3. global daily: 70 for prod origins, or PREVIEW_GLOBAL_DAILY_LIMIT (20) in a
+         separate bucket for preview origins (see _origin_class)
 
     Returns a 429 response, or None to continue. Fails open on storage errors and
     logs them through flask-limiter's logger, which the one-time watcher reads.
@@ -387,7 +441,10 @@ def charge_quota():
             return jsonify({"error": "IP daily limit reached"}), 429
         if not limiter.limiter.hit(USER_DAILY_LIMIT, "ask-user", _user_key()):
             return jsonify({"error": "Daily limit reached"}), 429
-        if not limiter.limiter.hit(GLOBAL_DAILY_LIMIT, "ask-global", "global"):
+        if _origin_class() == "preview":
+            if not limiter.limiter.hit(PREVIEW_GLOBAL_DAILY_LIMIT, "ask-global", "preview"):
+                return jsonify({"error": "Service limit reached"}), 429
+        elif not limiter.limiter.hit(GLOBAL_DAILY_LIMIT, "ask-global", "global"):
             return jsonify({"error": "Service limit reached"}), 429
     except Exception:
         logging.getLogger("flask-limiter").exception("Failed to charge rate limit. Swallowing error")

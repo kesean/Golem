@@ -66,13 +66,16 @@ All limits are fixed windows enforced in `app.py`. Redis (`REDIS_URL`) makes the
 | Per IP, per day, guests | `/ask` | 10 per day | client IP |
 | Per IP, per day, signed-in | `/ask` | 200 per day (backstop) | client IP |
 | Per user, per day | `/ask` | 5 per day | Clerk `sub`; guests share one bucket per IP |
-| Global, per day | `/ask` | 70 per day | everyone |
+| Global, per day, prod origins | `/ask` | 70 per day | everyone whose `Origin` is not a preview origin |
+| Global, per day, preview origins | `/ask` | 20 per day (`PREVIEW_GLOBAL_DAILY_LIMIT`) | `Origin` matching `PREVIEW_ORIGIN_REGEX`, not `FRONTEND_ORIGIN` |
 | Guest mints, per hour | `/guest-token` | 10 per hour | client IP |
 | Guest mints, per day | `/guest-token` | 20 per day | client IP |
 
 - The per-minute limit runs before auth, so unauthenticated requests count against it.
 - Every other `/ask` limit is charged after the token is verified and the request is valid. Garbage tokens, forged tokens and 400 responses use no daily quota.
 - Charge order is per-IP daily, then per-user, then global. A request refused early never uses a later budget. A request refused by the global cap is still charged to its user.
+- Preview frontends (Vercel previews and the e2e job) charge their own 20/day global bucket, so they cannot use up the prod 70/day budget. A missing, empty or invalid `Origin`, and an `Origin` equal to `FRONTEND_ORIGIN`, count as prod. The prod frontend origin must equal `FRONTEND_ORIGIN` exactly. If `FRONTEND_ORIGIN` is unset while `PREVIEW_ORIGIN_REGEX` is set, prod visitors can match the regex and be charged to the preview bucket, and startup logs a WARNING. `PREVIEW_GLOBAL_DAILY_LIMIT` overrides the 20; a value that is not a positive integer logs an error and uses 20.
+- Tradeoff: `Origin` is set by the client, so a non-browser caller can send a preview `Origin` to charge the preview bucket instead. That only moves its spend into the 20/day cap. Worst-case total global spend is 70 (prod) + 20 (preview) = 90 per day, not 70.
 - A guest's bucket is keyed on IP, not on the guest token, because tokens are free to mint.
 - Users behind one NAT address share the per-IP limits (20 per minute, and 10 per day for guests).
 - The limiter fails open. If storage errors at runtime, the first error logs one `Rate limiting is NOT enforced` WARNING per process. Each later error logs at ERROR only.
@@ -176,7 +179,7 @@ Everything runs on Vercel as two projects, both connected to this GitHub repo:
 
 Pushing to `main` deploys both projects to production. Pull requests get a `golem` preview, and the e2e tests run against it. `golem-api` skips preview builds (its ignored build step is `[ "$VERCEL_GIT_COMMIT_REF" != "main" ]`), so frontend previews call the production API, which allows them through `PREVIEW_ORIGIN_REGEX`.
 
-Environment variables live in Vercel (`vercel env ls`). `golem` holds `VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_CONVEX_URL` and `CONVEX_DEPLOY_KEY`. `golem-api` holds the API keys from step 2 of *Running locally*, plus `FRONTEND_ORIGIN` and `PREVIEW_ORIGIN_REGEX`. Local development leaves `VITE_API_URL` unset, so Vite proxies `/ask` to the Flask server on port 5001.
+Environment variables live in Vercel (`vercel env ls`). `golem` holds `VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_CONVEX_URL` and `CONVEX_DEPLOY_KEY`. `golem-api` holds the API keys from step 2 of *Running locally*, plus `FRONTEND_ORIGIN` and `PREVIEW_ORIGIN_REGEX`, and optionally `PREVIEW_GLOBAL_DAILY_LIMIT` (default 20, see *Rate limits*). Local development leaves `VITE_API_URL` unset, so Vite proxies `/ask` to the Flask server on port 5001.
 
 **One-time setup** (after cloning, requires [Vercel CLI](https://vercel.com/docs/cli)):
 
