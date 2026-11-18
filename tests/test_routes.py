@@ -1,7 +1,12 @@
 """test_routes.py — Integration tests for the /ask route."""
 
 import json
+import logging
 from unittest.mock import patch
+
+import pytest
+
+from app import STREAM_ERROR_MESSAGE
 
 
 def _auth_headers(token):
@@ -77,6 +82,128 @@ def test_invalid_history_format_returns_400(client, mock_jwks, valid_token):
     assert resp.status_code == 400
 
 
+def test_malformed_json_body_returns_400_not_500(client, mock_jwks, valid_token):
+    resp = client.post(
+        "/ask",
+        content_type="application/json",
+        data="{not json",
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+    assert resp.is_json
+
+
+@pytest.mark.parametrize("body", [["question"], "just a string", 42, None])
+def test_non_object_json_body_returns_400(client, mock_jwks, valid_token, body):
+    resp = client.post(
+        "/ask",
+        content_type="application/json",
+        data=json.dumps(body),
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+    assert resp.is_json
+
+
+@pytest.mark.parametrize("question", [123, ["a"], {"text": "a"}, None])
+def test_non_string_question_returns_400(client, mock_jwks, valid_token, question):
+    resp = client.post(
+        "/ask",
+        json={"question": question},
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+    assert resp.is_json
+
+
+def test_history_over_20_items_returns_400(client, mock_jwks, valid_token):
+    history = [{"role": "user", "content": "hi"}] * 21
+    resp = client.post(
+        "/ask",
+        json={"question": "test?", "history": history},
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "turn",
+    [
+        {"role": "system", "content": "hi"},
+        {"role": "user"},
+        {"role": "user", "content": 7},
+        {"role": "user", "content": "   \n\t "},
+        {"role": "assistant", "content": ""},
+        {"role": "user", "content": "x" * 2001},
+        {"role": "assistant", "content": "x" * 12001},
+        "just a string",
+    ],
+)
+def test_malformed_history_turn_returns_400(client, mock_jwks, valid_token, turn):
+    resp = client.post(
+        "/ask",
+        json={"question": "test?", "history": [turn]},
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+
+
+def test_history_at_item_limit_is_accepted(client, mock_jwks, valid_token):
+    """20 turns at the real per-role caps (user 2000, assistant 12000) fit the body cap."""
+    history = [
+        {"role": "user", "content": "x" * 2000} if i % 2 == 0 else {"role": "assistant", "content": "x" * 12000}
+        for i in range(20)
+    ]
+    xml = "<product_tag>Other</product_tag><summary>ok</summary>"
+    with patch("app.chat_run", return_value=_fake_chat_events(xml)):
+        resp = client.post(
+            "/ask",
+            json={"question": "test?", "history": history},
+            headers=_auth_headers(valid_token),
+        )
+    assert resp.status_code == 200
+
+
+def test_assistant_turn_of_9000_chars_is_accepted(client, mock_jwks, valid_token):
+    """A full XML assistant reply (~9000 chars) is a normal follow-up, not an error."""
+    history = [
+        {"role": "user", "content": "Why 401?"},
+        {"role": "assistant", "content": "<summary>" + "x" * 9000 + "</summary>"},
+    ]
+    xml = "<product_tag>Other</product_tag><summary>ok</summary>"
+    with patch("app.chat_run", return_value=_fake_chat_events(xml)):
+        resp = client.post(
+            "/ask",
+            json={"question": "Follow-up?", "history": history},
+            headers=_auth_headers(valid_token),
+        )
+    assert resp.status_code == 200
+
+
+def test_body_over_512kb_returns_413(client, mock_jwks, valid_token):
+    resp = client.post(
+        "/ask",
+        json={"question": "test?", "padding": "x" * (513 * 1024)},
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 413
+    assert resp.is_json
+    assert resp.get_json() == {"error": "Request too large"}
+
+
+def test_deeply_nested_json_returns_400(client, mock_jwks, valid_token):
+    """Nesting deep enough to hit the decoder's recursion limit is a client error, not a 500."""
+    deep = "[" * 100000 + "]" * 100000
+    resp = client.post(
+        "/ask",
+        content_type="application/json",
+        data=deep,
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+    assert resp.is_json
+
+
 # ── Happy path ────────────────────────────────────────────────────────────────
 
 def test_valid_request_streams_sse_response(client, mock_jwks, valid_token):
@@ -144,7 +271,7 @@ def test_chat_run_runtime_error_sends_error_event(client, mock_jwks, valid_token
         )
     assert resp.status_code == 200
     events = _parse_sse(resp.data)
-    assert events == [{"type": "error", "error": "No response from model"}]
+    assert events == [{"type": "error", "error": STREAM_ERROR_MESSAGE}]
 
 
 def test_chat_run_non_runtime_error_also_sends_error_event(client, mock_jwks, valid_token):
@@ -163,4 +290,22 @@ def test_chat_run_non_runtime_error_also_sends_error_event(client, mock_jwks, va
         )
     assert resp.status_code == 200
     events = _parse_sse(resp.data)
-    assert events == [{"type": "error", "error": "upstream connection reset"}]
+    assert events == [{"type": "error", "error": STREAM_ERROR_MESSAGE}]
+
+
+def test_stream_error_message_is_generic_and_exception_is_logged(client, mock_jwks, valid_token, caplog):
+    """Internal exception text stays out of the SSE event but is logged server-side."""
+    def _raising_generator(question, history):
+        raise RuntimeError("secret upstream detail sk-abc123")
+        yield  # pragma: no cover - makes this a generator function
+
+    with patch("app.chat_run", side_effect=_raising_generator), caplog.at_level(logging.ERROR, logger="app"):
+        resp = client.post(
+            "/ask",
+            json={"question": "Why am I getting a 401?"},
+            headers=_auth_headers(valid_token),
+        )
+    events = _parse_sse(resp.data)
+    assert events == [{"type": "error", "error": STREAM_ERROR_MESSAGE}]
+    assert "secret upstream detail" not in resp.get_data(as_text=True)
+    assert "secret upstream detail sk-abc123" in caplog.text

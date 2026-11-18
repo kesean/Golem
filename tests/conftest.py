@@ -95,6 +95,11 @@ def conftest_tokens():
 def mock_jwks(monkeypatch):
     """Patch _fetch_jwks so auth succeeds without a real Clerk endpoint."""
     import app as app_module
-    monkeypatch.setattr(app_module, "_fetch_jwks", lambda: FAKE_JWKS)
+    monkeypatch.setattr(app_module, "_fetch_jwks", lambda **_: FAKE_JWKS)
+
+
+@pytest.fixture
+def fake_jwks():
+    return FAKE_JWKS
 
 

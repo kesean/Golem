@@ -27,6 +27,12 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 512 * 1024  # larger bodies get 413 before parsing
+
+
+@app.errorhandler(413)
+def request_too_large(_err):
+    return jsonify({"error": "Request too large"}), 413
 
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
 _preview_regex = os.getenv("PREVIEW_ORIGIN_REGEX", "")
@@ -97,18 +103,56 @@ GUEST_JWT_SECRET = os.getenv("GUEST_JWT_SECRET", "")
 
 _jwks_cache: dict | None = None
 _jwks_cached_at: float = 0.0
+_jwks_last_attempt_at: float = 0.0
 JWKS_TTL = 3600  # 1 hour
+JWKS_MIN_FETCH_INTERVAL = 60  # network attempts are spaced at least this far apart
 
 
-def _fetch_jwks() -> dict:
-    """Fetch Clerk's public JWKS, cached for JWKS_TTL seconds."""
-    global _jwks_cache, _jwks_cached_at
-    if _jwks_cache and time.time() - _jwks_cached_at < JWKS_TTL:
-        return _jwks_cache
+class JWKSUnavailable(OSError):
+    """Clerk's signing keys cannot be loaded right now. Surfaces as 503, not 401."""
+
+
+def _download_jwks() -> dict:
     with urllib.request.urlopen(CLERK_JWKS_URL, timeout=5) as resp:
-        _jwks_cache = json.loads(resp.read())
-        _jwks_cached_at = time.time()
+        data = json.loads(resp.read())
+    if not isinstance(data, dict) or not isinstance(data.get("keys"), list):
+        raise ValueError("JWKS response has no keys list")
+    return data
+
+
+def _fetch_jwks(force: bool = False) -> dict:
+    """Return Clerk's public JWKS, refreshing it from the network when needed.
+
+    The cache is used until JWKS_TTL expires, or until `force` asks for a
+    refresh. Network attempts are at least JWKS_MIN_FETCH_INTERVAL apart, so
+    tokens with unknown kids cannot turn into a flood of requests to Clerk.
+    If a refresh fails and a cache exists, the stale cache is served.
+    """
+    global _jwks_cache, _jwks_cached_at, _jwks_last_attempt_at
+    now = time.time()
+    throttled = now - _jwks_last_attempt_at < JWKS_MIN_FETCH_INTERVAL
+    if _jwks_cache is not None:
+        fresh = now - _jwks_cached_at < JWKS_TTL and not force
+        if fresh or throttled:
+            return _jwks_cache
+    elif throttled:
+        # Nothing cached and the last attempt failed moments ago: fail fast
+        # instead of letting every request wait on another timeout.
+        raise JWKSUnavailable("JWKS unavailable; retrying after the throttle window")
+
+    _jwks_last_attempt_at = now
+    try:
+        _jwks_cache = _download_jwks()
+        _jwks_cached_at = now
+    except (OSError, ValueError) as e:
+        if _jwks_cache is None:
+            raise JWKSUnavailable(f"JWKS fetch failed: {e}") from e
+        logger.warning("JWKS refresh failed, keeping cached keys: %s", e)
     return _jwks_cache
+
+
+def _find_jwk(jwks: dict, kid) -> dict | None:
+    return next((k for k in jwks["keys"] if k.get("kid") == kid), None)
 
 
 def verify_clerk_token(token: str) -> dict:
@@ -116,12 +160,14 @@ def verify_clerk_token(token: str) -> dict:
     if not CLERK_JWKS_URL:
         raise RuntimeError("CLERK_JWKS_URL is not configured")
 
-    jwks = _fetch_jwks()
     header = jwt.get_unverified_header(token)
     kid = header.get("kid")
 
-    key_data = next((k for k in jwks["keys"] if k["kid"] == kid), None)
-    if not key_data:
+    key_data = _find_jwk(_fetch_jwks(), kid)
+    if key_data is None:
+        # Clerk rotates signing keys, so a kid missing from the cache may be new.
+        key_data = _find_jwk(_fetch_jwks(force=True), kid)
+    if key_data is None:
         raise ValueError("No matching JWK found for kid: " + str(kid))
 
     public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key_data))
@@ -187,7 +233,7 @@ def require_auth(f):
         else:
             try:
                 g.clerk_payload = verify_clerk_token(token)
-            except urllib.error.URLError as e:
+            except OSError as e:  # URLError and TimeoutError are OSError subclasses
                 logging.error("JWKS fetch failed: %s", e)
                 return jsonify({"error": "Auth service unavailable"}), 503
             except jwt.ExpiredSignatureError:
@@ -220,6 +266,27 @@ def guest_token():
     return jsonify({"token": token})
 
 
+HISTORY_MAX_ITEMS = 20
+HISTORY_MAX_CONTENT_CHARS = {"user": 2000, "assistant": 12000}  # assistant turns carry raw XML replies
+STREAM_ERROR_MESSAGE = "Something went wrong while answering. Please try again."
+
+
+def _history_is_valid(history) -> bool:
+    """History must be a short list of {role, content} turns with string content."""
+    if not isinstance(history, list) or len(history) > HISTORY_MAX_ITEMS:
+        return False
+    for turn in history:
+        if not isinstance(turn, dict):
+            return False
+        role = turn.get("role")
+        if role not in HISTORY_MAX_CONTENT_CHARS:
+            return False
+        content = turn.get("content")
+        if not isinstance(content, str) or not content.strip() or len(content) > HISTORY_MAX_CONTENT_CHARS[role]:
+            return False
+    return True
+
+
 @app.route("/ask", methods=["POST"])
 @require_auth
 @limiter.limit("20 per minute")
@@ -244,9 +311,18 @@ def ask():
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
 
-    data = request.get_json()
-    question = data.get("question", "").strip()
-    history  = data.get("history", [])
+    try:
+        data = request.get_json(silent=True)
+    except (ValueError, RecursionError):
+        # Deeply nested JSON can exhaust the decoder's recursion limit.
+        return jsonify({"error": "Malformed JSON body"}), 400
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
+
+    question = data.get("question")
+    if not isinstance(question, str):
+        return jsonify({"error": "question must be a string"}), 400
+    question = question.strip()
 
     if not question:
         return jsonify({"error": "No question provided"}), 400
@@ -254,7 +330,8 @@ def ask():
     if len(question) > 2000:
         return jsonify({"error": "Question exceeds 2000 character limit"}), 400
 
-    if not isinstance(history, list):
+    history = data.get("history", [])
+    if not _history_is_valid(history):
         return jsonify({"error": "Invalid history format"}), 400
 
     def sse(event: dict) -> str:
@@ -264,15 +341,15 @@ def ask():
         try:
             for event in chat_run(question, history):
                 yield sse(event)
-        except Exception as exc:
+        except Exception:
             # Broad on purpose: headers are already committed (200,
             # text/event-stream) by the time this generator runs, so any
-            # failure — RuntimeError from stream_run's own checks, or an
-            # anthropic.APIError/APIConnectionError from the SDK — has to
-            # become a clean 'error' SSE event instead of an unhandled
-            # exception that just aborts the stream.
-            logging.warning("stream_run failed: %s", exc)
-            yield sse({"type": "error", "error": str(exc)})
+            # failure has to become a clean 'error' SSE event instead of an
+            # unhandled exception that just aborts the stream. The real
+            # exception stays server-side; SDK and upstream messages can
+            # carry internal details, so the client gets a fixed string.
+            logger.exception("stream_run failed")
+            yield sse({"type": "error", "error": STREAM_ERROR_MESSAGE})
 
     return Response(
         stream_with_context(generate()),
@@ -281,5 +358,10 @@ def ask():
     )
 
 
+def debug_enabled() -> bool:
+    """Werkzeug's debugger allows arbitrary code execution, so it is opt-in only."""
+    return os.getenv("FLASK_DEBUG") == "1"
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=debug_enabled(), port=5001)
