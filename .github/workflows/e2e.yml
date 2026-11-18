@@ -7,12 +7,38 @@ permissions:
   contents: read
 
 jobs:
-  e2e:
+  # Fork PR commits are reachable from this repo (refs/pull/N/head), so
+  # `repos/.../commits/<sha>` succeeds for them too. Branch heads in this repo are
+  # what decide "same repo": a fork PR head is not a branch head here.
+  # The guard job holds no secrets; VERCEL_BYPASS_TOKEN is only passed to e2e.
+  guard:
     # Vercel names the environment 'Preview – golem' now that golem-api shares the repo.
     if: >
       github.event.deployment_status.state == 'success' &&
       (github.event.deployment.environment == 'Preview' ||
        github.event.deployment.environment == 'Preview – golem')
+    runs-on: ubuntu-latest
+    outputs:
+      same_repo: ${{ steps.check.outputs.same_repo }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.deployment.sha }}
+        run: |
+          # Fail closed: any API error leaves the count empty and same_repo=false.
+          count=$(gh api "repos/$REPO/commits/$SHA/branches-where-head" --jq 'length' 2>/dev/null) || count=""
+          if [ -n "$count" ] && [ "$count" -gt 0 ] 2>/dev/null; then
+            echo "same_repo=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "same_repo=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$SHA is not a branch head in $REPO (fork PR, API error, or stale deploy); skipping e2e"
+          fi
+
+  e2e:
+    needs: guard
+    if: needs.guard.outputs.same_repo == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

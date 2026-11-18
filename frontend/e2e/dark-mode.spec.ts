@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // WCAG 2.x relative luminance and contrast ratio for rgb()/rgba() strings.
 function luminance(css: string): number {

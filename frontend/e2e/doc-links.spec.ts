@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { DEMO_QUESTIONS } from '../src/lib/demoQuestions';
 
 const MOCK_TEXT =

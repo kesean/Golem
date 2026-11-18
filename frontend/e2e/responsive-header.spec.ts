@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('header does not overflow horizontally at 375px', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });

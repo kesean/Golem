@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { AxeBuilder } from '@axe-core/playwright';
 
 const NOT_FOUND = 'This answer may have been deleted by its owner or removed to make room.';

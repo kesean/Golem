@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 const MOCK_TEXT = '<summary>Test summary.</summary>';
 const MOCK_SSE_BODY =
