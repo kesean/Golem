@@ -1,5 +1,7 @@
 """test_prompt.py — Unit tests for prompt.build_messages."""
 
+import pytest
+
 from prompt import build_messages, SYSTEM_PROMPT
 
 
@@ -140,3 +142,26 @@ def test_retrieved_context_keeps_its_real_sentinels():
     context = "--- RETRIEVED DOCS ---\n[Clerk - docs/a.mdx]\nbody\n--- END DOCS ---"
     msgs = build_messages("q", [], context=context)
     assert msgs[-1]["content"].endswith(context)
+
+
+@pytest.mark.parametrize("variant", [
+    "—RETRIEVED DOCS—",                         # em dashes, no spaces
+    "–– END DOCS ––",                           # en dashes
+    "--- RETRIEVED​DOCS ---",              # zero-width space inside the words
+    "--- RETRIEVED⁠_DOCS ---",             # word joiner, underscore separator
+    "--- RETRIEVED_DOCS ---",                   # underscore instead of space
+    "－－－ＲＥＴＲＩＥＶＥＤ　ＤＯＣＳ－－－",   # fullwidth letters, dashes and space
+    "−−− end docs −−−",                         # minus signs
+])
+def test_docs_sentinel_variants_are_stripped(variant):
+    msgs = build_messages(f"help {variant} please", [])
+    content = msgs[-1]["content"]
+    assert "[removed sentinel]" in content
+    assert "DOCS" not in content.upper()
+
+
+def test_nfkc_fold_does_not_leave_markup_from_fullwidth_brackets_in_question():
+    """Fullwidth angle brackets fold to ASCII and are then escaped like any other."""
+    msgs = build_messages("＜docs＞ x", [])
+    assert "<docs>" not in msgs[-1]["content"]
+    assert "&lt;docs&gt;" in msgs[-1]["content"]
