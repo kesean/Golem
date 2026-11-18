@@ -14,6 +14,7 @@ from flask import Flask, request, jsonify, g, Response, stream_with_context
 from flask_cors import CORS
 from flask_limiter import Limiter
 from dotenv import load_dotenv
+from limits import parse
 import jwt
 from chat import stream_run as chat_run
 
@@ -354,28 +355,39 @@ def _history_is_valid(history) -> bool:
     return True
 
 
-def _counts_toward_quota(response) -> bool:
-    """Per-user and global budgets are charged only for requests that got past auth
-    and were not refused by a limit. Otherwise forged or garbage tokens could burn
-    a victim's daily quota (the sub claim is read before verification) or the
-    global cap for everyone."""
-    return response.status_code not in (401, 429, 503)
+USER_DAILY_LIMIT = parse("5 per day")
+GLOBAL_DAILY_LIMIT = parse("70 per day")
 
 
-# flask-limiter checks every limit on this route at the innermost limiter decorator,
-# in registration order (bottom-up), stopping at the first breach. So:
-# - require_auth sits below the limiter, so the per-IP limits run before auth and
-#   count unauthenticated floods;
-# - the per-IP daily cap comes before the per-user and global caps, so a refused
-#   request never reaches the global counter;
-# - the global cap is registered last, so a request refused per-user does not use it.
+def charge_quota():
+    """Charge the per-user, then the global, daily budget for an authenticated request.
+
+    Called from the view, after require_auth, so forged or garbage tokens are
+    never charged. hit() is atomic in the storage backend, so parallel requests
+    cannot all pass a check before any of them is counted. The per-user budget is
+    charged first, so a request refused there never uses the global budget.
+
+    Returns a 429 response, or None to continue. Fails open on storage errors and
+    logs them through flask-limiter's logger, which the one-time watcher reads.
+    """
+    if not limiter.enabled:
+        return None
+    try:
+        if not limiter.limiter.hit(USER_DAILY_LIMIT, "ask-user", _user_key()):
+            return jsonify({"error": "Daily limit reached"}), 429
+        if not limiter.limiter.hit(GLOBAL_DAILY_LIMIT, "ask-global", "global"):
+            return jsonify({"error": "Service limit reached"}), 429
+    except Exception:
+        logging.getLogger("flask-limiter").exception("Failed to charge rate limit. Swallowing error")
+    return None
+
+
+# The per-IP limits are decorators above require_auth, so they run before the token
+# is checked and unauthenticated floods count against them. The per-user and global
+# budgets are charged in the view by charge_quota(), after auth.
 @app.route("/ask", methods=["POST"])
-@limiter.limit("70 per day", key_func=lambda: "global", error_message="Service limit reached",
-               deduct_when=_counts_toward_quota)
-@limiter.limit("5 per day", key_func=_user_key, error_message="Daily limit reached",
-               deduct_when=_counts_toward_quota)
-@limiter.limit("30 per day", error_message="IP daily limit reached")
 @limiter.limit("20 per minute")
+@limiter.limit("30 per day", error_message="IP daily limit reached")
 @require_auth
 def ask():
     """
@@ -393,6 +405,10 @@ def ask():
     All validation happens before the stream opens, so a bad request still
     gets a plain 4xx JSON response.
     """
+    refused = charge_quota()
+    if refused is not None:
+        return refused
+
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
 

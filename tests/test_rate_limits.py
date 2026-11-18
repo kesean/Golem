@@ -129,6 +129,57 @@ def test_forged_tokens_cannot_use_up_a_victims_daily_quota(rate_limited_client, 
             assert resp.status_code == 200
 
 
+def test_parallel_guest_requests_cannot_exceed_daily_limit(rate_limited_client, clock):
+    """Six requests pass auth at the same moment: exactly five are answered, one is refused.
+
+    The barrier holds every request after auth and before the charge. A
+    check-then-count split would let all six through; an atomic hit does not.
+    """
+    import threading
+    import app as app_module
+
+    real_verify = app_module.verify_guest_token
+    real_test = app_module.limiter.limiter.test
+    barrier = threading.Barrier(6, timeout=5)
+
+    def verify_then_wait(token):
+        payload = real_verify(token)
+        barrier.wait()
+        return payload
+
+    def test_then_wait(*args, **kwargs):
+        # Only a check-then-count split calls test(); holding every thread between
+        # its check and its count is what would let all six through.
+        result = real_test(*args, **kwargs)
+        barrier.wait()
+        return result
+
+    tokens = [_guest_token(clock) for _ in range(6)]
+    statuses = []
+    lock = threading.Lock()
+
+    def worker(token):
+        with app_module.app.test_client() as client:
+            resp = client.post(
+                "/ask", json={"question": "q"}, headers=_auth_headers(token),
+                environ_base={"REMOTE_ADDR": "10.3.0.1"},
+            )
+            resp.get_data()
+            with lock:
+                statuses.append(resp.status_code)
+
+    with patch.object(app_module, "verify_guest_token", verify_then_wait), \
+         patch.object(app_module.limiter.limiter, "test", side_effect=test_then_wait), \
+         patch("app.chat_run", return_value=_fake_chat_result()):
+        threads = [threading.Thread(target=worker, args=(t,)) for t in tokens]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=15)
+
+    assert sorted(statuses) == [200] * 5 + [429]
+
+
 def test_fresh_guest_tokens_share_one_daily_bucket_per_ip(rate_limited_client, clock):
     """Minting a new guest token must not reset the guest daily limit for that IP."""
     with patch("app.chat_run", return_value=_fake_chat_result()):

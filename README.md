@@ -70,7 +70,7 @@ All limits are fixed windows enforced in `app.py`. Redis (`REDIS_URL`) makes the
 | Guest mints, per day | `/guest-token` | 20 per day | client IP |
 
 - The per-IP limits run before auth, so unauthenticated requests count against them.
-- The per-user and global limits are charged only for requests that passed auth and were not refused. Responses with status 401, 429 or 503 are not charged.
+- The per-user and global limits are charged after auth, so forged or garbage tokens never use them. A request refused by the per-user limit does not use the global budget. A request refused by the global cap is still charged to its user.
 - A guest's bucket is keyed on IP, not on the guest token, because tokens are free to mint.
 - Users behind one NAT address share the per-IP limits (20 per minute, 30 per day).
 - The limiter fails open. If storage errors at runtime, the first error logs one `Rate limiting is NOT enforced` WARNING per process. Each later error logs at ERROR only.
