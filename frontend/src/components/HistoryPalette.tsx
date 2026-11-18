@@ -75,8 +75,10 @@ export function HistoryPalette({ open, onOpenChange, onSelect, isGuest }: Histor
               Close
             </DialogClose>
             <SignInButton mode="modal">
+              {/* Clerk runs this onClick first, then opens its modal, so the trapped dialog closes before sign-in. */}
               <Button
                 className="min-h-11"
+                onClick={() => onOpenChange(false)}
                 style={{ backgroundColor: 'var(--accent)', color: 'var(--btn-text)' }}
               >
                 Sign in
