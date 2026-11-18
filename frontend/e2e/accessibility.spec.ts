@@ -91,6 +91,8 @@ const SEEDED_HISTORY = [
 ];
 
 async function openHistoryPalette(page: Page) {
+  // The Ctrl+K listener mounts with React; a keypress sent before that is dropped
+  await expect(page.locator('#question')).toBeVisible();
   await page.keyboard.press('Control+k');
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
