@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
@@ -72,6 +72,27 @@ test("createEval stops a user at 200 creations in 24 hours, others unaffected", 
     .withIdentity({ tokenIdentifier: "test|user2" })
     .mutation(api.evals.createEval, EVAL_ARGS);
   expect(typeof otherId).toBe("string");
+});
+
+test("createEval does not count rows older than 24 hours toward the cap", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    const t = convexTest(schema, modules);
+    // Rows dated 25 hours ago fill the table with 200 rows for this user.
+    vi.setSystemTime(Date.now() - 25 * 60 * 60 * 1000);
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 200; i++) {
+        await ctx.db.insert("evals", { userId: "test|user1", ...EVAL_ARGS });
+      }
+    });
+    vi.useRealTimers();
+    const id = await t
+      .withIdentity({ tokenIdentifier: "test|user1" })
+      .mutation(api.evals.createEval, EVAL_ARGS);
+    expect(typeof id).toBe("string");
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 // ── setFeedback ───────────────────────────────────────────────────────────────
