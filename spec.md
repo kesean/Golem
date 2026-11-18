@@ -1,5 +1,7 @@
 # Spec — V3a Eval harness
 
+V3a shipped (see README); checklist kept as history.
+
 Status: draft for review · Date: 2026-10-01 · Phase: V3a (see README → V3 — Next steps)
 
 ## 1. Problem
