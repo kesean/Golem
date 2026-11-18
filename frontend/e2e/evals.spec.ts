@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { AxeBuilder } from '@axe-core/playwright';
 
 const rules = { completed: true, format: true, productTag: true, citations: true, retrieval: true };

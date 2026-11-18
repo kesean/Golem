@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('tour replay button opens the tour and steps through it', async ({ page }) => {
   await page.goto('/');

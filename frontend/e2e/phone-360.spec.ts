@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Phone-width touch checks at 360x740 (a common Android width).
 test.use({ viewport: { width: 360, height: 740 }, hasTouch: true });

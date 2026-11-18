@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // The test bypass renders the signed-in layout only, so the guest "History
 // unavailable" dialog cannot be reached here. This covers the signed-in history

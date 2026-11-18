@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { AxeBuilder, Result } from '@axe-core/playwright';
 
 const MOCK_TEXT =
