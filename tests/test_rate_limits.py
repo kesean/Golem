@@ -451,13 +451,13 @@ def test_spoofed_preview_origin_cannot_exceed_preview_cap_or_touch_prod(rate_lim
     assert _prod_remaining(preview_config) == 70
 
 
-@pytest.mark.parametrize("raw,expected", [("", 20), ("5", 5), ("0", 20), ("-3", 20), ("lots", 20)])
-def test_preview_limit_env_override_and_fallback(monkeypatch, caplog, raw, expected):
+@pytest.mark.parametrize("raw,expected", [("", 20), ("5", 5), ("0", 20), ("-3", 20), ("lots", 20), ("100", 70)])
+def test_preview_limit_env_override_fallback_and_clamp(monkeypatch, caplog, raw, expected):
     import logging
     import app as app_module
 
     monkeypatch.setenv("PREVIEW_GLOBAL_DAILY_LIMIT", raw)
-    with caplog.at_level(logging.ERROR, logger="app"):
+    with caplog.at_level(logging.WARNING, logger="app"):
         item = app_module._preview_global_daily_limit()
     assert item.amount == expected
     logged = any("PREVIEW_GLOBAL_DAILY_LIMIT" in r.message for r in caplog.records)

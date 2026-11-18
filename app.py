@@ -382,6 +382,13 @@ def _preview_global_daily_limit():
             raw, e, PREVIEW_GLOBAL_DAILY_DEFAULT,
         )
         return parse(f"{PREVIEW_GLOBAL_DAILY_DEFAULT} per day")
+    prod_cap = GLOBAL_DAILY_LIMIT.amount
+    if count > prod_cap:
+        logger.warning(
+            "PREVIEW_GLOBAL_DAILY_LIMIT=%d exceeds the prod cap (%d); clamping to %d",
+            count, prod_cap, prod_cap,
+        )
+        count = prod_cap
     return parse(f"{count} per day")
 
 
