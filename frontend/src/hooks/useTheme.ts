@@ -21,14 +21,19 @@ export function useTheme() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
+
+  // Only an explicit toggle is stored. The OS-derived default is never written,
+  // so it keeps following the OS.
+  const toggle = () => {
+    const next: Theme = theme === 'light' ? 'dark' : 'light'
+    setTheme(next)
     try {
-      localStorage.setItem('theme', theme)
+      localStorage.setItem('theme', next)
     } catch {
       // Not persisted; the toggle still works for this page view
     }
-  }, [theme])
-
-  const toggle = () => setTheme(t => (t === 'light' ? 'dark' : 'light'))
+  }
 
   return { theme, toggle }
 }
