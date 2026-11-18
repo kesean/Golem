@@ -286,3 +286,51 @@ def test_rejected_requests_do_not_consume_global_cap(rate_limited_client, mock_j
         )
     assert resp.status_code == 429
     assert b"Service limit reached" in resp.data
+
+
+def test_invalid_requests_do_not_use_daily_quota(rate_limited_client, mock_jwks, valid_token):
+    """400s are refused before the quota is charged, so bad requests cost nothing."""
+    for _ in range(10):
+        resp = rate_limited_client.post("/ask", json={"question": ""}, headers=_auth_headers(valid_token))
+        assert resp.status_code == 400
+    with patch("app.chat_run", return_value=_fake_chat_result()):
+        for _ in range(5):
+            resp = rate_limited_client.post("/ask", json={"question": "q"}, headers=_auth_headers(valid_token))
+            resp.get_data()
+            assert resp.status_code == 200
+
+
+def test_user_is_charged_when_only_the_global_cap_refuses(rate_limited_client, mock_jwks, conftest_tokens, monkeypatch):
+    """User B passes the per-user check, then the global cap refuses. B is still charged."""
+    import app as app_module
+    from limits import parse
+
+    monkeypatch.setattr(app_module, "GLOBAL_DAILY_LIMIT", parse("1 per day"))
+    with patch("app.chat_run", return_value=_fake_chat_result()):
+        first = rate_limited_client.post("/ask", json={"question": "q"}, headers=_auth_headers(conftest_tokens[0]))
+        first.get_data()
+        assert first.status_code == 200
+        refused = rate_limited_client.post("/ask", json={"question": "q"}, headers=_auth_headers(conftest_tokens[1]))
+    assert refused.status_code == 429
+    assert b"Service limit reached" in refused.data
+
+    remaining = app_module.limiter.limiter.get_window_stats(app_module.USER_DAILY_LIMIT, "ask-user", "user_1").remaining
+    assert remaining == 4
+
+
+def test_storage_error_inside_charge_fails_open_with_one_warning(rate_limited_client, mock_jwks, valid_token, monkeypatch, caplog):
+    import logging
+    from unittest.mock import patch as mock_patch
+    import app as app_module
+
+    monkeypatch.setattr(app_module._limiter_failure_watch, "tripped", False)
+    with patch("app.chat_run", return_value=_fake_chat_result()), \
+         mock_patch.object(app_module.limiter.limiter, "hit", side_effect=ConnectionError("redis down")), \
+         caplog.at_level(logging.WARNING, logger="app"):
+        for _ in range(2):
+            resp = rate_limited_client.post("/ask", json={"question": "q"}, headers=_auth_headers(valid_token))
+            resp.get_data()
+            assert resp.status_code == 200
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "NOT enforced" in r.message]
+    assert len(warnings) == 1
+    assert any("Failed to charge rate limit" in r.message for r in caplog.records if r.levelno == logging.ERROR)

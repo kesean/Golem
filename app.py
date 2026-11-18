@@ -405,10 +405,6 @@ def ask():
     All validation happens before the stream opens, so a bad request still
     gets a plain 4xx JSON response.
     """
-    refused = charge_quota()
-    if refused is not None:
-        return refused
-
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
 
@@ -434,6 +430,11 @@ def ask():
     history = data.get("history", [])
     if not _history_is_valid(history):
         return jsonify({"error": "Invalid history format"}), 400
+
+    # Charged only once the request is valid, so malformed requests do not use quota.
+    refused = charge_quota()
+    if refused is not None:
+        return refused
 
     def sse(event: dict) -> str:
         return f"data: {json.dumps(event)}\n\n"
