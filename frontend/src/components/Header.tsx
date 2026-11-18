@@ -80,7 +80,8 @@ export function Header({
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end', minWidth: 0 }}>
+      {/* marginLeft auto keeps the controls right-aligned when they wrap to their own row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto', minWidth: 0 }}>
         <button
           onClick={onNewConversation}
           aria-label="New conversation"
