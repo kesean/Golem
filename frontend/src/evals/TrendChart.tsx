@@ -15,8 +15,8 @@ type Props = {
 }
 
 // Margins fit 24-unit labels at the phone breakpoint (see .ev-axis in evals.css):
-// L for a "100%" tick, T and B for the top tick and the date baselines.
-const W = 640, H = 168, L = 64, R = 56, T = 20, B = 24
+// L for a "100%" tick, T for the top tick, B so the bottom tick and the date row do not touch.
+const W = 640, H = 172, L = 72, R = 56, T = 20, B = 36
 
 export function TrendChart({ title, unitLabel, points, domain, ticks, fmt, color, selectedId, eps }: Props) {
   const [lo, hi] = domain
