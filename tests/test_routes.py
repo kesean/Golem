@@ -132,7 +132,8 @@ def test_history_over_20_items_returns_400(client, mock_jwks, valid_token):
         {"role": "system", "content": "hi"},
         {"role": "user"},
         {"role": "user", "content": 7},
-        {"role": "user", "content": "x" * 4001},
+        {"role": "user", "content": "x" * 2001},
+        {"role": "assistant", "content": "x" * 12001},
         "just a string",
     ],
 )
@@ -146,9 +147,11 @@ def test_malformed_history_turn_returns_400(client, mock_jwks, valid_token, turn
 
 
 def test_history_at_item_limit_is_accepted(client, mock_jwks, valid_token):
-    # 20 turns at 3000 chars stays under the 64 KB body cap; full 4000-char
-    # turns (80 KB total) cannot be sent in one request.
-    history = [{"role": "user", "content": "x" * 3000}] * 20
+    """20 turns at the real per-role caps (user 2000, assistant 12000) fit the body cap."""
+    history = [
+        {"role": "user", "content": "x" * 2000} if i % 2 == 0 else {"role": "assistant", "content": "x" * 12000}
+        for i in range(20)
+    ]
     xml = "<product_tag>Other</product_tag><summary>ok</summary>"
     with patch("app.chat_run", return_value=_fake_chat_events(xml)):
         resp = client.post(
@@ -159,10 +162,26 @@ def test_history_at_item_limit_is_accepted(client, mock_jwks, valid_token):
     assert resp.status_code == 200
 
 
-def test_body_over_64kb_returns_413(client, mock_jwks, valid_token):
+def test_assistant_turn_of_9000_chars_is_accepted(client, mock_jwks, valid_token):
+    """A full XML assistant reply (~9000 chars) is a normal follow-up, not an error."""
+    history = [
+        {"role": "user", "content": "Why 401?"},
+        {"role": "assistant", "content": "<summary>" + "x" * 9000 + "</summary>"},
+    ]
+    xml = "<product_tag>Other</product_tag><summary>ok</summary>"
+    with patch("app.chat_run", return_value=_fake_chat_events(xml)):
+        resp = client.post(
+            "/ask",
+            json={"question": "Follow-up?", "history": history},
+            headers=_auth_headers(valid_token),
+        )
+    assert resp.status_code == 200
+
+
+def test_body_over_512kb_returns_413(client, mock_jwks, valid_token):
     resp = client.post(
         "/ask",
-        json={"question": "test?", "padding": "x" * (65 * 1024)},
+        json={"question": "test?", "padding": "x" * (513 * 1024)},
         headers=_auth_headers(valid_token),
     )
     assert resp.status_code == 413

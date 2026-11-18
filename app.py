@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # larger bodies get 413 before parsing
+app.config["MAX_CONTENT_LENGTH"] = 512 * 1024  # larger bodies get 413 before parsing
 
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
 _preview_regex = os.getenv("PREVIEW_ORIGIN_REGEX", "")
@@ -251,7 +251,7 @@ def guest_token():
 
 
 HISTORY_MAX_ITEMS = 20
-HISTORY_MAX_CONTENT_CHARS = 4000
+HISTORY_MAX_CONTENT_CHARS = {"user": 2000, "assistant": 12000}  # assistant turns carry raw XML replies
 STREAM_ERROR_MESSAGE = "Something went wrong while answering. Please try again."
 
 
@@ -260,10 +260,13 @@ def _history_is_valid(history) -> bool:
     if not isinstance(history, list) or len(history) > HISTORY_MAX_ITEMS:
         return False
     for turn in history:
-        if not isinstance(turn, dict) or turn.get("role") not in ("user", "assistant"):
+        if not isinstance(turn, dict):
+            return False
+        role = turn.get("role")
+        if role not in HISTORY_MAX_CONTENT_CHARS:
             return False
         content = turn.get("content")
-        if not isinstance(content, str) or len(content) > HISTORY_MAX_CONTENT_CHARS:
+        if not isinstance(content, str) or len(content) > HISTORY_MAX_CONTENT_CHARS[role]:
             return False
     return True
 
