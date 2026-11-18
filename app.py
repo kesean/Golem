@@ -69,23 +69,21 @@ def _load_preview_origin_pattern(raw: str):
         return None
 
 
-def _cors_origins_from_env(frontend_origin: str, preview_regex: str) -> list:
+def _cors_origins_from_env(frontend_origin: str, pattern) -> list:
     origins: list = []
     if frontend_origin:
         origins.append(frontend_origin)
-    pattern = _load_preview_origin_pattern(preview_regex)
     if pattern is not None:
         origins.append(pattern)
     return origins
 
 
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
-_preview_regex = os.getenv("PREVIEW_ORIGIN_REGEX", "")
-_preview_origin_pattern = _load_preview_origin_pattern(_preview_regex)
+_preview_origin_pattern = _load_preview_origin_pattern(os.getenv("PREVIEW_ORIGIN_REGEX", ""))
 
 CORS(
     app,
-    origins=_cors_origins_from_env(_frontend_origin, _preview_regex),
+    origins=_cors_origins_from_env(_frontend_origin, _preview_origin_pattern),
     allow_headers=["Authorization", "Content-Type"],
     methods=["POST", "OPTIONS"],
 )
