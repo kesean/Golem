@@ -10,7 +10,10 @@ export function readStoredTheme(): Theme {
   } catch {
     // Storage blocked (private mode, disabled site data): use the OS preference
   }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  const prefersDark =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  return prefersDark ? 'dark' : 'light'
 }
 
 export function useTheme() {
