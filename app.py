@@ -228,7 +228,7 @@ def require_auth(f):
         else:
             try:
                 g.clerk_payload = verify_clerk_token(token)
-            except (urllib.error.URLError, TimeoutError, OSError) as e:
+            except OSError as e:  # URLError and TimeoutError are OSError subclasses
                 logging.error("JWKS fetch failed: %s", e)
                 return jsonify({"error": "Auth service unavailable"}), 503
             except jwt.ExpiredSignatureError:
