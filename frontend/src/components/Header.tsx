@@ -1,7 +1,6 @@
-import { useState } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
-import { CircleHelp } from 'lucide-react'
+import { CircleHelp, Moon, Sun } from 'lucide-react'
 import type { Theme } from '../hooks/useTheme'
 
 type HeaderProps = {
@@ -23,7 +22,6 @@ export function Header({
   userName,
   onSignOut,
 }: HeaderProps) {
-  const [signOutHovered, setSignOutHovered] = useState(false)
   const totalQuestions = useQuery(api.stats.getGlobalCount)
 
   // Compute counter label once
@@ -31,17 +29,13 @@ export function Header({
     totalQuestions !== undefined
       ? `${totalQuestions.toLocaleString()} ${totalQuestions === 1 ? 'question' : 'questions'} answered`
       : ''
+  // Wraps to a second row on phones instead of pushing the page wider than the viewport
   return (
     <header
+      className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-3.5"
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '14px 12px',
-        borderBottom: '1px solid var(--border-color)',
+        borderColor: 'var(--border-color)',
         backgroundColor: 'var(--bg)',
-        flexWrap: 'nowrap',
-        gap: '8px',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'nowrap', minWidth: 0 }}>
@@ -86,7 +80,7 @@ export function Header({
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end', minWidth: 0 }}>
         <button
           onClick={onNewConversation}
           aria-label="New conversation"
@@ -140,12 +134,19 @@ export function Header({
             minHeight: '44px',
             minWidth: '44px',
             color: 'var(--text-secondary)',
-            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             whiteSpace: 'nowrap',
+            flexShrink: 0,
           }}
           className="px-1.5 sm:px-2.5"
         >
-          {theme === 'light' ? '🌙' : '☀️'}
+          {theme === 'light' ? (
+            <Moon size={16} strokeWidth={2} aria-hidden="true" />
+          ) : (
+            <Sun size={16} strokeWidth={2} aria-hidden="true" />
+          )}
         </button>
 
         <button
@@ -191,26 +192,21 @@ export function Header({
         {onSignOut && (
           <button
             onClick={onSignOut}
-            onMouseEnter={() => setSignOutHovered(true)}
-            onMouseLeave={() => setSignOutHovered(false)}
             aria-label="Sign out"
+            className="signout-btn px-1.5 sm:px-2.5 sm:gap-1.5"
             style={{
               display: 'flex',
               alignItems: 'center',
               fontFamily: "'DM Sans', sans-serif",
               fontSize: '13px',
-              color: signOutHovered ? '#a85238' : 'var(--text-secondary)',
               background: 'none',
-              border: `1px solid ${signOutHovered ? '#a85238' : 'var(--border-strong)'}`,
               borderRadius: '6px',
               cursor: 'pointer',
-              paddingTop: '5px',
-              paddingBottom: '5px',
-              transition: 'color 0.15s ease, border-color 0.15s ease',
+              minHeight: '44px',
+              minWidth: '44px',
               marginLeft: '4px',
               whiteSpace: 'nowrap',
             }}
-            className="px-1.5 sm:px-2.5 sm:gap-1.5"
           >
             <svg
               width="13"
@@ -218,11 +214,8 @@ export function Header({
               viewBox="0 0 13 13"
               fill="none"
               aria-hidden="true"
-              style={{
-                transform: signOutHovered ? 'translateX(1px)' : 'translateX(0)',
-                transition: 'transform 0.15s ease',
-                flexShrink: 0,
-              }}
+              className="signout-icon"
+              style={{ flexShrink: 0 }}
             >
               <path
                 d="M5 2H2.5C2.22 2 2 2.22 2 2.5v8c0 .28.22.5.5.5H5"

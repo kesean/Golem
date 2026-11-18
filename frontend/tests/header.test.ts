@@ -26,10 +26,12 @@ describe('Header (signed in)', () => {
     expect(screen.getByText('Ada')).toBeTruthy()
   })
 
-  it('keeps every control on a single non-wrapping row', () => {
+  it('wraps its controls on narrow screens instead of overflowing the viewport', () => {
     const { container } = render(createElement(Header, { ...base, userName: 'Ada', onSignOut: vi.fn() }))
     const header = container.querySelector('header') as HTMLElement
-    expect(header.style.flexWrap).toBe('nowrap')
+    // Tailwind's flex-wrap is class-based; jsdom does not apply it, so assert the class
+    expect(header.className).toContain('flex-wrap')
+    expect(header.style.flexWrap).toBe('')
     for (const name of ['New conversation', 'Open history (Ctrl+K)', 'Sign out']) {
       expect(screen.getByRole('button', { name })).toBeTruthy()
     }
