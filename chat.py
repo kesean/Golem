@@ -52,14 +52,44 @@ def _cited_doc_urls(response_text: str) -> list[str]:
     return list(dict.fromkeys(u for u in urls if u))
 
 
+def _retrieved_urls(chunks: list[dict] | None) -> set[str]:
+    return {_norm_url(str(c["url"])).lower() for c in chunks or [] if isinstance(c, dict) and c.get("url")}
+
+
 def find_unretrieved_doc_urls(response_text: str, chunks: list[dict] | None) -> list[str]:
     """<docs> URLs that are not the url of any retrieved chunk. Never raises."""
     try:
-        retrieved = {_norm_url(str(c["url"])).lower() for c in chunks or [] if isinstance(c, dict) and c.get("url")}
+        retrieved = _retrieved_urls(chunks)
         return [u for u in _cited_doc_urls(response_text) if u.lower() not in retrieved]
     except Exception as exc:
         logging.debug("find_unretrieved_doc_urls failed: %s", exc)
         return []
+
+
+def filter_docs_block(response_text: str, chunks: list[dict] | None) -> str:
+    """Keep a <docs> line only if it cites at least one URL and every URL on it was retrieved.
+
+    The whole line goes, not just the URL, because the title on it can carry
+    the payload too. Lines with no http(s) URL are dropped as well: the
+    allowlist is what was retrieved, not what a denylist misses (javascript:
+    links, bare domains). Fails closed: on any error every docs line is dropped.
+    """
+    try:
+        retrieved = _retrieved_urls(chunks)
+
+        def keep(line: str) -> bool:
+            urls = [_norm_url(u).lower() for u in _URL_RE.findall(line)]
+            return bool(urls) and all(u in retrieved for u in urls)
+
+        def rewrite(match: re.Match) -> str:
+            # Blank lines are layout and stay; any other line must pass keep().
+            kept = [line for line in match.group(1).split("\n") if not line.strip() or keep(line)]
+            return "<docs>" + "\n".join(kept) + "</docs>"
+
+        return _DOCS_BLOCK_RE.sub(rewrite, response_text or "")
+    except Exception as exc:
+        logging.warning("filter_docs_block failed; dropping all docs: %s", exc)
+        return _DOCS_BLOCK_RE.sub("<docs></docs>", response_text or "")
 
 
 # ---------------------------------------------------------------------------
@@ -124,9 +154,10 @@ def stream_run(question: str, history: list):
     except Exception as exc:  # logging must never break the stream
         logging.debug("docs-url-miss logging failed: %s", exc)
 
+    # Deltas already streamed unfiltered; `done.response` is the text clients keep.
     yield {
         "type": "done",
-        "response": full_text,
+        "response": filter_docs_block(full_text, chunks),
         "input_tokens": final_message.usage.input_tokens,
         "output_tokens": final_message.usage.output_tokens,
         "latency_ms": round((time.time() - start) * 1000),
