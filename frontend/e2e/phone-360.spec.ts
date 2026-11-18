@@ -21,6 +21,13 @@ for (const signedIn of [false, true]) {
     const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
     expect(fits, 'document scrollWidth must not exceed the viewport').toBe(true);
 
+    // Touch (hasTouch) must hide the shortcut hint, and Ask must stay right-aligned
+    // on its own, not drift left into the hint's old slot
+    await expect(page.locator('.submit-hint')).toBeHidden();
+    const askBox = await page.locator('#ask-btn').boundingBox();
+    expect(askBox, 'Ask button box').not.toBeNull();
+    expect(askBox!.x + askBox!.width, 'Ask should sit on the right edge').toBeGreaterThanOrEqual(360 - 40);
+
     const buttons = page.locator('header button, #ask-btn');
     const count = await buttons.count();
     expect(count).toBeGreaterThan(0);
@@ -34,3 +41,16 @@ for (const signedIn of [false, true]) {
     await page.screenshot({ path: testInfo.outputPath(`360-${name}.png`), fullPage: true });
   });
 }
+
+test('320px signed-in header wraps to a second row without overflow', async ({ page }, testInfo) => {
+  test.skip(!!process.env.BASE_URL, 'needs the test-bypass build');
+  await page.addInitScript(() => {
+    (window as unknown as { __GOLEM_E2E_SIGNED_IN__: boolean }).__GOLEM_E2E_SIGNED_IN__ = true;
+  });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(fits, 'no horizontal overflow at 320px').toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('320-signed-in.png'), clip: { x: 0, y: 0, width: 320, height: 120 } });
+});

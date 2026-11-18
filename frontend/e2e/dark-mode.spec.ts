@@ -54,4 +54,15 @@ test.describe('dark mode with no stored theme', () => {
 
     await page.screenshot({ path: testInfo.outputPath('360-dark.png'), fullPage: true });
   });
+
+  test('error state renders in dark mode at 360px', async ({ page }, testInfo) => {
+    await page.route('**/ask', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"boom"}' });
+    });
+    await page.goto('/');
+    await page.locator('#question').fill('Why am I getting a 401 error?');
+    await page.locator('#ask-btn').click();
+    await expect(page.getByRole('alert')).toContainText("Couldn't get an answer");
+    await page.screenshot({ path: testInfo.outputPath('360-error-dark.png'), fullPage: true });
+  });
 });

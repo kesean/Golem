@@ -134,6 +134,22 @@ const STATES: ScanState[] = [
     },
   },
   {
+    name: 'error state',
+    viewports: ['desktop', 'mobile'],
+    requireContent: true,
+    setup: async (page) => {
+      await page.unroute('**/ask');
+      await page.route('**/ask', async (route) => {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"boom"}' });
+      });
+      await page.locator('#question').fill('Why am I getting a 401 error?');
+      await page.locator('#ask-btn').click();
+      const alert = page.getByRole('alert');
+      await expect(alert).toContainText("Couldn't get an answer");
+      await expect(alert.getByRole('button', { name: 'Try again' })).toBeVisible();
+    },
+  },
+  {
     name: 'tour dialog open',
     viewports: ['desktop'],
     requireContent: false,
