@@ -52,7 +52,10 @@ def build_messages(question: str, history: list | None = None, context: str = ""
     context is pre-retrieved doc text injected directly so Claude answers in one call.
     """
     messages = list(history or [])
-    content = f"<user_input>\n{question}\n</user_input>"
+    # Escape angle brackets so a question cannot close <user_input> early and
+    # pass text to the model as if it were outside the delimiters.
+    safe_question = question.replace("<", "&lt;").replace(">", "&gt;")
+    content = f"<user_input>\n{safe_question}\n</user_input>"
     if context:
         content += f"\n\n{context}"
     messages.append({"role": "user", "content": content})
