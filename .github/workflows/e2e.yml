@@ -8,8 +8,9 @@ permissions:
 
 jobs:
   # Fork PR commits are reachable from this repo (refs/pull/N/head), so
-  # `repos/.../commits/<sha>` succeeds for them too. The only check that rules
-  # forks out is that the deployed SHA is the current tip of a branch in this repo.
+  # `repos/.../commits/<sha>` succeeds for them too. Branch heads in this repo are
+  # what decide "same repo": a fork PR head is not a branch head here.
+  # The guard job holds no secrets; VERCEL_BYPASS_TOKEN is only passed to e2e.
   guard:
     # Vercel names the environment 'Preview – golem' now that golem-api shares the repo.
     if: >
@@ -24,15 +25,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          REF: ${{ github.event.deployment.ref }}
           SHA: ${{ github.event.deployment.sha }}
         run: |
-          tip=$(gh api "repos/$REPO/git/ref/heads/$REF" --jq '.object.sha' 2>/dev/null) || tip=""
-          if [ -n "$tip" ] && [ "$tip" = "$SHA" ]; then
+          # Fail closed: any API error leaves the count empty and same_repo=false.
+          count=$(gh api "repos/$REPO/commits/$SHA/branches-where-head" --jq 'length' 2>/dev/null) || count=""
+          if [ -n "$count" ] && [ "$count" -gt 0 ] 2>/dev/null; then
             echo "same_repo=true" >> "$GITHUB_OUTPUT"
           else
             echo "same_repo=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::$SHA is not the tip of branch $REF in $REPO (fork or stale deploy); skipping e2e"
+            echo "::notice::$SHA is not a branch head in $REPO (fork PR, API error, or stale deploy); skipping e2e"
           fi
 
   e2e:
