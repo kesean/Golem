@@ -281,5 +281,10 @@ def ask():
     )
 
 
+def debug_enabled() -> bool:
+    """Werkzeug's debugger allows arbitrary code execution, so it is opt-in only."""
+    return os.getenv("FLASK_DEBUG") == "1"
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=debug_enabled(), port=5001)
