@@ -223,6 +223,7 @@ def guest_token():
 
 HISTORY_MAX_ITEMS = 20
 HISTORY_MAX_CONTENT_CHARS = 4000
+STREAM_ERROR_MESSAGE = "Something went wrong while answering. Please try again."
 
 
 def _history_is_valid(history) -> bool:
@@ -288,15 +289,15 @@ def ask():
         try:
             for event in chat_run(question, history):
                 yield sse(event)
-        except Exception as exc:
+        except Exception:
             # Broad on purpose: headers are already committed (200,
             # text/event-stream) by the time this generator runs, so any
-            # failure — RuntimeError from stream_run's own checks, or an
-            # anthropic.APIError/APIConnectionError from the SDK — has to
-            # become a clean 'error' SSE event instead of an unhandled
-            # exception that just aborts the stream.
-            logging.warning("stream_run failed: %s", exc)
-            yield sse({"type": "error", "error": str(exc)})
+            # failure has to become a clean 'error' SSE event instead of an
+            # unhandled exception that just aborts the stream. The real
+            # exception stays server-side; SDK and upstream messages can
+            # carry internal details, so the client gets a fixed string.
+            logger.exception("stream_run failed")
+            yield sse({"type": "error", "error": STREAM_ERROR_MESSAGE})
 
     return Response(
         stream_with_context(generate()),

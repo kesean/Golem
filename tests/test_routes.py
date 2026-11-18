@@ -1,9 +1,12 @@
 """test_routes.py — Integration tests for the /ask route."""
 
 import json
+import logging
 from unittest.mock import patch
 
 import pytest
+
+from app import STREAM_ERROR_MESSAGE
 
 
 def _auth_headers(token):
@@ -232,7 +235,7 @@ def test_chat_run_runtime_error_sends_error_event(client, mock_jwks, valid_token
         )
     assert resp.status_code == 200
     events = _parse_sse(resp.data)
-    assert events == [{"type": "error", "error": "No response from model"}]
+    assert events == [{"type": "error", "error": STREAM_ERROR_MESSAGE}]
 
 
 def test_chat_run_non_runtime_error_also_sends_error_event(client, mock_jwks, valid_token):
@@ -251,4 +254,22 @@ def test_chat_run_non_runtime_error_also_sends_error_event(client, mock_jwks, va
         )
     assert resp.status_code == 200
     events = _parse_sse(resp.data)
-    assert events == [{"type": "error", "error": "upstream connection reset"}]
+    assert events == [{"type": "error", "error": STREAM_ERROR_MESSAGE}]
+
+
+def test_stream_error_message_is_generic_and_exception_is_logged(client, mock_jwks, valid_token, caplog):
+    """Internal exception text stays out of the SSE event but is logged server-side."""
+    def _raising_generator(question, history):
+        raise RuntimeError("secret upstream detail sk-abc123")
+        yield  # pragma: no cover - makes this a generator function
+
+    with patch("app.chat_run", side_effect=_raising_generator), caplog.at_level(logging.ERROR, logger="app"):
+        resp = client.post(
+            "/ask",
+            json={"question": "Why am I getting a 401?"},
+            headers=_auth_headers(valid_token),
+        )
+    events = _parse_sse(resp.data)
+    assert events == [{"type": "error", "error": STREAM_ERROR_MESSAGE}]
+    assert "secret upstream detail" not in resp.get_data(as_text=True)
+    assert "secret upstream detail sk-abc123" in caplog.text
