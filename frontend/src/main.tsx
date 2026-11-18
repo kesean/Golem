@@ -8,6 +8,7 @@ import { TokenContext } from './contexts/TokenContext'
 import { getGuestToken } from './lib/guestAuth'
 import App from './App'
 import { EvalsApp } from './evals/EvalsApp'
+import { AppLoading } from './components/AppLoading'
 import './globals.css'
 
 const Page = /^\/evals\/?$/.test(window.location.pathname) ? EvalsApp : App
@@ -32,35 +33,7 @@ function GuestTokenProvider({ children }: { children: React.ReactNode }) {
       .catch(() => setReady(true))
   }, [])
 
-  if (!ready) {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          backgroundColor: 'var(--bg)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '10px',
-        }}
-      >
-        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-          {[0, 1, 2].map(i => (
-            <span key={i} className="thinking-dot" style={{ animationDelay: `${i * 0.16}s` }} />
-          ))}
-        </div>
-        <span
-          style={{
-            fontFamily: "'DM Sans', sans-serif",
-            fontSize: '13px',
-            color: 'var(--text-secondary)',
-          }}
-        >
-          Loading…
-        </span>
-      </div>
-    )
-  }
+  if (!ready) return <AppLoading />
 
   return (
     <TokenContext.Provider value={{ getToken: () => getGuestToken().catch(() => null) }}>
@@ -71,7 +44,7 @@ function GuestTokenProvider({ children }: { children: React.ReactNode }) {
 
 function AuthRouter() {
   const { isSignedIn, isLoaded } = useAuth()
-  if (!isLoaded) return null
+  if (!isLoaded) return <AppLoading />
 
   if (isSignedIn) {
     return (

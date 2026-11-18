@@ -7,6 +7,7 @@ import { QuestionInput } from './components/QuestionInput'
 import { ResponsePanel } from './components/ResponsePanel'
 import { HistoryPalette } from './components/HistoryPalette'
 import { SuggestedQuestions } from './components/SuggestedQuestions'
+import { AppLoading } from './components/AppLoading'
 import { TourDialog } from './components/TourDialog'
 import { SharedNotice } from './components/SharedNotice'
 import { useSharedEntry, sharedViewFor } from './hooks/useSharedEntry'
@@ -104,7 +105,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
   return (
     <div
       style={{
-        minHeight: '100vh',
+        minHeight: '100dvh',
         backgroundColor: 'var(--bg)',
         display: 'flex',
         flexDirection: 'column',
@@ -155,6 +156,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
           historyId={chat.historyId}
           chunks={chat.chunks}
           isShared={sharedView === 'found'}
+          onRetry={chat.canRetry ? chat.retry : undefined}
         />
       </main>
 
@@ -173,7 +175,7 @@ function Layout({ userName, isGuest = false, onSignOut }: { userName?: string; i
 function AuthenticatedApp() {
   const { isSignedIn, isLoaded, user } = useUser()
   const { signOut } = useClerk()
-  if (!isLoaded) return null
+  if (!isLoaded) return <AppLoading />
   return (
     <Layout
       isGuest={!isSignedIn}
@@ -183,9 +185,17 @@ function AuthenticatedApp() {
   )
 }
 
+// Test-only: the signed-in header (user name, Sign out) under the bypass build.
+// A spec sets window.__GOLEM_E2E_SIGNED_IN__ before load, like the other E2E seams.
+function bypassIdentity(): { userName?: string; onSignOut?: () => void } {
+  return (window as { __GOLEM_E2E_SIGNED_IN__?: boolean }).__GOLEM_E2E_SIGNED_IN__
+    ? { userName: 'Test User', onSignOut: () => {} }
+    : {}
+}
+
 export default function App() {
   if (bypassAuth) {
-    return <Layout />
+    return <Layout {...bypassIdentity()} />
   }
   return <AuthenticatedApp />
 }
