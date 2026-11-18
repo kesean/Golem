@@ -133,6 +133,33 @@ def check_limiter_storage() -> bool:
     return True
 
 
+class _LimiterFailureWatch(logging.Handler):
+    """Turns the first swallowed limiter storage error into one WARNING per process.
+
+    flask-limiter logs every swallowed storage error at ERROR, once per request.
+    The limiter fails open, so the first one is the signal an operator needs.
+    """
+
+    def __init__(self):
+        super().__init__(level=logging.ERROR)
+        self.tripped = False
+
+    def emit(self, record):
+        if self.tripped:
+            return
+        self.tripped = True
+        cause = record.exc_info[1] if record.exc_info else None
+        detail = f"{record.getMessage()}: {cause!r}" if cause is not None else record.getMessage()
+        logger.warning(
+            "Rate limiting is NOT enforced in this process: limiter storage failed (%s). "
+            "Requests are being allowed. Check REDIS_URL and Redis health.",
+            detail,
+        )
+
+
+_limiter_failure_watch = _LimiterFailureWatch()
+logging.getLogger("flask-limiter").addHandler(_limiter_failure_watch)
+
 check_limiter_storage()
 
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
@@ -232,19 +259,20 @@ def _is_guest_token(token: str) -> bool:
 
 
 def _user_key() -> str:
-    """Return Clerk user ID for per-user rate limiting, falls back to IP.
+    """Return the per-user rate-limit key: Clerk user ID, or client IP for guests.
 
-    Decodes the JWT without verification — auth is enforced separately by
-    require_auth. We only need the sub claim as a stable per-user key.
+    Decodes the JWT without verification (require_auth verifies it). Guest tokens
+    are minted for free, so each one has a fresh sub. Keying guests on that sub
+    would give every new token a new daily bucket, so guests share one bucket per IP.
     """
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return client_ip()
+    token = auth.split(" ", 1)[1]
+    if _is_guest_token(token):
+        return f"guest-ip:{client_ip()}"
     try:
-        payload = jwt.decode(
-            auth.split(" ", 1)[1],
-            options={"verify_signature": False},
-        )
+        payload = jwt.decode(token, options={"verify_signature": False})
         return payload.get("sub") or client_ip()
     except Exception:
         return client_ip()
@@ -290,6 +318,7 @@ def require_auth(f):
 
 @app.route("/guest-token", methods=["GET"])
 @limiter.limit("10 per hour")
+@limiter.limit("20 per day", error_message="Guest token daily limit reached")
 def guest_token():
     if not GUEST_JWT_SECRET:
         return jsonify({"error": "Guest access not configured"}), 503
@@ -325,11 +354,29 @@ def _history_is_valid(history) -> bool:
     return True
 
 
+def _counts_toward_quota(response) -> bool:
+    """Per-user and global budgets are charged only for requests that got past auth
+    and were not refused by a limit. Otherwise forged or garbage tokens could burn
+    a victim's daily quota (the sub claim is read before verification) or the
+    global cap for everyone."""
+    return response.status_code not in (401, 429, 503)
+
+
+# flask-limiter checks every limit on this route at the innermost limiter decorator,
+# in registration order (bottom-up), stopping at the first breach. So:
+# - require_auth sits below the limiter, so the per-IP limits run before auth and
+#   count unauthenticated floods;
+# - the per-IP daily cap comes before the per-user and global caps, so a refused
+#   request never reaches the global counter;
+# - the global cap is registered last, so a request refused per-user does not use it.
 @app.route("/ask", methods=["POST"])
-@require_auth
+@limiter.limit("70 per day", key_func=lambda: "global", error_message="Service limit reached",
+               deduct_when=_counts_toward_quota)
+@limiter.limit("5 per day", key_func=_user_key, error_message="Daily limit reached",
+               deduct_when=_counts_toward_quota)
+@limiter.limit("30 per day", error_message="IP daily limit reached")
 @limiter.limit("20 per minute")
-@limiter.limit("5 per day", key_func=_user_key, error_message="Daily limit reached")
-@limiter.limit("70 per day", key_func=lambda: "global", error_message="Service limit reached")
+@require_auth
 def ask():
     """
     Accepts a JSON body: { "question": "...", "history": [...] }

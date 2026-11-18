@@ -56,6 +56,25 @@ VOYAGE_API_KEY=...
 
 On startup the API checks the rate-limit storage and logs whether Redis is reachable. The limiter fails open (a Redis outage won't take `/ask` down), so an unreachable Redis is logged as an error instead of silently disabling limits.
 
+#### Rate limits
+
+All limits are fixed windows enforced in `app.py`. Redis (`REDIS_URL`) makes them shared across instances.
+
+| Limit | Route | Value | Keyed on |
+|---|---|---|---|
+| Per IP, per minute | `/ask` | 20 per minute | client IP |
+| Per IP, per day | `/ask` | 30 per day | client IP |
+| Per user, per day | `/ask` | 5 per day | Clerk `sub`; guests share one bucket per IP |
+| Global, per day | `/ask` | 70 per day | everyone |
+| Guest mints, per hour | `/guest-token` | 10 per hour | client IP |
+| Guest mints, per day | `/guest-token` | 20 per day | client IP |
+
+- The per-IP limits run before auth, so unauthenticated requests count against them.
+- The per-user and global limits are charged only for requests that passed auth and were not refused. Responses with status 401, 429 or 503 are not charged.
+- A guest's bucket is keyed on IP, not on the guest token, because tokens are free to mint.
+- Users behind one NAT address share the per-IP limits (20 per minute, 30 per day).
+- The limiter fails open. If storage errors at runtime, the first error logs one `Rate limiting is NOT enforced` WARNING per process. Each later error logs at ERROR only.
+
 Copy `.env.example` to `frontend/.env` and fill in the frontend keys:
 
 ```

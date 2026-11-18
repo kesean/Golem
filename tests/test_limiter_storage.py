@@ -34,3 +34,24 @@ def test_healthy_redis_logs_info_only(caplog):
          caplog.at_level(logging.INFO, logger="app"):
         assert app_module.check_limiter_storage() is True
     assert all(r.levelno == logging.INFO for r in caplog.records)
+
+
+def test_runtime_storage_failure_warns_once_per_process(rate_limited_client, caplog, monkeypatch):
+    """Two requests with storage down: the request still succeeds, and exactly one WARNING is logged."""
+    monkeypatch.setattr(app_module._limiter_failure_watch, "tripped", False)
+    with patch.object(app_module.limiter.limiter, "test", side_effect=ConnectionError("redis down")), \
+         patch.object(app_module.limiter.limiter, "hit", side_effect=ConnectionError("redis down")), \
+         caplog.at_level(logging.WARNING, logger="app"):
+        for _ in range(2):
+            resp = rate_limited_client.get("/guest-token")
+            assert resp.status_code == 200
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "NOT enforced" in r.message]
+    assert len(warnings) == 1
+    assert "redis down" in warnings[0].message
+
+
+def test_runtime_warning_not_repeated_after_first_failure(monkeypatch, caplog):
+    monkeypatch.setattr(app_module._limiter_failure_watch, "tripped", True)
+    with caplog.at_level(logging.WARNING, logger="app"):
+        logging.getLogger("flask-limiter").error("Failed to rate limit. Swallowing error")
+    assert not [r for r in caplog.records if "NOT enforced" in r.message]
