@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/globals.css"
+        ],
+        "createdAt": "2026-11-18T06:02:15.120Z",
+        "reason": "assistant judgment, not user confirmed: .nb-summary 3px left rule is a pull-quote on serif answer text, not a card side-stripe; pre-existing, design review rated the answer layout distinctive"
+      }
+    ]
+  }
+}
