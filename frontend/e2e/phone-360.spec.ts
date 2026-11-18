@@ -26,7 +26,10 @@ for (const signedIn of [false, true]) {
     await expect(page.locator('.submit-hint')).toBeHidden();
     const askBox = await page.locator('#ask-btn').boundingBox();
     expect(askBox, 'Ask button box').not.toBeNull();
-    expect(askBox!.x + askBox!.width, 'Ask should sit on the right edge').toBeGreaterThanOrEqual(360 - 40);
+    // The input row has 24px side padding, so the button's right edge sits at 336px (1px tolerance)
+    const askRight = askBox!.x + askBox!.width;
+    expect(askRight, 'Ask right edge').toBeGreaterThanOrEqual(360 - 24 - 1);
+    expect(askRight, 'Ask right edge').toBeLessThanOrEqual(360 - 24 + 1);
 
     const buttons = page.locator('header button, #ask-btn');
     const count = await buttons.count();
