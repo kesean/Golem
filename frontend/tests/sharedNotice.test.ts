@@ -6,7 +6,7 @@ import { SharedNotice } from '../src/components/SharedNotice'
 afterEach(cleanup)
 
 const FOUND = "Shared by another user. It wasn't generated for you and may have been edited. Not verified by Golem."
-const NOT_FOUND = "This shared link doesn't work. The answer may have been deleted."
+const NOT_FOUND = 'This answer may have been deleted by its owner or removed to make room.'
 
 describe('SharedNotice', () => {
   it('always mounts an empty status region when there is nothing to show', () => {
