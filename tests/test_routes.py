@@ -187,6 +187,21 @@ def test_body_over_512kb_returns_413(client, mock_jwks, valid_token):
         headers=_auth_headers(valid_token),
     )
     assert resp.status_code == 413
+    assert resp.is_json
+    assert resp.get_json() == {"error": "Request too large"}
+
+
+def test_deeply_nested_json_returns_400(client, mock_jwks, valid_token):
+    """Nesting deep enough to hit the decoder's recursion limit is a client error, not a 500."""
+    deep = "[" * 100000 + "]" * 100000
+    resp = client.post(
+        "/ask",
+        content_type="application/json",
+        data=deep,
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+    assert resp.is_json
 
 
 # ── Happy path ────────────────────────────────────────────────────────────────

@@ -29,6 +29,11 @@ logger.setLevel(logging.INFO)
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 512 * 1024  # larger bodies get 413 before parsing
 
+
+@app.errorhandler(413)
+def request_too_large(_err):
+    return jsonify({"error": "Request too large"}), 413
+
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
 _preview_regex = os.getenv("PREVIEW_ORIGIN_REGEX", "")
 
@@ -306,7 +311,11 @@ def ask():
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
 
-    data = request.get_json(silent=True)
+    try:
+        data = request.get_json(silent=True)
+    except (ValueError, RecursionError):
+        # Deeply nested JSON can exhaust the decoder's recursion limit.
+        return jsonify({"error": "Malformed JSON body"}), 400
     if not isinstance(data, dict):
         return jsonify({"error": "Request body must be a JSON object"}), 400
 
