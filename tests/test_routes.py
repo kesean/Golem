@@ -3,6 +3,8 @@
 import json
 from unittest.mock import patch
 
+import pytest
+
 
 def _auth_headers(token):
     return {"Authorization": f"Bearer {token}"}
@@ -75,6 +77,92 @@ def test_invalid_history_format_returns_400(client, mock_jwks, valid_token):
         headers=_auth_headers(valid_token),
     )
     assert resp.status_code == 400
+
+
+def test_malformed_json_body_returns_400_not_500(client, mock_jwks, valid_token):
+    resp = client.post(
+        "/ask",
+        content_type="application/json",
+        data="{not json",
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+    assert resp.is_json
+
+
+@pytest.mark.parametrize("body", [["question"], "just a string", 42, None])
+def test_non_object_json_body_returns_400(client, mock_jwks, valid_token, body):
+    resp = client.post(
+        "/ask",
+        content_type="application/json",
+        data=json.dumps(body),
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+    assert resp.is_json
+
+
+@pytest.mark.parametrize("question", [123, ["a"], {"text": "a"}, None])
+def test_non_string_question_returns_400(client, mock_jwks, valid_token, question):
+    resp = client.post(
+        "/ask",
+        json={"question": question},
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+    assert resp.is_json
+
+
+def test_history_over_20_items_returns_400(client, mock_jwks, valid_token):
+    history = [{"role": "user", "content": "hi"}] * 21
+    resp = client.post(
+        "/ask",
+        json={"question": "test?", "history": history},
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "turn",
+    [
+        {"role": "system", "content": "hi"},
+        {"role": "user"},
+        {"role": "user", "content": 7},
+        {"role": "user", "content": "x" * 4001},
+        "just a string",
+    ],
+)
+def test_malformed_history_turn_returns_400(client, mock_jwks, valid_token, turn):
+    resp = client.post(
+        "/ask",
+        json={"question": "test?", "history": [turn]},
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 400
+
+
+def test_history_at_item_limit_is_accepted(client, mock_jwks, valid_token):
+    # 20 turns at 3000 chars stays under the 64 KB body cap; full 4000-char
+    # turns (80 KB total) cannot be sent in one request.
+    history = [{"role": "user", "content": "x" * 3000}] * 20
+    xml = "<product_tag>Other</product_tag><summary>ok</summary>"
+    with patch("app.chat_run", return_value=_fake_chat_events(xml)):
+        resp = client.post(
+            "/ask",
+            json={"question": "test?", "history": history},
+            headers=_auth_headers(valid_token),
+        )
+    assert resp.status_code == 200
+
+
+def test_body_over_64kb_returns_413(client, mock_jwks, valid_token):
+    resp = client.post(
+        "/ask",
+        json={"question": "test?", "padding": "x" * (65 * 1024)},
+        headers=_auth_headers(valid_token),
+    )
+    assert resp.status_code == 413
 
 
 # ── Happy path ────────────────────────────────────────────────────────────────

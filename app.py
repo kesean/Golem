@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # larger bodies get 413 before parsing
 
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
 _preview_regex = os.getenv("PREVIEW_ORIGIN_REGEX", "")
@@ -220,6 +221,23 @@ def guest_token():
     return jsonify({"token": token})
 
 
+HISTORY_MAX_ITEMS = 20
+HISTORY_MAX_CONTENT_CHARS = 4000
+
+
+def _history_is_valid(history) -> bool:
+    """History must be a short list of {role, content} turns with string content."""
+    if not isinstance(history, list) or len(history) > HISTORY_MAX_ITEMS:
+        return False
+    for turn in history:
+        if not isinstance(turn, dict) or turn.get("role") not in ("user", "assistant"):
+            return False
+        content = turn.get("content")
+        if not isinstance(content, str) or len(content) > HISTORY_MAX_CONTENT_CHARS:
+            return False
+    return True
+
+
 @app.route("/ask", methods=["POST"])
 @require_auth
 @limiter.limit("20 per minute")
@@ -244,9 +262,14 @@ def ask():
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
 
-    data = request.get_json()
-    question = data.get("question", "").strip()
-    history  = data.get("history", [])
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
+
+    question = data.get("question")
+    if not isinstance(question, str):
+        return jsonify({"error": "question must be a string"}), 400
+    question = question.strip()
 
     if not question:
         return jsonify({"error": "No question provided"}), 400
@@ -254,7 +277,8 @@ def ask():
     if len(question) > 2000:
         return jsonify({"error": "Question exceeds 2000 character limit"}), 400
 
-    if not isinstance(history, list):
+    history = data.get("history", [])
+    if not _history_is_valid(history):
         return jsonify({"error": "Invalid history format"}), 400
 
     def sse(event: dict) -> str:
