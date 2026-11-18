@@ -103,9 +103,16 @@ JWKS_TTL = 3600  # 1 hour
 JWKS_MIN_FETCH_INTERVAL = 60  # network attempts are spaced at least this far apart
 
 
+class JWKSUnavailable(OSError):
+    """Clerk's signing keys cannot be loaded right now. Surfaces as 503, not 401."""
+
+
 def _download_jwks() -> dict:
     with urllib.request.urlopen(CLERK_JWKS_URL, timeout=5) as resp:
-        return json.loads(resp.read())
+        data = json.loads(resp.read())
+    if not isinstance(data, dict) or not isinstance(data.get("keys"), list):
+        raise ValueError("JWKS response has no keys list")
+    return data
 
 
 def _fetch_jwks(force: bool = False) -> dict:
@@ -128,10 +135,10 @@ def _fetch_jwks(force: bool = False) -> dict:
     try:
         _jwks_cache = _download_jwks()
         _jwks_cached_at = now
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
+    except (OSError, ValueError) as e:
         if _jwks_cache is None:
-            raise
-        logger.warning("JWKS refresh failed, serving stale cache: %s", e)
+            raise JWKSUnavailable(f"JWKS fetch failed: {e}") from e
+        logger.warning("JWKS refresh failed, keeping cached keys: %s", e)
     return _jwks_cache
 
 

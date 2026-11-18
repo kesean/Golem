@@ -61,6 +61,35 @@ def test_valid_token_passes_auth_to_route(client, mock_jwks, valid_token):
     assert resp.status_code == 415
 
 
+def _fake_jwks_response(body: bytes):
+    """Stand-in for urlopen() that returns a 200 with the given body."""
+    response = MagicMock()
+    response.read.return_value = body
+    context = MagicMock()
+    context.__enter__.return_value = response
+    return MagicMock(return_value=context)
+
+
+def test_non_json_jwks_200_keeps_cached_keys(jwks_state, fake_jwks, valid_token):
+    """A 200 whose body is not JSON must not replace the good cache."""
+    _set_jwks_state(jwks_state, fake_jwks, cached_age=7200, attempt_age=120)
+    fake_urlopen = _fake_jwks_response(b"<html>maintenance</html>")
+    with patch.object(app_module.urllib.request, "urlopen", fake_urlopen):
+        payload = app_module.verify_clerk_token(valid_token)
+    assert payload["sub"] == "user_test123"
+    assert fake_urlopen.call_count == 1
+
+
+def test_jwks_200_without_keys_list_keeps_cached_keys(jwks_state, fake_jwks, valid_token):
+    """A 200 JSON body without a keys list must not replace the good cache."""
+    _set_jwks_state(jwks_state, fake_jwks, cached_age=7200, attempt_age=120)
+    fake_urlopen = _fake_jwks_response(b'{"error": "unexpected"}')
+    with patch.object(app_module.urllib.request, "urlopen", fake_urlopen):
+        payload = app_module.verify_clerk_token(valid_token)
+    assert payload["sub"] == "user_test123"
+    assert fake_urlopen.call_count == 1
+
+
 # ── JWKS cache, unknown-kid refetch, and upstream failures ────────────────────
 
 @pytest.fixture
