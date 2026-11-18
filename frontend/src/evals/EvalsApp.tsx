@@ -21,11 +21,11 @@ export function EvalsApp() {
 
   let body
   if (admin === undefined) {
-    body = <p className="ev-note" role="status">Loading…</p>
+    body = <p className="ev-state" role="status">Loading…</p>
   } else if (!admin) {
-    body = <p className="ev-note">You don't have access to evals.</p>
+    body = <p className="ev-state">You don't have access to evals.</p>
   } else if (all === undefined || scheduled === undefined) {
-    body = <p className="ev-note" role="status">Loading…</p>
+    body = <p className="ev-state" role="status">Loading…</p>
   } else if (all.length === 0) {
     body = <p className="ev-note">No eval runs yet. Run <code>make eval</code>.</p>
   } else {
@@ -84,13 +84,14 @@ export function EvalsApp() {
 
   return (
     <div className="ev-page">
+      <a href="#ev-main" className="skip-link">Skip to evals</a>
       <header className="ev-header">
         <h1>Evals</h1>
         <button type="button" className="ev-btn" onClick={toggle}>
           {theme === 'light' ? 'Dark theme' : 'Light theme'}
         </button>
       </header>
-      <main>{body}</main>
+      <main id="ev-main" tabIndex={-1}>{body}</main>
     </div>
   )
 }

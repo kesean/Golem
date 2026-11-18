@@ -76,6 +76,36 @@ test('empty state', async ({ page }) => {
   await expect(page.getByText('No eval runs yet.')).toBeVisible();
 });
 
+test('skip link moves focus to the evals content', async ({ page }) => {
+  await open(page, 'light');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to evals' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#ev-main')).toBeFocused();
+});
+
+test('360px: trend axis labels render at 11px or larger and are not clipped', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await open(page, 'light');
+  const svg = page.locator('.ev-svg').first();
+  await expect(svg).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('evals-360-light.png'), fullPage: true });
+  const result = await svg.evaluate(el => {
+    const svgEl = el as SVGSVGElement;
+    const vb = svgEl.viewBox.baseVal;
+    const scale = svgEl.getBoundingClientRect().width / vb.width;
+    const labels = Array.from(svgEl.querySelectorAll<SVGTextElement>('text.ev-axis'));
+    return {
+      minRenderedPx: Math.min(...labels.map(t => parseFloat(getComputedStyle(t).fontSize) * scale)),
+      clipped: labels
+        .map(t => t.getBBox())
+        .filter(b => b.x < 0 || b.x + b.width > vb.width || b.y < 0 || b.y + b.height > vb.height).length,
+    };
+  });
+  expect(result.minRenderedPx).toBeGreaterThanOrEqual(11);
+  expect(result.clipped).toBe(0);
+});
+
 const VIEWPORTS = { desktop: { width: 1280, height: 800 }, mobile: { width: 375, height: 812 } } as const;
 for (const [vp, size] of Object.entries(VIEWPORTS)) {
   for (const theme of ['light', 'dark'] as const) {
