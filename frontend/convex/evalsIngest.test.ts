@@ -44,6 +44,60 @@ function runDoc(overrides: Partial<{
   };
 }
 
+const RESULT = {
+  caseId: "case-1",
+  question: "Q",
+  response: "<summary>ok</summary>",
+  retrievedUrls: ["https://clerk.com/docs"],
+  rules: { completed: true, format: true, productTag: true, citations: true, retrieval: true },
+  latencyMs: 100,
+  inputTokens: 10,
+  outputTokens: 20,
+};
+
+// ── ingestRun idempotency ─────────────────────────────────────────────────────
+
+test("ingestRun returns the existing run id on a retried upload and writes nothing new", async () => {
+  const t = convexTest(schema, modules);
+  const args = { run: runDoc({ gitSha: "sha-retry", startedAt: 5_000 }), results: [RESULT] };
+  const firstId = await t.mutation(internal.evalsIngest.ingestRun, args);
+  const retryId = await t.mutation(internal.evalsIngest.ingestRun, args);
+  expect(retryId).toBe(firstId);
+  const counts = await t.run(async (ctx) => ({
+    runs: (await ctx.db.query("evalRuns").collect()).length,
+    results: (await ctx.db.query("evalResults").collect()).length,
+  }));
+  expect(counts).toEqual({ runs: 1, results: 1 });
+});
+
+test("ingestRun keeps the first write when a retry carries a different payload", async () => {
+  const t = convexTest(schema, modules);
+  const firstId = await t.mutation(internal.evalsIngest.ingestRun, {
+    run: runDoc({ gitSha: "sha-diff", startedAt: 6_000, meanScore: 2 }),
+    results: [RESULT],
+  });
+  const retryId = await t.mutation(internal.evalsIngest.ingestRun, {
+    run: runDoc({ gitSha: "sha-diff", startedAt: 6_000, meanScore: 4.5 }),
+    results: [RESULT, RESULT],
+  });
+  expect(retryId).toBe(firstId);
+  const stored = await t.run(async (ctx) => ctx.db.get(firstId));
+  expect(stored?.summary.meanScore).toBe(2);
+});
+
+test("ingestRun treats the same SHA with a different start time as a new run", async () => {
+  const t = convexTest(schema, modules);
+  const a = await t.mutation(internal.evalsIngest.ingestRun, {
+    run: runDoc({ gitSha: "sha-same", startedAt: 7_000 }),
+    results: [],
+  });
+  const b = await t.mutation(internal.evalsIngest.ingestRun, {
+    run: runDoc({ gitSha: "sha-same", startedAt: 7_001 }),
+    results: [],
+  });
+  expect(b).not.toBe(a);
+});
+
 // ── latestScheduled ───────────────────────────────────────────────────────────
 
 test("latestScheduled returns null when no completed scheduled run exists", async () => {

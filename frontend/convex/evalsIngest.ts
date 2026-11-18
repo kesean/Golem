@@ -66,6 +66,20 @@ export const ingestRun = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
+    // Idempotency guard: a retried upload of the same run (same git SHA and
+    // start time) returns the run already stored. The first write wins; a
+    // retry with a different payload is NOT merged in. This is a plain read
+    // before insert, safe because Convex mutations are serializable.
+    const existing = await ctx.db
+      .query("evalRuns")
+      .withIndex("by_sha_started", (q) =>
+        q.eq("gitSha", args.run.gitSha).eq("startedAt", args.run.startedAt)
+      )
+      .first();
+    if (existing) {
+      return existing._id;
+    }
+
     // Process baselineRunId: normalize it if provided, else omit
     const runData: typeof args.run & { baselineRunId?: string } = {
       ...args.run,
