@@ -80,6 +80,11 @@ def _cors_origins_from_env(frontend_origin: str, pattern) -> list:
 
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
 _preview_origin_pattern = _load_preview_origin_pattern(os.getenv("PREVIEW_ORIGIN_REGEX", ""))
+if not _frontend_origin and _preview_origin_pattern is not None:
+    logger.warning(
+        "FRONTEND_ORIGIN is unset while PREVIEW_ORIGIN_REGEX is set: the prod frontend's Origin "
+        "may match the regex and be charged to the preview bucket. Set FRONTEND_ORIGIN to the exact prod origin."
+    )
 
 CORS(
     app,
