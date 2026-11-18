@@ -2,6 +2,8 @@
 prompt.py — System prompt and message-building logic.
 """
 
+import re
+
 SYSTEM_PROMPT = """You are a knowledgeable developer support engineer. \
 Your job is to help developers debug issues, understand error messages, \
 and find solutions quickly.
@@ -51,18 +53,35 @@ def _escape_angle_brackets(text: str) -> str:
     return text.replace("<", "&lt;").replace(">", "&gt;")
 
 
+# The docs block delimiters from retrieval.py. Text that carries them could fake
+# a doc section, so they are removed from anything not written by retrieval.
+_DOCS_SENTINEL_RE = re.compile(r"-{2,}\s*(?:RETRIEVED\s+DOCS|END\s+DOCS)\s*-{2,}", re.IGNORECASE)
+
+
+def _neutralize_sentinels(text: str) -> str:
+    return _DOCS_SENTINEL_RE.sub("[removed sentinel]", text)
+
+
+def _sanitize_turn(turn: dict) -> dict:
+    """User turns get angle brackets escaped; every turn loses docs sentinels.
+
+    Assistant turns are prior model output, so they keep their markup, but a
+    client-supplied history can still carry a fake docs block, so sentinels go.
+    """
+    content = _neutralize_sentinels(turn["content"])
+    if turn.get("role") == "user":
+        content = _escape_angle_brackets(content)
+    return {**turn, "content": content}
+
+
 def build_messages(question: str, history: list | None = None, context: str = "") -> list:
     """Build the messages array for the Claude API call.
 
     history is a list of prior {role, content} turns (user + assistant alternating).
-    User turns are escaped the same way as the question; assistant turns are
-    prior model output and pass through unchanged.
     context is pre-retrieved doc text injected directly so Claude answers in one call.
     """
-    messages = [
-        {**turn, "content": _escape_angle_brackets(turn["content"])} if turn.get("role") == "user" else turn
-        for turn in (history or [])
-    ]
+    messages = [_sanitize_turn(turn) for turn in (history or [])]
+    question = _neutralize_sentinels(question)
     content = f"<user_input>\n{_escape_angle_brackets(question)}\n</user_input>"
     if context:
         content += f"\n\n{context}"
