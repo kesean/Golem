@@ -1,6 +1,13 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+const MAX_QUESTION_CHARS = 8000;
+const MAX_RESPONSE_CHARS = 100_000;
+// Per user, over a rolling 24h window. Only the newest MAX_CREATES_PER_DAY
+// rows are read, so the check stays bounded however large the table grows.
+const MAX_CREATES_PER_DAY = 200;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export const createEval = mutation({
   args: {
     question: v.string(),
@@ -12,8 +19,27 @@ export const createEval = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthenticated");
+    if (args.question.length > MAX_QUESTION_CHARS) {
+      throw new Error("Question is too long");
+    }
+    if (args.response.length > MAX_RESPONSE_CHARS) {
+      throw new Error("Response is too long");
+    }
+
+    const userId = identity.tokenIdentifier;
+    const since = Date.now() - DAY_MS;
+    const newest = await ctx.db
+      .query("evals")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .take(MAX_CREATES_PER_DAY);
+    const createdToday = newest.filter((row) => row._creationTime >= since).length;
+    if (createdToday >= MAX_CREATES_PER_DAY) {
+      throw new Error("Daily eval limit reached");
+    }
+
     return await ctx.db.insert("evals", {
-      userId: identity.tokenIdentifier,
+      userId,
       question: args.question,
       response: args.response,
       latency_ms: args.latency_ms,

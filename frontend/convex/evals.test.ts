@@ -36,6 +36,44 @@ test("createEval throws when unauthenticated", async () => {
   ).rejects.toThrow("Unauthenticated");
 });
 
+const EVAL_ARGS = {
+  question: "Why?",
+  response: "<summary>Test</summary>",
+  latency_ms: 100,
+  input_tokens: 10,
+  output_tokens: 20,
+};
+
+test("createEval rejects a question over 8000 characters", async () => {
+  const t = convexTest(schema, modules).withIdentity({ tokenIdentifier: "test|user1" });
+  await expect(
+    t.mutation(api.evals.createEval, { ...EVAL_ARGS, question: "x".repeat(8001) })
+  ).rejects.toThrow("Question is too long");
+});
+
+test("createEval rejects a response over 100000 characters", async () => {
+  const t = convexTest(schema, modules).withIdentity({ tokenIdentifier: "test|user1" });
+  await expect(
+    t.mutation(api.evals.createEval, { ...EVAL_ARGS, response: "x".repeat(100_001) })
+  ).rejects.toThrow("Response is too long");
+});
+
+test("createEval stops a user at 200 creations in 24 hours, others unaffected", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 200; i++) {
+      await ctx.db.insert("evals", { userId: "test|user1", ...EVAL_ARGS });
+    }
+  });
+  await expect(
+    t.withIdentity({ tokenIdentifier: "test|user1" }).mutation(api.evals.createEval, EVAL_ARGS)
+  ).rejects.toThrow("Daily eval limit reached");
+  const otherId = await t
+    .withIdentity({ tokenIdentifier: "test|user2" })
+    .mutation(api.evals.createEval, EVAL_ARGS);
+  expect(typeof otherId).toBe("string");
+});
+
 // ── setFeedback ───────────────────────────────────────────────────────────────
 
 test("setFeedback patches feedback to 'up'", async () => {
