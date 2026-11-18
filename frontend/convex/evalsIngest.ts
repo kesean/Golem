@@ -127,23 +127,20 @@ export const ingestRun = internalMutation({
 export const latestScheduled = internalQuery({
   args: {},
   handler: async (ctx) => {
-    // Get all scheduled runs, filter for completed, and sort to get the latest
-    const allRuns = await ctx.db
+    // Newest 8 completed scheduled runs, straight off the status index.
+    // Index order is startedAt desc, so recentRuns[0] is the latest.
+    const recentRuns = await ctx.db
       .query("evalRuns")
-      .withIndex("by_label_started", (q) =>
-        q.eq("label", "scheduled")
+      .withIndex("by_label_status_started", (q) =>
+        q.eq("label", "scheduled").eq("status", "completed")
       )
-      .collect();
+      .order("desc")
+      .take(8);
 
-    const completedRuns = allRuns
-      .filter((run) => run.status === "completed")
-      .sort((a, b) => b.startedAt - a.startedAt);
-
-    if (completedRuns.length === 0) {
+    const run = recentRuns[0];
+    if (!run) {
       return null;
     }
-
-    const run = completedRuns[0];
 
     // Get all results for this run
     const results = await ctx.db
@@ -151,12 +148,7 @@ export const latestScheduled = internalQuery({
       .withIndex("by_run", (q) => q.eq("runId", run._id))
       .collect();
 
-    // Get the last 8 completed scheduled runs to calculate recentBestMeanScore
-    const recentRuns = completedRuns.slice(0, 8);
-    const recentBestMeanScore =
-      recentRuns.length > 0
-        ? Math.max(...recentRuns.map((r) => r.summary.meanScore))
-        : 0;
+    const recentBestMeanScore = Math.max(...recentRuns.map((r) => r.summary.meanScore));
 
     return {
       run,
