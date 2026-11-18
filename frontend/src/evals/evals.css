@@ -33,7 +33,17 @@
   margin-top: 24px; padding: 20px; background: var(--bg-card); border: 1px solid var(--border-color);
   border-radius: 12px; color: var(--text-secondary); font-size: 14px; line-height: 1.55;
 }
-.ev-scroll { overflow-x: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; }
+/* Scroll cues: the edge fades stay put (local) while the shadows show that more content sits past either edge (scroll) */
+.ev-scroll {
+  overflow-x: auto; border: 1px solid var(--border-color); border-radius: 12px;
+  background:
+    linear-gradient(to right, var(--bg-card) 30%, rgba(255, 255, 255, 0)) left center / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--bg-card) 30%, rgba(255, 255, 255, 0)) right center / 24px 100% no-repeat local,
+    linear-gradient(to right, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0)) left center / 12px 100% no-repeat scroll,
+    linear-gradient(to left, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0)) right center / 12px 100% no-repeat scroll,
+    var(--bg-card);
+}
+.ev-date { white-space: nowrap; }
 .ev-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 520px; }
 .ev-table th, .ev-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-subtle); vertical-align: top; font-weight: 400; }
 .ev-table thead th { font-size: 12px; color: var(--text-secondary); font-weight: 600; }

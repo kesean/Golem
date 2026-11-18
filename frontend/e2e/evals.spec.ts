@@ -106,6 +106,19 @@ test('360px: trend axis labels render at 11px or larger and are not clipped', as
   expect(result.clipped).toBe(0);
 });
 
+test('360px: wide tables scroll inside a labelled region with a scroll cue', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await open(page, 'light');
+  const region = page.getByRole('region', { name: 'Eval runs, scrollable' });
+  await expect(region).toBeVisible();
+  const overflow = await region.evaluate(el => ({ scroll: el.scrollWidth, client: el.clientWidth }));
+  expect(overflow.scroll).toBeGreaterThan(overflow.client);
+  // The date cell stays on one line rather than wrapping into the Date column
+  const dateLines = await page.locator('.ev-date').first().evaluate(el => getComputedStyle(el).whiteSpace);
+  expect(dateLines).toBe('nowrap');
+  await page.screenshot({ path: testInfo.outputPath('evals-360-runs.png'), fullPage: true });
+});
+
 const VIEWPORTS = { desktop: { width: 1280, height: 800 }, mobile: { width: 375, height: 812 } } as const;
 for (const [vp, size] of Object.entries(VIEWPORTS)) {
   for (const theme of ['light', 'dark'] as const) {

@@ -23,7 +23,7 @@ export function RunList({ runs, selectedId, onSelect }: Props) {
             const sel = r._id === selectedId
             return (
               <tr key={r._id} className={sel ? 'ev-selected' : undefined}>
-                <th scope="row">
+                <th scope="row" className="ev-date">
                   <button type="button" className="ev-link" aria-pressed={sel} onClick={() => onSelect(r._id)}>
                     {formatDate(r.startedAt)}
                   </button>
