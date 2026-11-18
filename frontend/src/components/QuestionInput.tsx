@@ -69,6 +69,8 @@ export function QuestionInput({ value, onChange, onSubmit, isLoading, hero = fal
           onClick={onSubmit}
           disabled={isLoading || !value.trim()}
           style={{
+            // Stays on the right when the hint (the row's other child) is hidden on touch
+            marginLeft: 'auto',
             backgroundColor: 'var(--accent)',
             color: 'var(--btn-text)',
             fontFamily: "'DM Sans', sans-serif",
