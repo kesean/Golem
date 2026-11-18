@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 
-const NOT_FOUND = "This shared link doesn't work. The answer may have been deleted.";
+const NOT_FOUND = 'This answer may have been deleted by its owner or removed to make room.';
 
 // The bypass build points at a placeholder Convex URL, so the lookup never
 // settles and the hook's timeout produces the notFound notice. Against a real

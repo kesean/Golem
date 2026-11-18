@@ -1,12 +1,19 @@
 import { mutation, query, internalMutation } from "./_generated/server";
 
+// The counter is one row. Two first-ever writes that both saw an empty table
+// could each insert one, so every read and write treats ALL rows (a small
+// bounded read) as the counter: the total is their sum, and increment folds
+// them into the oldest row. Convex mutations are serializable, so this is a
+// defensive reconcile, not a fix for an observed race.
+const STATS_ROW_SCAN = 10;
+
 // Public — no auth required. Read by every visitor, including guests, to
 // show the global "N questions answered" counter in the header.
 export const getGlobalCount = query({
   args: {},
   handler: async (ctx) => {
-    const row = await ctx.db.query("stats").first();
-    return row?.totalQuestions ?? 0;
+    const rows = await ctx.db.query("stats").take(STATS_ROW_SCAN);
+    return rows.reduce((sum, row) => sum + row.totalQuestions, 0);
   },
 });
 
@@ -17,12 +24,18 @@ export const getGlobalCount = query({
 export const increment = mutation({
   args: {},
   handler: async (ctx) => {
-    const row = await ctx.db.query("stats").first();
-    if (!row) {
+    const rows = await ctx.db.query("stats").take(STATS_ROW_SCAN);
+    if (rows.length === 0) {
       await ctx.db.insert("stats", { totalQuestions: 1 });
       return;
     }
-    await ctx.db.patch(row._id, { totalQuestions: row.totalQuestions + 1 });
+    // Query order is ascending creation time, so rows[0] is the oldest row.
+    const [canonical, ...duplicates] = rows;
+    const total = rows.reduce((sum, row) => sum + row.totalQuestions, 0) + 1;
+    await ctx.db.patch(canonical._id, { totalQuestions: total });
+    for (const duplicate of duplicates) {
+      await ctx.db.delete(duplicate._id);
+    }
   },
 });
 

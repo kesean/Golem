@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
@@ -34,6 +34,65 @@ test("createEval throws when unauthenticated", async () => {
       output_tokens: 20,
     })
   ).rejects.toThrow("Unauthenticated");
+});
+
+const EVAL_ARGS = {
+  question: "Why?",
+  response: "<summary>Test</summary>",
+  latency_ms: 100,
+  input_tokens: 10,
+  output_tokens: 20,
+};
+
+test("createEval rejects a question over 8000 characters", async () => {
+  const t = convexTest(schema, modules).withIdentity({ tokenIdentifier: "test|user1" });
+  await expect(
+    t.mutation(api.evals.createEval, { ...EVAL_ARGS, question: "x".repeat(8001) })
+  ).rejects.toThrow("Question is too long");
+});
+
+test("createEval rejects a response over 100000 characters", async () => {
+  const t = convexTest(schema, modules).withIdentity({ tokenIdentifier: "test|user1" });
+  await expect(
+    t.mutation(api.evals.createEval, { ...EVAL_ARGS, response: "x".repeat(100_001) })
+  ).rejects.toThrow("Response is too long");
+});
+
+test("createEval stops a user at 200 creations in 24 hours, others unaffected", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 200; i++) {
+      await ctx.db.insert("evals", { userId: "test|user1", ...EVAL_ARGS });
+    }
+  });
+  await expect(
+    t.withIdentity({ tokenIdentifier: "test|user1" }).mutation(api.evals.createEval, EVAL_ARGS)
+  ).rejects.toThrow("Daily eval limit reached");
+  const otherId = await t
+    .withIdentity({ tokenIdentifier: "test|user2" })
+    .mutation(api.evals.createEval, EVAL_ARGS);
+  expect(typeof otherId).toBe("string");
+});
+
+test("createEval does not count rows older than 24 hours toward the cap", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    const t = convexTest(schema, modules);
+    // Rows dated 25 hours ago fill the table with 200 rows for this user.
+    vi.setSystemTime(Date.now() - 25 * 60 * 60 * 1000);
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 200; i++) {
+        await ctx.db.insert("evals", { userId: "test|user1", ...EVAL_ARGS });
+      }
+    });
+    vi.useRealTimers();
+    const id = await t
+      .withIdentity({ tokenIdentifier: "test|user1" })
+      .mutation(api.evals.createEval, EVAL_ARGS);
+    expect(typeof id).toBe("string");
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 // ── setFeedback ───────────────────────────────────────────────────────────────

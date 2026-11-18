@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { ExternalLink } from 'lucide-react'
 import { parseDocLink } from '../lib/docLink'
+import { isAllowedDocHref } from '../lib/docHosts'
 
 // Answers can be authored by another user (share links), so only plain prose
 // markup survives: no forms, images, styles or classes that could phish,
@@ -10,12 +11,18 @@ import { parseDocLink } from '../lib/docLink'
 const ALLOWED_TAGS = ['p', 'a', 'code', 'pre', 'strong', 'em', 'del', 'ul', 'ol', 'li', 'blockquote',
   'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'tr', 'th', 'td']
 const ALLOWED_ATTR = ['href', 'title']
-const SAFE_HREF = /^(https?:|mailto:)/i
-
+// Every link in an answer, own or shared, must point at an allowlisted https
+// host. A link that fails loses its href and degrades to plain text. mailto is
+// dropped for all answers: the sanitizer hook cannot see whether an answer is
+// a share, so one rule covers both.
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName !== 'A') return
   const href = node.getAttribute('href')
-  if (href !== null && !SAFE_HREF.test(href)) node.removeAttribute('href')
+  if (href === null) return
+  if (!isAllowedDocHref(href)) {
+    node.removeAttribute('href')
+    return
+  }
   node.setAttribute('target', '_blank')
   node.setAttribute('rel', 'noopener noreferrer')
 })
@@ -107,11 +114,14 @@ function hostOf(href: string): string {
   }
 }
 
+// Doc links come from the model and, in a share view, from another user's
+// answer. Only allowlisted hosts become links; anything else is plain text.
 export function DocList({ docs }: { docs: string[] }) {
   return (
     <ul className="nb-docs">
       {docs.map((doc, i) => {
-        const { label, href } = parseDocLink(doc)
+        const { label, href: parsedHref } = parseDocLink(doc)
+        const href = parsedHref && isAllowedDocHref(parsedHref) ? parsedHref : null
         return (
           <li key={i}>
             {href ? (

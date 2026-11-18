@@ -40,8 +40,8 @@ import App from '../src/App'
 
 const RAW_XML =
   '<product_tag>Verified by Golem</product_tag><summary>Shared summary</summary><root_cause>Cause</root_cause><debug_steps></debug_steps><docs></docs>'
-const FOUND_TEXT = "Shared by another user. It wasn't generated for you and may have been edited."
-const NOT_FOUND_TEXT = "This shared link doesn't work. The answer may have been deleted."
+const FOUND_TEXT = "Shared by another user. It wasn't generated for you and may have been edited. Not verified by Golem."
+const NOT_FOUND_TEXT = 'This answer may have been deleted by its owner or removed to make room.'
 
 const found: SharedEntryState = { status: 'found', id: 'abc', question: 'Shared question?', rawXml: RAW_XML }
 

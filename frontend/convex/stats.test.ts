@@ -57,6 +57,20 @@ test("seedFromExisting sets totalQuestions to the current evals count", async ()
   expect(count).toBe(4);
 });
 
+test("increment folds duplicate rows into one counter without losing counts", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("stats", { totalQuestions: 3 });
+    await ctx.db.insert("stats", { totalQuestions: 4 });
+  });
+  expect(await t.query(api.stats.getGlobalCount, {})).toBe(7);
+  await t.mutation(api.stats.increment, {});
+  expect(await t.query(api.stats.getGlobalCount, {})).toBe(8);
+  const rows = await t.run(async (ctx) => ctx.db.query("stats").collect());
+  expect(rows).toHaveLength(1);
+  expect(rows[0].totalQuestions).toBe(8);
+});
+
 test("seedFromExisting throws if a stats row already exists", async () => {
   const t = convexTest(schema, modules);
   await t.mutation(api.stats.increment, {});
