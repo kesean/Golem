@@ -462,3 +462,68 @@ def test_preview_limit_env_override_fallback_and_clamp(monkeypatch, caplog, raw,
     assert item.amount == expected
     logged = any("PREVIEW_GLOBAL_DAILY_LIMIT" in r.message for r in caplog.records)
     assert logged == (raw not in ("", "5"))
+
+
+def test_preview_refused_by_per_user_limit_does_not_touch_preview_bucket(rate_limited_client, mock_jwks, conftest_tokens, preview_config):
+    with patch("app.chat_run", return_value=_fake_chat_result()):
+        statuses = [
+            _ask_with_origin(rate_limited_client, conftest_tokens[0], "10.16.0.1", PREVIEW_ORIGIN).status_code
+            for _ in range(6)
+        ]
+    assert statuses == [200] * 5 + [429]
+    assert _preview_remaining(preview_config) == 15
+
+
+def test_preview_refused_by_guest_ip_limit_does_not_touch_preview_bucket(rate_limited_client, clock, preview_config, monkeypatch):
+    from limits import parse
+
+    monkeypatch.setattr(preview_config, "USER_DAILY_LIMIT", parse("100 per day"))
+    with patch("app.chat_run", return_value=_fake_chat_result()):
+        statuses = [
+            _ask_with_origin(rate_limited_client, _guest_token(clock), "10.16.0.2", PREVIEW_ORIGIN).status_code
+            for _ in range(11)
+        ]
+        refused = _ask_with_origin(rate_limited_client, _guest_token(clock), "10.16.0.2", PREVIEW_ORIGIN)
+    assert statuses == [200] * 10 + [429]
+    assert refused.status_code == 429
+    assert b"IP daily limit reached" in refused.data
+    assert _preview_remaining(preview_config) == 10
+
+
+def test_unset_frontend_origin_lets_prod_origin_fall_into_preview_bucket(rate_limited_client, mock_jwks, conftest_tokens, preview_config, monkeypatch):
+    """Documents the hazard: with FRONTEND_ORIGIN unset, the real prod origin matches the regex and is charged to preview."""
+    monkeypatch.setattr(preview_config, "_frontend_origin", "")
+    with patch("app.chat_run", return_value=_fake_chat_result()):
+        resp = _ask_with_origin(rate_limited_client, conftest_tokens[0], "10.19.0.1", PROD_ORIGIN)
+    assert resp.status_code == 200
+    assert _preview_remaining(preview_config) == 19
+    assert _prod_remaining(preview_config) == 70
+
+
+@pytest.mark.parametrize("origin", [
+    PROD_ORIGIN + "/",
+    PROD_ORIGIN.upper(),
+    "https://GOLEM-abc123.vercel.app",
+    "https://golem-abc123.vercel.app/",
+])
+def test_trailing_slash_and_uppercase_origins_count_as_prod(rate_limited_client, mock_jwks, conftest_tokens, preview_config, origin):
+    with patch("app.chat_run", return_value=_fake_chat_result()):
+        resp = _ask_with_origin(rate_limited_client, conftest_tokens[0], "10.20.0.1", origin)
+    assert resp.status_code == 200
+    assert _prod_remaining(preview_config) == 69
+    assert _preview_remaining(preview_config) == 20
+
+
+def test_spoofed_preview_origins_from_one_user_hit_the_per_user_limit(rate_limited_client, mock_jwks, conftest_tokens, preview_config):
+    """Same user and IP, a different preview Origin each time: the per-user cap still applies on the preview path."""
+    with patch("app.chat_run", return_value=_fake_chat_result()):
+        statuses = []
+        for i in range(6):
+            resp = _ask_with_origin(
+                rate_limited_client, conftest_tokens[0], "10.18.0.1", f"https://golem-s{i}.vercel.app",
+            )
+            statuses.append(resp.status_code)
+        assert b"Daily limit reached" in resp.data
+    assert statuses == [200] * 5 + [429]
+    assert _preview_remaining(preview_config) == 15
+    assert _prod_remaining(preview_config) == 70
