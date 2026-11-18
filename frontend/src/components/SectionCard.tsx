@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { ExternalLink } from 'lucide-react'
 import { parseDocLink } from '../lib/docLink'
+import { isAllowedDocHref } from '../lib/docHosts'
 
 // Answers can be authored by another user (share links), so only plain prose
 // markup survives: no forms, images, styles or classes that could phish,
@@ -107,11 +108,14 @@ function hostOf(href: string): string {
   }
 }
 
+// Doc links come from the model and, in a share view, from another user's
+// answer. Only allowlisted hosts become links; anything else is plain text.
 export function DocList({ docs }: { docs: string[] }) {
   return (
     <ul className="nb-docs">
       {docs.map((doc, i) => {
-        const { label, href } = parseDocLink(doc)
+        const { label, href: parsedHref } = parseDocLink(doc)
+        const href = parsedHref && isAllowedDocHref(parsedHref) ? parsedHref : null
         return (
           <li key={i}>
             {href ? (
