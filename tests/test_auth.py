@@ -109,6 +109,20 @@ def _set_jwks_state(monkeypatch, cache, *, cached_age, attempt_age):
     monkeypatch.setattr(app_module, "_jwks_last_attempt_at", now - attempt_age)
 
 
+def test_failed_fetch_with_no_cache_is_throttled_to_503(client, jwks_state, valid_token):
+    """After a failed fetch with nothing cached, the next request returns 503 without calling Clerk."""
+    _set_jwks_state(jwks_state, None, cached_age=0, attempt_age=10)
+    download = MagicMock()
+    with patch.object(app_module, "_download_jwks", download):
+        resp = client.post(
+            "/ask",
+            json={"question": "test"},
+            headers={"Authorization": f"Bearer {valid_token}"},
+        )
+    assert resp.status_code == 503
+    assert download.call_count == 0
+
+
 def test_unknown_kid_refetches_once_and_accepts_rotated_key(jwks_state, fake_jwks, valid_token):
     _set_jwks_state(jwks_state, {"keys": []}, cached_age=10, attempt_age=120)
     download = MagicMock(return_value=fake_jwks)

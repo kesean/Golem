@@ -125,11 +125,15 @@ def _fetch_jwks(force: bool = False) -> dict:
     """
     global _jwks_cache, _jwks_cached_at, _jwks_last_attempt_at
     now = time.time()
+    throttled = now - _jwks_last_attempt_at < JWKS_MIN_FETCH_INTERVAL
     if _jwks_cache is not None:
         fresh = now - _jwks_cached_at < JWKS_TTL and not force
-        throttled = now - _jwks_last_attempt_at < JWKS_MIN_FETCH_INTERVAL
         if fresh or throttled:
             return _jwks_cache
+    elif throttled:
+        # Nothing cached and the last attempt failed moments ago: fail fast
+        # instead of letting every request wait on another timeout.
+        raise JWKSUnavailable("JWKS unavailable; retrying after the throttle window")
 
     _jwks_last_attempt_at = now
     try:
