@@ -306,6 +306,140 @@ describe('useChat conversation history', () => {
   })
 })
 
+function sseFor(summary: string): Response {
+  const text = `<summary>${summary}</summary>`
+  const body =
+    `data: ${JSON.stringify({ type: 'delta', text })}\n\n` +
+    `data: ${JSON.stringify({ type: 'done', response: text, input_tokens: 1, output_tokens: 1, latency_ms: 1, chunks: [] })}\n\n`
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(body))
+      controller.close()
+    },
+  })
+  return new Response(stream, { status: 200 })
+}
+
+describe('useChat superseded success', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('an older ask that succeeds after a newer one writes no response and no history', async () => {
+    let resolveFirst!: (res: Response) => void
+    let resolveSecond!: (res: Response) => void
+    const fetchMock = vi
+      .fn()
+      // Ignores its abort signal, so it settles late with a success
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (resolveFirst = resolve)))
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (resolveSecond = resolve)))
+      .mockImplementationOnce(() => Promise.resolve(sseFor('third')))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useChat(false))
+
+    let firstAsk!: Promise<void>
+    let secondAsk!: Promise<void>
+    await act(async () => {
+      firstAsk = result.current.ask('first question')
+      secondAsk = result.current.ask('second question')
+    })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+
+    await act(async () => {
+      resolveSecond(sseFor('second'))
+      await secondAsk
+    })
+    await act(async () => {
+      resolveFirst(sseFor('late'))
+      await firstAsk
+    })
+
+    expect(result.current.parsedResponse?.summary).toBe('second')
+    expect(result.current.error).toBeNull()
+
+    await act(async () => {
+      await result.current.ask('third question')
+    })
+    // Only the second pair is history; the superseded first question never joined it
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).history).toEqual([
+      { role: 'user', content: 'second question' },
+      { role: 'assistant', content: '<summary>second</summary>' },
+    ])
+  })
+
+  it('a success that arrives after reset() does not repopulate the response', async () => {
+    let resolveFirst!: (res: Response) => void
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (resolveFirst = resolve)))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useChat(false))
+
+    let firstAsk!: Promise<void>
+    await act(async () => {
+      firstAsk = result.current.ask('first question')
+    })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    act(() => result.current.reset())
+    await act(async () => {
+      resolveFirst(sseFor('late'))
+      await firstAsk
+    })
+
+    expect(result.current.parsedResponse).toBeNull()
+  })
+})
+
+describe('useChat retry', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('retry re-asks the failed question with the same history', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValueOnce(sseFor('ok'))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useChat(false))
+
+    await act(async () => {
+      await result.current.ask('why 401?')
+    })
+    expect(result.current.error).toBe('Something went wrong. Please try again.')
+    expect(result.current.canRetry).toBe(true)
+
+    await act(async () => {
+      result.current.retry()
+    })
+    await vi.waitFor(() => expect(result.current.parsedResponse?.summary).toBe('ok'))
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ question: 'why 401?', history: [] })
+    expect(result.current.error).toBeNull()
+  })
+
+  it('a daily-limit error offers no retry', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(null, { status: 429 })))
+    const { result } = renderHook(() => useChat(false))
+
+    await act(async () => {
+      await result.current.ask('why 401?')
+    })
+    expect(result.current.error).toBe("You've reached the daily limit — try again tomorrow.")
+    expect(result.current.canRetry).toBe(false)
+  })
+})
+
 describe('useChat loadFromHistory', () => {
   it('sets historyId when one is given, and leaves evalId null', () => {
     const { result } = renderHook(() => useChat(false))

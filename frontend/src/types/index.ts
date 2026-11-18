@@ -17,6 +17,10 @@ export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
 export type UseChatReturn = {
   ask: (question: string) => Promise<void>
+  /** Re-asks the last question. Only meaningful when canRetry is true. */
+  retry: () => void
+  /** False for errors where asking again cannot help (daily limit, guest session missing). */
+  canRetry: boolean
   loadFromHistory: (rawXml: string, historyId?: string) => void
   parsedResponse: ParsedResponse | null
   isLoading: boolean
