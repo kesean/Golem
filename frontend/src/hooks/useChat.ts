@@ -168,6 +168,8 @@ export function useChat(isGuest = false): UseChatReturn {
           .catch(() => { setEvalId('eval-unavailable') })
       }
     } catch (err) {
+      // A superseded ask must not overwrite the newer ask's error or response.
+      if (abortControllerRef.current !== controller) return
       if (err instanceof DOMException && err.name === 'AbortError') {
         // Deliberate cancellation (reset() or unmount) — not a failure,
         // so don't clobber whatever state reset() already set.

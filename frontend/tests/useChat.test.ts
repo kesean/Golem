@@ -192,6 +192,44 @@ describe('useChat aborted asks', () => {
   })
 })
 
+describe('useChat superseded error', () => {
+  it('an older ask that fails after a newer ask started does not set an error', async () => {
+    let failFirst!: (res: Response) => void
+    let resolveSecond!: (res: Response) => void
+    const fetchMock = vi
+      .fn()
+      // Ignores its abort signal, so it settles late with a 429
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (failFirst = resolve)))
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (resolveSecond = resolve)))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useChat(false))
+
+    let firstAsk!: Promise<void>
+    let secondAsk!: Promise<void>
+    await act(async () => {
+      firstAsk = result.current.ask('first question')
+      secondAsk = result.current.ask('second question')
+    })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+
+    await act(async () => {
+      failFirst(new Response(null, { status: 429 }))
+      await firstAsk
+    })
+
+    expect(result.current.error).toBeNull()
+    expect(result.current.isLoading).toBe(true)
+
+    await act(async () => {
+      resolveSecond(sseResponse())
+      await secondAsk
+    })
+
+    expect(result.current.error).toBeNull()
+    expect(result.current.parsedResponse?.summary).toBe('ok')
+  })
+})
+
 describe('useChat conversation history', () => {
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
