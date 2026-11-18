@@ -259,7 +259,8 @@ def test_trailing_punctuation_and_bold_are_stripped():
 def test_uppercase_tag_and_unclosed_block():
     from chat import find_unretrieved_doc_urls
     assert find_unretrieved_doc_urls("<DOCS>T: https://x.dev/a</DOCS>", []) == ["https://x.dev/a"]
-    assert find_unretrieved_doc_urls("<docs>T: https://x.dev/a", []) == []
+    # An unclosed block runs to the end of the text, so its URLs are still checked and logged.
+    assert find_unretrieved_doc_urls("<docs>T: https://x.dev/a", []) == ["https://x.dev/a"]
 
 
 def test_order_is_preserved():
