@@ -169,6 +169,14 @@ input::placeholder {
   .animate-pulse {
     animation: none;
   }
+  /* Blanket backstop: dialog open/close (tw-animate), inline transitions and any new motion */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ---- Answer as a notebook page ---- */
