@@ -9,3 +9,8 @@
 /.superpowers/
 .pytest_cache/
 __pycache__/
+.agents/
+skills-lock.json
+spec.md
+tasks.md
+.impeccable/
