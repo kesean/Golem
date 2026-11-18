@@ -47,18 +47,43 @@ def set_api_headers(response):
     response.headers["Cache-Control"] = "no-store"
     return response
 
+def _load_preview_origin_pattern(raw: str):
+    """Compile PREVIEW_ORIGIN_REGEX, or refuse it (returns None).
+
+    An unanchored pattern would match any origin containing the fragment, so it
+    is refused rather than trusted. Refused or invalid values disable preview
+    CORS and log an error; the rest of the app still starts.
+    """
+    if not raw:
+        return None
+    if not (raw.startswith("^") and raw.endswith("$")):
+        logger.error(
+            "PREVIEW_ORIGIN_REGEX must start with ^ and end with $; refusing it, preview CORS origins are DISABLED"
+        )
+        return None
+    try:
+        return re.compile(raw)
+    except re.error as e:
+        logger.error("PREVIEW_ORIGIN_REGEX is not a valid regex (%s); preview CORS origins are DISABLED", e)
+        return None
+
+
+def _cors_origins_from_env(frontend_origin: str, preview_regex: str) -> list:
+    origins: list = []
+    if frontend_origin:
+        origins.append(frontend_origin)
+    pattern = _load_preview_origin_pattern(preview_regex)
+    if pattern is not None:
+        origins.append(pattern)
+    return origins
+
+
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
 _preview_regex = os.getenv("PREVIEW_ORIGIN_REGEX", "")
 
-_cors_origins: list = []
-if _frontend_origin:
-    _cors_origins.append(_frontend_origin)
-if _preview_regex:
-    _cors_origins.append(re.compile(_preview_regex))
-
 CORS(
     app,
-    origins=_cors_origins if _cors_origins else [],
+    origins=_cors_origins_from_env(_frontend_origin, _preview_regex),
     allow_headers=["Authorization", "Content-Type"],
     methods=["POST", "OPTIONS"],
 )
