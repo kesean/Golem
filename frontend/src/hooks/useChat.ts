@@ -43,10 +43,11 @@ export function useChat(isGuest = false): UseChatReturn {
     setParsedResponse(null)
     setChunks([])
 
-    conversationHistory.current = [
-      ...conversationHistory.current,
-      { role: 'user' as const, content: question },
-    ].slice(-MAX_HISTORY)
+    // Prior turns only. The question joins history with its answer on success,
+    // so a failed or aborted ask never leaves an orphan user turn behind.
+    // History is stored in whole Q/A pairs, so keep an even count: an odd cut
+    // would send an assistant turn first once the window is full.
+    const history = conversationHistory.current.slice(-(MAX_HISTORY - 2))
 
     try {
       const post = (token: string | null) =>
@@ -56,10 +57,7 @@ export function useChat(isGuest = false): UseChatReturn {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({
-            question,
-            history: conversationHistory.current.slice(0, -1),
-          }),
+          body: JSON.stringify({ question, history }),
           signal: controller.signal,
         })
 
@@ -138,6 +136,7 @@ export function useChat(isGuest = false): UseChatReturn {
 
       conversationHistory.current = [
         ...conversationHistory.current,
+        { role: 'user' as const, content: question },
         { role: 'assistant' as const, content: done.response },
       ].slice(-MAX_HISTORY)
 
@@ -169,6 +168,8 @@ export function useChat(isGuest = false): UseChatReturn {
           .catch(() => { setEvalId('eval-unavailable') })
       }
     } catch (err) {
+      // A superseded ask must not overwrite the newer ask's error or response.
+      if (abortControllerRef.current !== controller) return
       if (err instanceof DOMException && err.name === 'AbortError') {
         // Deliberate cancellation (reset() or unmount) — not a failure,
         // so don't clobber whatever state reset() already set.
@@ -187,8 +188,12 @@ export function useChat(isGuest = false): UseChatReturn {
         console.error('[useChat] ask error:', err)
       }
     } finally {
-      setIsLoading(false)
-      setIsStreaming(false)
+      // Only the latest ask owns the loading state. An older ask aborted by a
+      // newer one must not clear the newer ask's spinner.
+      if (abortControllerRef.current === controller) {
+        setIsLoading(false)
+        setIsStreaming(false)
+      }
     }
   }
 

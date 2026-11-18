@@ -43,7 +43,7 @@ export function QuestionInput({ value, onChange, onSubmit, isLoading, hero = fal
           fontSize: '13px',
           resize: 'vertical',
           backgroundColor: 'var(--bg-card)',
-          borderColor: 'var(--border-color)',
+          borderColor: 'var(--border-strong)',
           color: 'var(--text-primary)',
         }}
       />
@@ -60,6 +60,7 @@ export function QuestionInput({ value, onChange, onSubmit, isLoading, hero = fal
         </span>
         <Button
           id="ask-btn"
+          className="h-11 sm:h-8"
           onClick={onSubmit}
           disabled={isLoading || !value.trim()}
           style={{

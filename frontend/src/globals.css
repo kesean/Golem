@@ -56,6 +56,10 @@
     --border-color: #e4e0d9;
     --border-subtle: #ede9e2;
     --highlight: rgba(242, 217, 92, 0.75);
+    /* Borders on interactive controls (3:1 against the page); --border-color stays for dividers */
+    --border-strong: #8f8a80;
+    --danger-subtle: #fef2f2;
+    --col-docs-text: #566b7d;
   }
 
   .dark {
@@ -87,6 +91,11 @@
     --border-color: #252d3d;
     --border-subtle: #1d2433;
     --highlight: rgba(242, 217, 92, 0.5);
+    --accent-hover: #4cc58c;
+    --accent-subtle: rgba(47, 168, 112, 0.14);
+    --border-strong: #636e83;
+    --danger-subtle: rgba(168, 82, 56, 0.12);
+    --col-docs-text: #8b9eb0;
   }
 
   * {
@@ -130,8 +139,9 @@ input::placeholder {
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
   padding: 6px 12px;
+  min-height: 44px;
   border-radius: 999px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-strong);
   background-color: var(--bg-card);
   color: var(--text-secondary);
   cursor: pointer;
@@ -151,6 +161,21 @@ input::placeholder {
 @media (prefers-reduced-motion: reduce) {
   .suggested-chip {
     transition: none;
+  }
+  .thinking-dot {
+    animation: none;
+    opacity: 0.7;
+  }
+  .animate-pulse {
+    animation: none;
+  }
+  /* Blanket backstop: dialog open/close (tw-animate), inline transitions and any new motion */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
