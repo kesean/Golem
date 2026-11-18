@@ -277,7 +277,7 @@ def _history_is_valid(history) -> bool:
         if role not in HISTORY_MAX_CONTENT_CHARS:
             return False
         content = turn.get("content")
-        if not isinstance(content, str) or len(content) > HISTORY_MAX_CONTENT_CHARS[role]:
+        if not isinstance(content, str) or not content.strip() or len(content) > HISTORY_MAX_CONTENT_CHARS[role]:
             return False
     return True
 

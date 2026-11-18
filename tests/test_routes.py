@@ -132,6 +132,8 @@ def test_history_over_20_items_returns_400(client, mock_jwks, valid_token):
         {"role": "system", "content": "hi"},
         {"role": "user"},
         {"role": "user", "content": 7},
+        {"role": "user", "content": "   \n\t "},
+        {"role": "assistant", "content": ""},
         {"role": "user", "content": "x" * 2001},
         {"role": "assistant", "content": "x" * 12001},
         "just a string",
