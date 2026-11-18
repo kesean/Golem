@@ -7,12 +7,37 @@ permissions:
   contents: read
 
 jobs:
-  e2e:
+  # Fork PR commits are reachable from this repo (refs/pull/N/head), so
+  # `repos/.../commits/<sha>` succeeds for them too. The only check that rules
+  # forks out is that the deployed SHA is the current tip of a branch in this repo.
+  guard:
     # Vercel names the environment 'Preview – golem' now that golem-api shares the repo.
     if: >
       github.event.deployment_status.state == 'success' &&
       (github.event.deployment.environment == 'Preview' ||
        github.event.deployment.environment == 'Preview – golem')
+    runs-on: ubuntu-latest
+    outputs:
+      same_repo: ${{ steps.check.outputs.same_repo }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.event.deployment.ref }}
+          SHA: ${{ github.event.deployment.sha }}
+        run: |
+          tip=$(gh api "repos/$REPO/git/ref/heads/$REF" --jq '.object.sha' 2>/dev/null) || tip=""
+          if [ -n "$tip" ] && [ "$tip" = "$SHA" ]; then
+            echo "same_repo=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "same_repo=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$SHA is not the tip of branch $REF in $REPO (fork or stale deploy); skipping e2e"
+          fi
+
+  e2e:
+    needs: guard
+    if: needs.guard.outputs.same_repo == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
