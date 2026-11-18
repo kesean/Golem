@@ -4,7 +4,7 @@ import type { SharedView } from '../hooks/useSharedEntry'
 type SharedNoticeProps = { view: SharedView; onAskOwn: () => void }
 
 const COPY: Record<Exclude<SharedView, 'none'>, string> = {
-  found: "Shared by another user. It wasn't generated for you and may have been edited.",
+  found: "Shared by another user. It wasn't generated for you and may have been edited. Not verified by Golem.",
   notFound: "This shared link doesn't work. The answer may have been deleted.",
 }
 
