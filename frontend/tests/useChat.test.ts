@@ -56,9 +56,10 @@ function sseResponse(): Response {
 }
 
 beforeEach(() => {
-  incrementMock.mockClear()
-  createEvalMock.mockClear()
-  saveMock.mockClear()
+  // mockReset + re-resolve: vi.restoreAllMocks() in later describes strips the resolved value
+  incrementMock.mockReset().mockResolvedValue(undefined)
+  createEvalMock.mockReset().mockResolvedValue('eval-id')
+  saveMock.mockReset().mockResolvedValue('history-id')
   getTokenMock.mockReset().mockResolvedValue('test-token')
   clearGuestTokenMock.mockClear()
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse()))
@@ -147,6 +148,106 @@ describe('useChat rejected token', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(clearGuestTokenMock).not.toHaveBeenCalled()
     expect(result.current.error).toBe('Something went wrong. Please try again.')
+  })
+})
+
+describe('useChat aborted asks', () => {
+  it('an aborted older ask does not clear the loading state of the newer ask', async () => {
+    let resolveSecond!: (res: Response) => void
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            const fail = () => reject(new DOMException('aborted', 'AbortError'))
+            if (init.signal?.aborted) fail()
+            else init.signal?.addEventListener('abort', fail)
+          }),
+      )
+      .mockImplementationOnce(
+        () => new Promise<Response>((resolve) => (resolveSecond = resolve)),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useChat(false))
+
+    let firstAsk!: Promise<void>
+    let secondAsk!: Promise<void>
+    await act(async () => {
+      firstAsk = result.current.ask('first question')
+      secondAsk = result.current.ask('second question')
+      await firstAsk
+    })
+
+    // The first ask has settled (aborted); the second is still in flight.
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.error).toBeNull()
+
+    await act(async () => {
+      resolveSecond(sseResponse())
+      await secondAsk
+    })
+
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.isStreaming).toBe(false)
+  })
+})
+
+describe('useChat conversation history', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function sentHistory(fetchMock: ReturnType<typeof vi.fn>, call: number) {
+    return JSON.parse(fetchMock.mock.calls[call][1].body).history
+  }
+
+  it('a 429 ask leaves no orphan user turn in the next request history', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 429 }))
+      .mockResolvedValueOnce(sseResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useChat(false))
+
+    await act(async () => {
+      await result.current.ask('failed question')
+    })
+    expect(result.current.error).toBe("You've reached the daily limit — try again tomorrow.")
+
+    await act(async () => {
+      await result.current.ask('next question')
+    })
+
+    expect(sentHistory(fetchMock, 1)).toEqual([])
+  })
+
+  it('a successful ask adds the question and answer pair to the next request history', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(sseResponse())
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValueOnce(sseResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useChat(false))
+
+    await act(async () => {
+      await result.current.ask('q1')
+    })
+    await act(async () => {
+      await result.current.ask('q2 fails')
+    })
+    await act(async () => {
+      await result.current.ask('q3')
+    })
+
+    expect(sentHistory(fetchMock, 2)).toEqual([
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: '<summary>ok</summary>' },
+    ])
   })
 })
 
