@@ -143,6 +143,11 @@ test('opening the Clerk sign-in modal produces no CSP violations', async ({ page
   await page.goto('/');
   await settle(page);
   // Clerk exposes window.Clerk once clerk-js has loaded from its frontend API host.
+  // Preview builds set VITE_TEST_BYPASS_AUTH=true, so Clerk is not mounted there.
+  const clerkMounted = await page.evaluate(
+    () => Boolean((window as unknown as { Clerk?: { loaded?: boolean } }).Clerk?.loaded),
+  );
+  test.skip(!clerkMounted, 'Clerk not mounted on this deployment (VITE_TEST_BYPASS_AUTH build)');
   const opened = await page.evaluate(async () => {
     const clerk = (window as unknown as { Clerk?: { loaded?: boolean; openSignIn?: (o: object) => void; closeSignIn?: () => void } }).Clerk;
     if (!clerk?.loaded || !clerk.openSignIn) return false;
