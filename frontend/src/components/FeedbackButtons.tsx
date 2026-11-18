@@ -24,7 +24,7 @@ export function FeedbackButtons({ evalId }: FeedbackButtonsProps) {
   }
 
   const btnBase: React.CSSProperties = {
-    border: '1px solid var(--border-color)',
+    border: '1px solid var(--border-strong)',
     borderRadius: '6px',
     padding: '4px 10px',
     minHeight: '44px',
@@ -66,7 +66,7 @@ export function FeedbackButtons({ evalId }: FeedbackButtonsProps) {
         aria-label="Not helpful"
         style={{
           ...btnBase,
-          background: active === 'down' ? '#fef2f2' : 'none',
+          background: active === 'down' ? 'var(--danger-subtle)' : 'none',
         }}
       >
         👎

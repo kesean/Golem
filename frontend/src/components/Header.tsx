@@ -116,7 +116,7 @@ export function Header({
             fontSize: '13px',
             color: 'var(--text-secondary)',
             background: 'none',
-            border: '1px solid var(--border-color)',
+            border: '1px solid var(--border-strong)',
             borderRadius: '6px',
             cursor: 'pointer',
             minHeight: '44px',
@@ -134,7 +134,7 @@ export function Header({
           aria-pressed={theme === 'dark'}
           style={{
             background: 'none',
-            border: '1px solid var(--border-color)',
+            border: '1px solid var(--border-strong)',
             borderRadius: '6px',
             cursor: 'pointer',
             minHeight: '44px',
@@ -155,7 +155,7 @@ export function Header({
           title="Show guided tour"
           style={{
             background: 'none',
-            border: '1px solid var(--border-color)',
+            border: '1px solid var(--border-strong)',
             borderRadius: '6px',
             cursor: 'pointer',
             minHeight: '44px',
@@ -201,7 +201,7 @@ export function Header({
               fontSize: '13px',
               color: signOutHovered ? '#a85238' : 'var(--text-secondary)',
               background: 'none',
-              border: `1px solid ${signOutHovered ? '#a85238' : 'var(--border-color)'}`,
+              border: `1px solid ${signOutHovered ? '#a85238' : 'var(--border-strong)'}`,
               borderRadius: '6px',
               cursor: 'pointer',
               paddingTop: '5px',

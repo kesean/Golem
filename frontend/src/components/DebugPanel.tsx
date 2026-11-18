@@ -71,7 +71,7 @@ export function DebugPanel({ chunks }: DebugPanelProps) {
                 style={{
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: '11px',
-                  color: 'var(--col-docs)',
+                  color: 'var(--col-docs-text)',
                   marginBottom: '4px',
                 }}
               >
