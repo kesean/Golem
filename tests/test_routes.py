@@ -293,6 +293,39 @@ def test_chat_run_non_runtime_error_also_sends_error_event(client, mock_jwks, va
     assert events == [{"type": "error", "error": STREAM_ERROR_MESSAGE}]
 
 
+def test_api_responses_carry_security_headers(client, mock_jwks, valid_token):
+    """nosniff and no-store on success, validation errors and 413 alike."""
+    xml = "<product_tag>Other</product_tag><summary>ok</summary>"
+    with patch("app.chat_run", return_value=_fake_chat_events(xml)):
+        ok = client.post("/ask", json={"question": "q"}, headers=_auth_headers(valid_token))
+        ok.get_data()  # consume the SSE stream so its request context is popped
+    bad =client.post("/ask", json={"question": ""}, headers=_auth_headers(valid_token))
+    big = client.post("/ask", json={"question": "q", "padding": "x" * (513 * 1024)}, headers=_auth_headers(valid_token))
+    for resp in (ok, bad, big):
+        assert resp.headers["X-Content-Type-Options"] == "nosniff"
+        assert resp.headers["Cache-Control"] == "no-store"
+
+
+def test_sse_stream_still_parses_with_headers(client, mock_jwks, valid_token):
+    xml = "<product_tag>Other</product_tag><summary>ok</summary>"
+    with patch("app.chat_run", return_value=_fake_chat_events(xml)):
+        resp = client.post("/ask", json={"question": "q"}, headers=_auth_headers(valid_token))
+    assert resp.headers["Cache-Control"] == "no-store"
+    assert resp.headers["X-Accel-Buffering"] == "no"
+    assert [e["type"] for e in _parse_sse(resp.data)] == ["delta", "done"]
+
+
+def test_rate_limited_response_carries_security_headers(rate_limited_client, monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    headers = {"X-Forwarded-For": "203.0.113.50"}
+    for _ in range(10):
+        rate_limited_client.get("/guest-token", headers=headers)
+    resp = rate_limited_client.get("/guest-token", headers=headers)
+    assert resp.status_code == 429
+    assert resp.headers["X-Content-Type-Options"] == "nosniff"
+    assert resp.headers["Cache-Control"] == "no-store"
+
+
 def test_stream_error_message_is_generic_and_exception_is_logged(client, mock_jwks, valid_token, caplog):
     """Internal exception text stays out of the SSE event but is logged server-side."""
     def _raising_generator(question, history):

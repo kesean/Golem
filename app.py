@@ -34,6 +34,19 @@ app.config["MAX_CONTENT_LENGTH"] = 512 * 1024  # larger bodies get 413 before pa
 def request_too_large(_err):
     return jsonify({"error": "Request too large"}), 413
 
+
+@app.after_request
+def set_api_headers(response):
+    """Applies to every response, including errors and SSE streams.
+
+    no-store keeps answers and token-bearing responses out of shared caches.
+    nosniff stops browsers from reinterpreting JSON or SSE as another type.
+    Headers are set before the body streams, so SSE framing is unaffected.
+    """
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
 _preview_regex = os.getenv("PREVIEW_ORIGIN_REGEX", "")
 
@@ -354,7 +367,7 @@ def ask():
     return Response(
         stream_with_context(generate()),
         mimetype="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers={"X-Accel-Buffering": "no"},
     )
 
 
