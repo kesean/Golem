@@ -81,11 +81,22 @@ MDN_FILES = [
     "files/en-us/web/http/guides/cors/index.md",
 ]
 
+# ── Upstream pins ─────────────────────────────────────────────────────────────
+# Content is fetched at a fixed commit, so an upstream change cannot silently
+# alter what gets embedded. To bump a pin:
+#   gh api repos/clerk/clerk-docs/commits/main --jq .sha
+#   gh api repos/mdn/content/commits/main --jq .sha
+# Review the upstream diff for the listed files, then update the SHA below.
+# Per-run override: CLERK_DOCS_REF / MDN_CONTENT_REF (any commit SHA or branch).
+
+CLERK_DOCS_REF = os.getenv("CLERK_DOCS_REF") or "ef4c8967cd3ee006d3f5af1340b1a5c44463e4f5"
+MDN_CONTENT_REF = os.getenv("MDN_CONTENT_REF") or "5d53607e3645a456fce6564424823169157b74b1"
+
 # ── Source registry ───────────────────────────────────────────────────────────
 
 SOURCES = [
-    {"name": "Clerk", "owner": "clerk", "repo": "clerk-docs", "branch": "main", "files": CLERK_FILES},
-    {"name": "MDN",   "owner": "mdn",   "repo": "content",    "branch": "main", "files": MDN_FILES},
+    {"name": "Clerk", "owner": "clerk", "repo": "clerk-docs", "ref": CLERK_DOCS_REF, "files": CLERK_FILES},
+    {"name": "MDN",   "owner": "mdn",   "repo": "content",    "ref": MDN_CONTENT_REF, "files": MDN_FILES},
 ]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -98,9 +109,9 @@ def github_headers() -> dict:
     return h
 
 
-def fetch_file(owner: str, repo: str, path: str) -> str:
+def fetch_file(owner: str, repo: str, path: str, ref: str) -> str:
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
-    resp = httpx.get(url, headers=github_headers(), timeout=15)
+    resp = httpx.get(url, headers=github_headers(), params={"ref": ref}, timeout=15)
     resp.raise_for_status()
     data = resp.json()
     if data.get("encoding") != "base64":
@@ -134,9 +145,9 @@ def chunk_id(repo_path: str, chunk_index: int) -> str:
     return str(uuid.UUID(digest[:32]))
 
 
-def check_file_exists(owner: str, repo: str, path: str) -> bool:
+def check_file_exists(owner: str, repo: str, path: str, ref: str) -> bool:
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
-    resp = httpx.get(url, headers=github_headers(), timeout=15)
+    resp = httpx.get(url, headers=github_headers(), params={"ref": ref}, timeout=15)
     if resp.status_code == 200:
         return True
     if resp.status_code == 404:
@@ -168,7 +179,7 @@ def validate_sources() -> None:
     failed = []
     for source in SOURCES:
         for path in source["files"]:
-            if not check_file_exists(source["owner"], source["repo"], path):
+            if not check_file_exists(source["owner"], source["repo"], path, source["ref"]):
                 failed.append(f"{source['name']}: {path}")
     if failed:
         logging.error("Path validation failed — %d file(s) not found:", len(failed))
@@ -233,6 +244,7 @@ def main(validate_only: bool = False) -> None:
         name = source["name"]
         owner = source["owner"]
         repo = source["repo"]
+        ref = source["ref"]
         file_list = source["files"]
 
         all_chunks: list[str] = []
@@ -240,13 +252,13 @@ def main(validate_only: bool = False) -> None:
 
         for path in file_list:
             try:
-                content = fetch_file(owner, repo, path)
+                content = fetch_file(owner, repo, path, ref)
             except Exception as e:
                 logging.error("  FAILED %s — fetch error: %s", path, e)
                 raise
 
             chunks = chunk_text(content, enc)
-            github_url = f"https://github.com/{owner}/{repo}/blob/main/{path}"
+            github_url = f"https://github.com/{owner}/{repo}/blob/{ref}/{path}"
             for i, chunk in enumerate(chunks):
                 all_chunks.append(chunk)
                 all_meta.append({
