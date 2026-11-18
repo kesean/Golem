@@ -357,15 +357,20 @@ def _history_is_valid(history) -> bool:
 
 USER_DAILY_LIMIT = parse("5 per day")
 GLOBAL_DAILY_LIMIT = parse("70 per day")
+GUEST_IP_DAILY_LIMIT = parse("10 per day")  # guests only
+SIGNED_IN_IP_BACKSTOP = parse("200 per day")  # loose: signed-in users are capped per user
 
 
 def charge_quota():
-    """Charge the per-user, then the global, daily budget for an authenticated request.
+    """Charge the daily budgets for an authenticated request, most specific first.
 
     Called from the view, after require_auth, so forged or garbage tokens are
     never charged. hit() is atomic in the storage backend, so parallel requests
-    cannot all pass a check before any of them is counted. The per-user budget is
-    charged first, so a request refused there never uses the global budget.
+    cannot all pass a check before any of them is counted. Each refusal stops the
+    chain, so a request refused early never uses a later budget:
+      1. per-IP daily: 10 for guests, 200 backstop for signed-in users
+      2. per-user daily: 5 (guests share one bucket per IP)
+      3. global daily: 70
 
     Returns a 429 response, or None to continue. Fails open on storage errors and
     logs them through flask-limiter's logger, which the one-time watcher reads.
@@ -373,6 +378,13 @@ def charge_quota():
     if not limiter.enabled:
         return None
     try:
+        ip = client_ip()
+        is_guest = g.clerk_payload.get("role") == "guest"
+        if is_guest:
+            if not limiter.limiter.hit(GUEST_IP_DAILY_LIMIT, "ask-guest-ip", ip):
+                return jsonify({"error": "IP daily limit reached"}), 429
+        elif not limiter.limiter.hit(SIGNED_IN_IP_BACKSTOP, "ask-ip", ip):
+            return jsonify({"error": "IP daily limit reached"}), 429
         if not limiter.limiter.hit(USER_DAILY_LIMIT, "ask-user", _user_key()):
             return jsonify({"error": "Daily limit reached"}), 429
         if not limiter.limiter.hit(GLOBAL_DAILY_LIMIT, "ask-global", "global"):
@@ -382,12 +394,11 @@ def charge_quota():
     return None
 
 
-# The per-IP limits are decorators above require_auth, so they run before the token
-# is checked and unauthenticated floods count against them. The per-user and global
-# budgets are charged in the view by charge_quota(), after auth.
+# The per-minute per-IP limit is a decorator above require_auth, so it runs before the
+# token is checked and unauthenticated floods count against it. Every other budget is
+# charged in the view by charge_quota(), after auth.
 @app.route("/ask", methods=["POST"])
 @limiter.limit("20 per minute")
-@limiter.limit("30 per day", error_message="IP daily limit reached")
 @require_auth
 def ask():
     """

@@ -62,17 +62,19 @@ All limits are fixed windows enforced in `app.py`. Redis (`REDIS_URL`) makes the
 
 | Limit | Route | Value | Keyed on |
 |---|---|---|---|
-| Per IP, per minute | `/ask` | 20 per minute | client IP |
-| Per IP, per day | `/ask` | 30 per day | client IP |
+| Per IP, per minute | `/ask` | 20 per minute | client IP (before auth) |
+| Per IP, per day, guests | `/ask` | 10 per day | client IP |
+| Per IP, per day, signed-in | `/ask` | 200 per day (backstop) | client IP |
 | Per user, per day | `/ask` | 5 per day | Clerk `sub`; guests share one bucket per IP |
 | Global, per day | `/ask` | 70 per day | everyone |
 | Guest mints, per hour | `/guest-token` | 10 per hour | client IP |
 | Guest mints, per day | `/guest-token` | 20 per day | client IP |
 
-- The per-IP limits run before auth, so unauthenticated requests count against them.
-- The per-user and global limits are charged after auth, so forged or garbage tokens never use them. A request refused by the per-user limit does not use the global budget. A request refused by the global cap is still charged to its user.
+- The per-minute limit runs before auth, so unauthenticated requests count against it.
+- Every other `/ask` limit is charged after the token is verified and the request is valid. Garbage tokens, forged tokens and 400 responses use no daily quota.
+- Charge order is per-IP daily, then per-user, then global. A request refused early never uses a later budget. A request refused by the global cap is still charged to its user.
 - A guest's bucket is keyed on IP, not on the guest token, because tokens are free to mint.
-- Users behind one NAT address share the per-IP limits (20 per minute, 30 per day).
+- Users behind one NAT address share the per-IP limits (20 per minute, and 10 per day for guests).
 - The limiter fails open. If storage errors at runtime, the first error logs one `Rate limiting is NOT enforced` WARNING per process. Each later error logs at ERROR only.
 
 Copy `.env.example` to `frontend/.env` and fill in the frontend keys:

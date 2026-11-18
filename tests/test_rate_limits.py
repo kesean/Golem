@@ -234,58 +234,66 @@ def test_guest_token_mints_capped_per_ip_per_day(rate_limited_client, clock):
     assert b"Guest token daily limit reached" in resp.data
 
 
-def test_ask_per_ip_daily_cap_is_30(rate_limited_client, mock_jwks, clock, conftest_tokens):
-    """One IP gets 30 /ask requests a day, even with a fresh user on every request."""
+def test_signed_in_ip_backstop_is_200_per_day(rate_limited_client, mock_jwks, clock, conftest_tokens, monkeypatch):
+    """Signed-in users are capped per user. The per-IP daily figure is a loose 200 backstop.
+    The global cap is raised here so that it cannot fire first."""
+    import app as app_module
+    from limits import parse
+
+    monkeypatch.setattr(app_module, "GLOBAL_DAILY_LIMIT", parse("1000 per day"))
+    statuses = []
     with patch("app.chat_run", return_value=_fake_chat_result()):
-        statuses = []
-        for i, token in enumerate(conftest_tokens[:31]):
-            if i == 20:
-                clock.advance(61)  # clear the 20/minute window; only the daily cap can fire now
+        for i in range(201):
+            if i and i % 20 == 0:
+                clock.advance(61)  # clear the per-minute window; only the daily backstop can fire
+            # 71 subs reused: each sub appears at most 3 times, under its own 5/day cap.
             resp = rate_limited_client.post(
-                "/ask", json={"question": "q"}, headers=_auth_headers(token),
+                "/ask", json={"question": "q"}, headers=_auth_headers(conftest_tokens[i % 71]),
                 environ_base={"REMOTE_ADDR": "10.6.0.1"},
             )
             resp.get_data()
             statuses.append(resp.status_code)
-        last = resp
-    assert statuses[:30] == [200] * 30
-    assert statuses[30] == 429
-    assert b"IP daily limit reached" in last.data
+    assert statuses[:200] == [200] * 200
+    assert statuses[200] == 429
+    assert b"IP daily limit reached" in resp.data
 
 
-def test_rejected_requests_do_not_consume_global_cap(rate_limited_client, mock_jwks, clock, conftest_tokens):
-    """One IP that hammers /ask must not use up the 70/day global budget for everyone else.
+def test_guest_ip_cap_is_10_per_day(rate_limited_client, clock, monkeypatch):
+    """Guests get 10 /ask requests a day per IP. The per-user cap is raised so only the IP cap can fire."""
+    import app as app_module
+    from limits import parse
 
-    IP A sends 40 requests (30 may pass, the rest hit the per-IP daily cap).
-    Then 40 requests from fresh IPs must all pass, and the 41st must hit the
-    global cap. If A's rejected requests were counted globally, this fails early.
-    """
-    tokens = conftest_tokens
+    monkeypatch.setattr(app_module, "USER_DAILY_LIMIT", parse("100 per day"))
+    statuses = []
     with patch("app.chat_run", return_value=_fake_chat_result()):
-        for i in range(40):
-            if i == 20:
-                clock.advance(61)
+        for _ in range(11):
             resp = rate_limited_client.post(
-                "/ask", json={"question": "q"}, headers=_auth_headers(tokens[i]),
+                "/ask", json={"question": "q"}, headers=_auth_headers(_guest_token(clock)),
+                environ_base={"REMOTE_ADDR": "10.2.0.1"},
+            )
+            resp.get_data()
+            statuses.append(resp.status_code)
+    assert statuses[:10] == [200] * 10
+    assert statuses[10] == 429
+    assert b"IP daily limit reached" in resp.data
+
+
+def test_per_user_refusal_does_not_use_global_budget(rate_limited_client, mock_jwks, conftest_tokens):
+    """A user refused by the per-user cap never reaches the global budget."""
+    import app as app_module
+
+    statuses = []
+    with patch("app.chat_run", return_value=_fake_chat_result()):
+        for _ in range(6):
+            resp = rate_limited_client.post(
+                "/ask", json={"question": "q"}, headers=_auth_headers(conftest_tokens[0]),
                 environ_base={"REMOTE_ADDR": "10.5.0.1"},
             )
             resp.get_data()
-
-        # Subs repeat across the next batch but each stays under its own 5/day user cap.
-        for j in range(40):
-            resp = rate_limited_client.post(
-                "/ask", json={"question": "q"}, headers=_auth_headers(tokens[j % 71]),
-                environ_base={"REMOTE_ADDR": f"10.5.1.{j}"},
-            )
-            resp.get_data()
-            assert resp.status_code == 200, f"fresh IP {j} was refused"
-
-        resp = rate_limited_client.post(
-            "/ask", json={"question": "q"}, headers=_auth_headers(tokens[40]),
-            environ_base={"REMOTE_ADDR": "10.5.2.0"},
-        )
-    assert resp.status_code == 429
-    assert b"Service limit reached" in resp.data
+            statuses.append(resp.status_code)
+    assert statuses == [200] * 5 + [429]
+    remaining = app_module.limiter.limiter.get_window_stats(app_module.GLOBAL_DAILY_LIMIT, "ask-global", "global").remaining
+    assert remaining == 65
 
 
 def test_invalid_requests_do_not_use_daily_quota(rate_limited_client, mock_jwks, valid_token):
