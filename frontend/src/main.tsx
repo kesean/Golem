@@ -77,7 +77,11 @@ if (import.meta.env.VITE_TEST_BYPASS_AUTH === 'true') {
   )
 } else {
   root.render(
-    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string}>
+    <ClerkProvider
+      publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string}
+      // The CSP does not allow clerk-telemetry.com; turning telemetry off also stops usage data going to Clerk.
+      telemetry={false}
+    >
       <AuthRouter />
     </ClerkProvider>
   )
