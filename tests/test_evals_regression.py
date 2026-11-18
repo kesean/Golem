@@ -188,8 +188,8 @@ class TestSummarize:
 class TestFindRegressions:
     """Tests for the find_regressions function."""
 
-    def test_no_baseline_returns_empty(self):
-        """Test that no baseline returns empty regressions list."""
+    def test_no_baseline_healthy_run_returns_empty(self):
+        """Without a baseline, a run with no errors has no regressions."""
         cases = [
             make_case_result("case-001", judge=JudgeVerdict(groundedness=3, coverage=2, key_points_missed=[], reason="Fair"))
         ]
@@ -198,6 +198,32 @@ class TestFindRegressions:
         regressions = find_regressions(cases, summary, None, None)
 
         assert regressions == []
+
+    def test_no_baseline_mostly_errored_run_is_error_rate_regression(self):
+        """A first run where most cases errored fails even with no baseline."""
+        cases = [
+            make_case_result("case-001", error="Error 1", judge=None),
+            make_case_result("case-002", error="Error 2", judge=None),
+            make_case_result("case-003", error="Error 3", judge=None),
+            make_case_result("case-004", judge=JudgeVerdict(groundedness=4, coverage=4, key_points_missed=[], reason="Good")),
+        ]
+        summary = summarize(cases)
+
+        regressions = find_regressions(cases, summary, None, None)
+
+        assert [r.kind for r in regressions] == ["errorRate"]
+        assert regressions[0].error_count == 3
+        assert regressions[0].case_count == 4
+
+    def test_no_baseline_error_rate_at_threshold_not_regression(self):
+        """Exactly MAX_ERROR_RATE (20%) without a baseline is still not a regression."""
+        cases = [make_case_result("case-001", error="Error 1", judge=None)] + [
+            make_case_result(f"case-{i:03d}", judge=JudgeVerdict(groundedness=4, coverage=4, key_points_missed=[], reason="Good"))
+            for i in range(2, 6)
+        ]
+        summary = summarize(cases)
+
+        assert find_regressions(cases, summary, None, None) == []
 
     def test_baseline_none_with_recent_best_returns_empty(self):
         """Test that baseline=None with recent_best=4.5 returns [] (baseline required for all regressions)."""

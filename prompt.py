@@ -2,6 +2,9 @@
 prompt.py — System prompt and message-building logic.
 """
 
+import re
+import unicodedata
+
 SYSTEM_PROMPT = """You are a knowledgeable developer support engineer. \
 Your job is to help developers debug issues, understand error messages, \
 and find solutions quickly.
@@ -51,18 +54,47 @@ def _escape_angle_brackets(text: str) -> str:
     return text.replace("<", "&lt;").replace(">", "&gt;")
 
 
+# The docs block delimiters from retrieval.py. Text that carries them could fake
+# a doc section, so they are removed from anything not written by retrieval.
+# Dashes: ASCII hyphen, Unicode hyphen through horizontal bar, and minus sign.
+# One or more, so a single em dash form (—RETRIEVED DOCS—) is caught too.
+_DASH = r"[\-‐-―−]"
+_DOCS_SENTINEL_RE = re.compile(
+    # The separator is optional because zero-width characters are removed first:
+    # "RETRIEVED​DOCS" must still match once it becomes "RETRIEVEDDOCS".
+    rf"{_DASH}+\s*(?:RETRIEVED|END)[\s_]*DOCS\s*{_DASH}+",
+    re.IGNORECASE,
+)
+_ZERO_WIDTH_RE = re.compile("[​‌‍⁠﻿­]")
+
+
+def _neutralize_sentinels(text: str) -> str:
+    """Strip docs sentinels after NFKC folding (fullwidth forms, compatibility
+    dashes) and removing zero-width characters that could split a sentinel."""
+    folded = _ZERO_WIDTH_RE.sub("", unicodedata.normalize("NFKC", text))
+    return _DOCS_SENTINEL_RE.sub("[removed sentinel]", folded)
+
+
+def _sanitize_turn(turn: dict) -> dict:
+    """User turns get angle brackets escaped; every turn loses docs sentinels.
+
+    Assistant turns are prior model output, so they keep their markup, but a
+    client-supplied history can still carry a fake docs block, so sentinels go.
+    """
+    content = _neutralize_sentinels(turn["content"])
+    if turn.get("role") == "user":
+        content = _escape_angle_brackets(content)
+    return {**turn, "content": content}
+
+
 def build_messages(question: str, history: list | None = None, context: str = "") -> list:
     """Build the messages array for the Claude API call.
 
     history is a list of prior {role, content} turns (user + assistant alternating).
-    User turns are escaped the same way as the question; assistant turns are
-    prior model output and pass through unchanged.
     context is pre-retrieved doc text injected directly so Claude answers in one call.
     """
-    messages = [
-        {**turn, "content": _escape_angle_brackets(turn["content"])} if turn.get("role") == "user" else turn
-        for turn in (history or [])
-    ]
+    messages = [_sanitize_turn(turn) for turn in (history or [])]
+    question = _neutralize_sentinels(question)
     content = f"<user_input>\n{_escape_angle_brackets(question)}\n</user_input>"
     if context:
         content += f"\n\n{context}"

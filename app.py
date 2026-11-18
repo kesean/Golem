@@ -14,6 +14,7 @@ from flask import Flask, request, jsonify, g, Response, stream_with_context
 from flask_cors import CORS
 from flask_limiter import Limiter
 from dotenv import load_dotenv
+from limits import parse
 import jwt
 from chat import stream_run as chat_run
 
@@ -34,18 +35,56 @@ app.config["MAX_CONTENT_LENGTH"] = 512 * 1024  # larger bodies get 413 before pa
 def request_too_large(_err):
     return jsonify({"error": "Request too large"}), 413
 
+
+@app.after_request
+def set_api_headers(response):
+    """Applies to every response, including errors and SSE streams.
+
+    no-store keeps answers and token-bearing responses out of shared caches.
+    nosniff stops browsers from reinterpreting JSON or SSE as another type.
+    Headers are set before the body streams, so SSE framing is unaffected.
+    """
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+def _load_preview_origin_pattern(raw: str):
+    """Compile PREVIEW_ORIGIN_REGEX so it must match the whole origin (None if unusable).
+
+    The value is wrapped as \\A(?:...)\\Z, so an alternation such as `^a|b$` cannot
+    match only part of an origin. An unanchored value still works, but it is
+    logged as normalised. An invalid regex disables preview CORS and logs an error;
+    the rest of the app still starts.
+    """
+    if not raw:
+        return None
+    if not (raw.startswith("^") and raw.endswith("$")):
+        logger.warning(
+            "PREVIEW_ORIGIN_REGEX does not start with ^ and end with $; it is normalised to match the whole origin"
+        )
+    try:
+        return re.compile(rf"\A(?:{raw})\Z")
+    except re.error as e:
+        logger.error("PREVIEW_ORIGIN_REGEX is not a valid regex (%s); preview CORS origins are DISABLED", e)
+        return None
+
+
+def _cors_origins_from_env(frontend_origin: str, preview_regex: str) -> list:
+    origins: list = []
+    if frontend_origin:
+        origins.append(frontend_origin)
+    pattern = _load_preview_origin_pattern(preview_regex)
+    if pattern is not None:
+        origins.append(pattern)
+    return origins
+
+
 _frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
 _preview_regex = os.getenv("PREVIEW_ORIGIN_REGEX", "")
 
-_cors_origins: list = []
-if _frontend_origin:
-    _cors_origins.append(_frontend_origin)
-if _preview_regex:
-    _cors_origins.append(re.compile(_preview_regex))
-
 CORS(
     app,
-    origins=_cors_origins if _cors_origins else [],
+    origins=_cors_origins_from_env(_frontend_origin, _preview_regex),
     allow_headers=["Authorization", "Content-Type"],
     methods=["POST", "OPTIONS"],
 )
@@ -94,6 +133,33 @@ def check_limiter_storage() -> bool:
     logger.info("Rate-limit storage: Redis reachable")
     return True
 
+
+class _LimiterFailureWatch(logging.Handler):
+    """Turns the first swallowed limiter storage error into one WARNING per process.
+
+    flask-limiter logs every swallowed storage error at ERROR, once per request.
+    The limiter fails open, so the first one is the signal an operator needs.
+    """
+
+    def __init__(self):
+        super().__init__(level=logging.ERROR)
+        self.tripped = False
+
+    def emit(self, record):
+        if self.tripped:
+            return
+        self.tripped = True
+        cause = record.exc_info[1] if record.exc_info else None
+        detail = f"{record.getMessage()}: {cause!r}" if cause is not None else record.getMessage()
+        logger.warning(
+            "Rate limiting is NOT enforced in this process: limiter storage failed (%s). "
+            "Requests are being allowed. Check REDIS_URL and Redis health.",
+            detail,
+        )
+
+
+_limiter_failure_watch = _LimiterFailureWatch()
+logging.getLogger("flask-limiter").addHandler(_limiter_failure_watch)
 
 check_limiter_storage()
 
@@ -194,19 +260,20 @@ def _is_guest_token(token: str) -> bool:
 
 
 def _user_key() -> str:
-    """Return Clerk user ID for per-user rate limiting, falls back to IP.
+    """Return the per-user rate-limit key: Clerk user ID, or client IP for guests.
 
-    Decodes the JWT without verification — auth is enforced separately by
-    require_auth. We only need the sub claim as a stable per-user key.
+    Decodes the JWT without verification (require_auth verifies it). Guest tokens
+    are minted for free, so each one has a fresh sub. Keying guests on that sub
+    would give every new token a new daily bucket, so guests share one bucket per IP.
     """
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return client_ip()
+    token = auth.split(" ", 1)[1]
+    if _is_guest_token(token):
+        return f"guest-ip:{client_ip()}"
     try:
-        payload = jwt.decode(
-            auth.split(" ", 1)[1],
-            options={"verify_signature": False},
-        )
+        payload = jwt.decode(token, options={"verify_signature": False})
         return payload.get("sub") or client_ip()
     except Exception:
         return client_ip()
@@ -252,6 +319,7 @@ def require_auth(f):
 
 @app.route("/guest-token", methods=["GET"])
 @limiter.limit("10 per hour")
+@limiter.limit("20 per day", error_message="Guest token daily limit reached")
 def guest_token():
     if not GUEST_JWT_SECRET:
         return jsonify({"error": "Guest access not configured"}), 503
@@ -287,11 +355,51 @@ def _history_is_valid(history) -> bool:
     return True
 
 
+USER_DAILY_LIMIT = parse("5 per day")
+GLOBAL_DAILY_LIMIT = parse("70 per day")
+GUEST_IP_DAILY_LIMIT = parse("10 per day")  # guests only
+SIGNED_IN_IP_BACKSTOP = parse("200 per day")  # loose: signed-in users are capped per user
+
+
+def charge_quota():
+    """Charge the daily budgets for an authenticated request, most specific first.
+
+    Called from the view, after require_auth, so forged or garbage tokens are
+    never charged. hit() is atomic in the storage backend, so parallel requests
+    cannot all pass a check before any of them is counted. Each refusal stops the
+    chain, so a request refused early never uses a later budget:
+      1. per-IP daily: 10 for guests, 200 backstop for signed-in users
+      2. per-user daily: 5 (guests share one bucket per IP)
+      3. global daily: 70
+
+    Returns a 429 response, or None to continue. Fails open on storage errors and
+    logs them through flask-limiter's logger, which the one-time watcher reads.
+    """
+    if not limiter.enabled:
+        return None
+    try:
+        ip = client_ip()
+        is_guest = g.clerk_payload.get("role") == "guest"
+        if is_guest:
+            if not limiter.limiter.hit(GUEST_IP_DAILY_LIMIT, "ask-guest-ip", ip):
+                return jsonify({"error": "IP daily limit reached"}), 429
+        elif not limiter.limiter.hit(SIGNED_IN_IP_BACKSTOP, "ask-ip", ip):
+            return jsonify({"error": "IP daily limit reached"}), 429
+        if not limiter.limiter.hit(USER_DAILY_LIMIT, "ask-user", _user_key()):
+            return jsonify({"error": "Daily limit reached"}), 429
+        if not limiter.limiter.hit(GLOBAL_DAILY_LIMIT, "ask-global", "global"):
+            return jsonify({"error": "Service limit reached"}), 429
+    except Exception:
+        logging.getLogger("flask-limiter").exception("Failed to charge rate limit. Swallowing error")
+    return None
+
+
+# The per-minute per-IP limit is a decorator above require_auth, so it runs before the
+# token is checked and unauthenticated floods count against it. Every other budget is
+# charged in the view by charge_quota(), after auth.
 @app.route("/ask", methods=["POST"])
-@require_auth
 @limiter.limit("20 per minute")
-@limiter.limit("5 per day", key_func=_user_key, error_message="Daily limit reached")
-@limiter.limit("70 per day", key_func=lambda: "global", error_message="Service limit reached")
+@require_auth
 def ask():
     """
     Accepts a JSON body: { "question": "...", "history": [...] }
@@ -334,6 +442,11 @@ def ask():
     if not _history_is_valid(history):
         return jsonify({"error": "Invalid history format"}), 400
 
+    # Charged only once the request is valid, so malformed requests do not use quota.
+    refused = charge_quota()
+    if refused is not None:
+        return refused
+
     def sse(event: dict) -> str:
         return f"data: {json.dumps(event)}\n\n"
 
@@ -354,7 +467,7 @@ def ask():
     return Response(
         stream_with_context(generate()),
         mimetype="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers={"X-Accel-Buffering": "no"},
     )
 
 

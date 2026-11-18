@@ -113,3 +113,26 @@ def test_validate_only_runs_by_path_from_another_cwd(tmp_path):
     output = result.stdout + result.stderr
     assert "No module named" not in output
     assert "No canonical URL" not in output
+
+
+# --- upstream pins ---
+
+def test_every_source_is_pinned_to_a_full_commit_sha():
+    import re
+    from scripts.embed_docs import SOURCES
+    for source in SOURCES:
+        assert re.fullmatch(r"[0-9a-f]{40}", source["ref"]), f"{source['name']} is not pinned to a SHA"
+
+
+def test_fetch_file_requests_the_pinned_ref(monkeypatch):
+    import base64
+    from unittest.mock import MagicMock
+    import scripts.embed_docs as embed_docs
+
+    resp = MagicMock(status_code=200)
+    resp.json.return_value = {"encoding": "base64", "content": base64.b64encode(b"hi").decode()}
+    get = MagicMock(return_value=resp)
+    monkeypatch.setattr(embed_docs.httpx, "get", get)
+
+    assert embed_docs.fetch_file("clerk", "clerk-docs", "docs/x.mdx", "abc123") == "hi"
+    assert get.call_args.kwargs["params"] == {"ref": "abc123"}

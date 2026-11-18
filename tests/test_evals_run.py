@@ -140,7 +140,9 @@ class TestPipelineException:
                 concurrency=1,
             )
 
-        assert exit_code == 0  # Run completes despite exception
+        # Run completes despite the exception, but 1 of 2 cases errored (>20%),
+        # which is an errorRate regression: exit 2, not 0.
+        assert exit_code == 2
 
         # Check that error was recorded
         run_file = tmp_path / "run.json"
@@ -767,6 +769,17 @@ class TestReportPolish:
 
         run, results = _report_fixture()
         assert "No Baseline" in report.generate_report(run, results)
+
+    def test_no_baseline_error_rate_regression_renders(self):
+        """A first run that fails on errorRate alone still renders its regression section."""
+        from evals import report
+        from evals.models import ErrorRate
+
+        run, results = _report_fixture()
+        run.regressions = [ErrorRate(kind="errorRate", error_count=3, case_count=4)]
+        text = report.generate_report(run, results)
+        assert "Regressions Detected" in text
+        assert "High Error Rate" in text
 
 
 class TestEnvAndGitFallbacks:

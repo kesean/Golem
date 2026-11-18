@@ -105,13 +105,26 @@ def find_regressions(
         current case errored, only the 'completed' rule is reported (an error
         forces all rules false). Rule values are camelCase wire names.
     (c) caseScoreDrop: a case's judge score drops by >= 2. Requires both runs graded.
-    (d) errorRate: more than 20% of cases error
+    (d) errorRate: more than 20% of cases error. Checked even without a baseline,
+        so a first run where most cases errored still fails.
     (e) recentBestDrop: mean score is more than 0.5 below recent_best. Skipped if
         recent_best is None or the current run has no graded cases.
 
-    When there is no baseline, regressions are empty, including (d) and (e).
+    When there is no baseline, only (d) can fire: (a), (b), (c) and (e) need one.
     """
     regressions: list[Regression] = []
+
+    # (d) errorRate: more than MAX_ERROR_RATE of cases error. Needs no baseline.
+    if summary.case_count > 0:
+        error_rate = summary.error_count / summary.case_count
+        if error_rate > MAX_ERROR_RATE:
+            regressions.append(
+                ErrorRate(
+                    kind="errorRate",
+                    error_count=summary.error_count,
+                    case_count=summary.case_count,
+                )
+            )
 
     if baseline is None:
         return regressions
@@ -178,18 +191,6 @@ def find_regressions(
                     case_id=case_id,
                     baseline=baseline_score,
                     current=current_score,
-                )
-            )
-
-    # (d) errorRate: more than 20% of cases error
-    if summary.case_count > 0:
-        error_rate = summary.error_count / summary.case_count
-        if error_rate > MAX_ERROR_RATE:
-            regressions.append(
-                ErrorRate(
-                    kind="errorRate",
-                    error_count=summary.error_count,
-                    case_count=summary.case_count,
                 )
             )
 
