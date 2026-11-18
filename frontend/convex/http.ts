@@ -4,20 +4,29 @@ import { internal } from "./_generated/api";
 
 const http = httpRouter();
 
-// Constant-time string comparison for bearer token
-function constantTimeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
+async function sha256(value: string): Promise<Uint8Array> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return new Uint8Array(digest);
+}
+
+// Constant-time comparison for bearer token. Both inputs are hashed to a
+// fixed 32-byte digest first, so neither the length nor the position of the
+// first mismatch leaks through timing.
+async function constantTimeCompare(a: string, b: string): Promise<boolean> {
+  const digestA = await sha256(a);
+  const digestB = await sha256(b);
   let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < digestA.length; i++) {
+    result |= (digestA[i] ?? 0) ^ (digestB[i] ?? 0);
   }
   return result === 0;
 }
 
 // Validate bearer token
-function validateBearer(authHeader: string | null): boolean {
+async function validateBearer(authHeader: string | null): Promise<boolean> {
   const secret = process.env.EVAL_INGEST_SECRET;
   if (!secret || !authHeader) {
     return false;
@@ -444,7 +453,7 @@ http.route({
   handler: httpAction(async (ctx, req) => {
     // Validate bearer token
     const authHeader = req.headers.get("Authorization");
-    if (!validateBearer(authHeader)) {
+    if (!(await validateBearer(authHeader))) {
       return new Response(JSON.stringify({}), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -535,7 +544,7 @@ http.route({
   handler: httpAction(async (ctx, req) => {
     // Validate bearer token
     const authHeader = req.headers.get("Authorization");
-    if (!validateBearer(authHeader)) {
+    if (!(await validateBearer(authHeader))) {
       return new Response(JSON.stringify({}), {
         status: 401,
         headers: { "Content-Type": "application/json" },

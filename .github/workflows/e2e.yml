@@ -3,6 +3,9 @@ name: E2E tests
 on:
   deployment_status:
 
+permissions:
+  contents: read
+
 jobs:
   e2e:
     # Vercel names the environment 'Preview – golem' now that golem-api shares the repo.

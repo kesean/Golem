@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend (pytest)
@@ -47,3 +50,7 @@ jobs:
       - name: Run tests
         working-directory: frontend
         run: npm test
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build

@@ -12,6 +12,9 @@ on:
       - "requirements.txt"
       - ".github/workflows/validate-doc-sources.yml"
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Check source file paths

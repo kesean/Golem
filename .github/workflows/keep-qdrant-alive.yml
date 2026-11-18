@@ -5,18 +5,31 @@ on:
     - cron: "0 12 * * *" # Every day at 12:00 UTC
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   ping:
     name: Ping Qdrant cluster
     runs-on: ubuntu-latest
+    env:
+      QDRANT_URL: ${{ secrets.QDRANT_URL }}
+      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
     steps:
       - name: Health check
         run: |
-          status=$(curl -s -o response.txt -w "%{http_code}" \
-            -H "api-key: ${{ secrets.QDRANT_API_KEY }}" \
-            "${{ secrets.QDRANT_URL }}/healthz")
-          echo "HTTP $status: $(cat response.txt)"
-          if [ "$status" -ge 400 ]; then
-            echo "::error::Qdrant health check failed with HTTP $status (401/403 = bad API key, 404 = wrong URL or deleted cluster, 5xx = cluster down)"
+          if [ -z "$QDRANT_URL" ]; then
+            echo "::error::QDRANT_URL secret is empty"
             exit 1
           fi
+          status=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' \
+            -H "api-key: $QDRANT_API_KEY" \
+            "$QDRANT_URL/healthz") || status=000
+          echo "HTTP $status"
+          case "$status" in
+            2??|3??) ;;
+            *)
+              echo "::error::Qdrant health check failed with HTTP $status (401/403 = bad API key, 404 = wrong URL or deleted cluster, 5xx = cluster down, 000 = no response)"
+              exit 1
+              ;;
+          esac

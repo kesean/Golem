@@ -1,5 +1,7 @@
 # Tasks — V3a Eval harness
 
+V3a shipped (see README); checklist kept as history.
+
 Source of truth: `spec.md` (approved 2026-10-01). Requirement IDs (R1–R10) and interface names refer to it. Every task:
 
 - reads `spec.md` §2 (its requirements), §4 (interfaces) and §5 (defaults) before starting;
