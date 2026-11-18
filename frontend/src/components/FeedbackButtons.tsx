@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
+import { ThumbsUp, ThumbsDown } from 'lucide-react'
 
 type FeedbackButtonsProps = {
   evalId: string | null
@@ -56,7 +57,7 @@ export function FeedbackButtons({ evalId }: FeedbackButtonsProps) {
           background: active === 'up' ? 'var(--accent-subtle)' : 'none',
         }}
       >
-        👍
+        <ThumbsUp size={16} strokeWidth={2} aria-hidden="true" />
       </button>
       <button
         id="thumb-down-btn"
@@ -69,7 +70,7 @@ export function FeedbackButtons({ evalId }: FeedbackButtonsProps) {
           background: active === 'down' ? 'var(--danger-subtle)' : 'none',
         }}
       >
-        👎
+        <ThumbsDown size={16} strokeWidth={2} aria-hidden="true" />
       </button>
     </div>
   )

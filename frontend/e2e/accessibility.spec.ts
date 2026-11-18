@@ -91,6 +91,8 @@ const SEEDED_HISTORY = [
 ];
 
 async function openHistoryPalette(page: Page) {
+  // The Ctrl+K listener mounts with React; a keypress sent before that is dropped
+  await expect(page.locator('#question')).toBeVisible();
   await page.keyboard.press('Control+k');
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
@@ -129,6 +131,22 @@ const STATES: ScanState[] = [
       await expect(page.locator('#response-area')).toBeVisible();
       await expect(page.getByText('Test summary.')).toBeVisible();
       await expect(page.locator('[role=status]', { hasText: 'Answer ready.' })).toHaveText('Answer ready.');
+    },
+  },
+  {
+    name: 'error state',
+    viewports: ['desktop', 'mobile'],
+    requireContent: true,
+    setup: async (page) => {
+      await page.unroute('**/ask');
+      await page.route('**/ask', async (route) => {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"boom"}' });
+      });
+      await page.locator('#question').fill('Why am I getting a 401 error?');
+      await page.locator('#ask-btn').click();
+      const alert = page.getByRole('alert');
+      await expect(alert).toContainText("Couldn't get an answer");
+      await expect(alert.getByRole('button', { name: 'Try again' })).toBeVisible();
     },
   },
   {

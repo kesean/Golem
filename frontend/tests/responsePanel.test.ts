@@ -32,6 +32,38 @@ function renderPanel(isShared?: boolean) {
   )
 }
 
+describe('ResponsePanel error state', () => {
+  function renderError(onRetry?: () => void) {
+    return render(
+      createElement(ResponsePanel, {
+        isLoading: false,
+        isStreaming: false,
+        parsedResponse: null,
+        error: 'Something went wrong. Please try again.',
+        evalId: null,
+        historyId: null,
+        chunks: [],
+        onRetry,
+      }),
+    )
+  }
+
+  it('shows a heading and the message in one alert, with a Try again button that calls onRetry', () => {
+    const onRetry = vi.fn()
+    renderError(onRetry)
+    const alert = screen.getByRole('alert')
+    expect(alert.textContent).toContain("Couldn't get an answer")
+    expect(alert.textContent).toContain('Something went wrong. Please try again.')
+    screen.getByRole('button', { name: 'Try again' }).click()
+    expect(onRetry).toHaveBeenCalledOnce()
+  })
+
+  it('omits Try again when no retry is offered', () => {
+    renderError()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+})
+
 describe('ResponsePanel shared mode', () => {
   it('hides the product tag and feedback, and announces a shared answer', () => {
     renderPanel(true)

@@ -5,6 +5,7 @@ import { NotebookRow, MarkdownContent, StepList, DocList } from './SectionCard'
 import { FeedbackButtons } from './FeedbackButtons'
 import { ResponseActions } from './ResponseActions'
 import { DebugPanel } from './DebugPanel'
+import { Button } from './ui/button'
 import type { ParsedResponse, RetrievedChunk } from '../types'
 
 function ThinkingIndicator() {
@@ -31,6 +32,8 @@ type ResponsePanelProps = {
   historyId: string | null
   chunks: RetrievedChunk[]
   isShared?: boolean
+  /** Shown as "Try again" on the error state. Omit when retrying cannot help. */
+  onRetry?: () => void
 }
 
 export function ResponsePanel({
@@ -42,6 +45,7 @@ export function ResponsePanel({
   historyId,
   chunks,
   isShared = false,
+  onRetry,
 }: ResponsePanelProps) {
   const [showWarmup, setShowWarmup] = useState(false)
 
@@ -78,6 +82,7 @@ export function ResponsePanel({
         historyId={historyId}
         chunks={chunks}
         isShared={isShared}
+        onRetry={onRetry}
         showWarmup={showWarmup}
       />
     </>
@@ -93,6 +98,7 @@ function ResponseBody({
   historyId,
   chunks,
   isShared,
+  onRetry,
   showWarmup,
 }: ResponsePanelProps & { showWarmup: boolean }) {
   if (!isLoading && !parsedResponse && !error) return null
@@ -129,18 +135,37 @@ function ResponseBody({
 
   if (error) {
     return (
-      <div
-        id="response-area"
-        role="alert"
-        aria-live="assertive"
-        style={{
-          padding: '24px',
-          color: 'var(--text-secondary)',
-          fontFamily: "'DM Sans', sans-serif",
-          fontSize: '14px',
-        }}
-      >
-        {error}
+      <div id="response-area" role="alert" style={{ padding: '24px' }}>
+        <div
+          style={{
+            backgroundColor: 'var(--danger-subtle)',
+            borderLeft: '3px solid var(--danger)',
+            borderRadius: '6px',
+            padding: '14px 16px',
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: '14px',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: 'var(--danger)' }}>
+            Couldn't get an answer
+          </h2>
+          <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)' }}>{error}</p>
+          {onRetry && (
+            <Button
+              className="mt-3 min-h-11"
+              variant="outline"
+              onClick={onRetry}
+              style={{
+                borderColor: 'var(--border-strong)',
+                color: 'var(--text-primary)',
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              Try again
+            </Button>
+          )}
+        </div>
       </div>
     )
   }

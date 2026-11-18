@@ -14,15 +14,36 @@
 .ev-link { border: 0; padding: 4px 0; text-align: left; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .ev-btn:focus-visible, .ev-link:focus-visible, .ev-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ev-charts { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
-@media (max-width: 760px) { .ev-charts { grid-template-columns: 1fr; } }
+/* Single column below 1000px: two charts side by side would be too narrow to read */
+@media (max-width: 1000px) { .ev-charts { grid-template-columns: 1fr; } }
 .ev-chart { margin: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px 14px 8px; }
 .ev-chart-title { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; font-weight: 600; }
 .ev-chart-latest { font-variant-numeric: tabular-nums; }
 .ev-chart-dir { font-weight: 400; color: var(--text-secondary); }
-.ev-svg { width: 100%; height: auto; display: block; }
+/* Capped at 640px so the SVG never scales text above its design size */
+.ev-svg { width: 100%; max-width: 640px; height: auto; display: block; }
 .ev-grid { stroke: var(--border-subtle); stroke-width: 1; }
-.ev-axis { fill: var(--text-secondary); font-size: 14px; font-family: 'DM Sans', sans-serif; }
-.ev-scroll { overflow-x: auto; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; }
+/* SVG text is in viewBox units and shrinks with the chart. These sizes keep
+   rendered labels at about 11px or more: 1000px+ two columns (~0.73 scale),
+   481-1000px stacked (~0.66 scale), and 360px phones (~0.47 scale). */
+.ev-axis { fill: var(--text-secondary); font-size: 16px; font-family: 'DM Sans', sans-serif; }
+@media (max-width: 1000px) { .ev-axis { font-size: 18px; } }
+@media (max-width: 480px) { .ev-axis { font-size: 24px; } }
+.ev-state {
+  margin-top: 24px; padding: 20px; background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: 12px; color: var(--text-secondary); font-size: 14px; line-height: 1.55;
+}
+/* Scroll cues: the edge fades stay put (local) while the shadows show that more content sits past either edge (scroll) */
+.ev-scroll {
+  overflow-x: auto; border: 1px solid var(--border-color); border-radius: 12px;
+  background:
+    linear-gradient(to right, var(--bg-card) 30%, rgba(255, 255, 255, 0)) left center / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--bg-card) 30%, rgba(255, 255, 255, 0)) right center / 24px 100% no-repeat local,
+    linear-gradient(to right, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0)) left center / 12px 100% no-repeat scroll,
+    linear-gradient(to left, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0)) right center / 12px 100% no-repeat scroll,
+    var(--bg-card);
+}
+.ev-date { white-space: nowrap; }
 .ev-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 520px; }
 .ev-table th, .ev-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-subtle); vertical-align: top; font-weight: 400; }
 .ev-table thead th { font-size: 12px; color: var(--text-secondary); font-weight: 600; }

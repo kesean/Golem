@@ -14,7 +14,9 @@ type Props = {
   eps: number
 }
 
-const W = 640, H = 150, L = 56, R = 56, T = 12, B = 22
+// Margins fit 24-unit labels at the phone breakpoint (see .ev-axis in evals.css):
+// L for a "100%" tick, T for the top tick, B so the bottom tick and the date row do not touch.
+const W = 640, H = 172, L = 72, R = 56, T = 20, B = 36
 
 export function TrendChart({ title, unitLabel, points, domain, ticks, fmt, color, selectedId, eps }: Props) {
   const [lo, hi] = domain
@@ -46,8 +48,8 @@ export function TrendChart({ title, unitLabel, points, domain, ticks, fmt, color
             <text x={L - 8} y={y(t) + 4} textAnchor="end" className="ev-axis">{fmt(t)}</text>
           </g>
         ))}
-        <text x={L} y={H - 4} className="ev-axis">{formatDate(first.startedAt)}</text>
-        <text x={W - R} y={H - 4} textAnchor="end" className="ev-axis">{formatDate(last.startedAt)}</text>
+        <text x={L} y={H - 8} className="ev-axis">{formatDate(first.startedAt)}</text>
+        <text x={W - R} y={H - 8} textAnchor="end" className="ev-axis">{formatDate(last.startedAt)}</text>
         <path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         {points.map((p, i) => (
           <circle

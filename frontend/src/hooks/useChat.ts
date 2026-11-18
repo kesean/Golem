@@ -15,11 +15,13 @@ export function useChat(isGuest = false): UseChatReturn {
   const [isLoading, setIsLoading] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [canRetry, setCanRetry] = useState(false)
   const [evalId, setEvalId] = useState<string | null>(null)
   const [historyId, setHistoryId] = useState<string | null>(null)
   const [chunks, setChunks] = useState<RetrievedChunk[]>([])
   const conversationHistory = useRef<ChatMessage[]>([])
   const abortControllerRef = useRef<AbortController | null>(null)
+  const lastQuestion = useRef<string | null>(null)
 
   const { getToken } = useToken()
   const { save: saveToHistory } = useHistory(isGuest)
@@ -36,12 +38,20 @@ export function useChat(isGuest = false): UseChatReturn {
     abortControllerRef.current?.abort()
     const controller = new AbortController()
     abortControllerRef.current = controller
+    lastQuestion.current = question
+    // False once a newer ask has started, reset() ran, or the component unmounted.
+    // reset() aborts without replacing the ref, so the ref check alone misses it.
+    const isCurrent = () => abortControllerRef.current === controller && !controller.signal.aborted
 
     setIsLoading(true)
     setIsStreaming(false)
     setError(null)
+    setCanRetry(false)
     setParsedResponse(null)
     setChunks([])
+    // The previous answer's eval and history ids must not follow the new answer
+    setEvalId(null)
+    setHistoryId(null)
 
     // Prior turns only. The question joins history with its answer on success,
     // so a failed or aborted ask never leaves an orphan user turn behind.
@@ -103,8 +113,10 @@ export function useChat(isGuest = false): UseChatReturn {
         for (const event of events) {
           if (event.type === 'delta') {
             fullText += event.text
-            setIsStreaming(true)
-            setParsedResponse(parseResponse(fullText))
+            if (isCurrent()) {
+              setIsStreaming(true)
+              setParsedResponse(parseResponse(fullText))
+            }
           } else if (event.type === 'done') {
             result = event
           } else if (event.type === 'error') {
@@ -133,6 +145,9 @@ export function useChat(isGuest = false): UseChatReturn {
       if (!done) {
         throw new Error('SERVER_ERROR')
       }
+      // A superseded ask that finishes late must not write history, response,
+      // chunks, or the save/eval records that belong to the newer ask.
+      if (!isCurrent()) return
 
       conversationHistory.current = [
         ...conversationHistory.current,
@@ -154,7 +169,7 @@ export function useChat(isGuest = false): UseChatReturn {
 
       if (!isGuest) {
         saveToHistory(question, done.response)
-          .then(hId => setHistoryId(hId))
+          .then(hId => { if (isCurrent()) setHistoryId(hId) })
           .catch(() => {})
 
         createEval({
@@ -164,8 +179,8 @@ export function useChat(isGuest = false): UseChatReturn {
           input_tokens: done.input_tokens,
           output_tokens: done.output_tokens,
         })
-          .then(id => setEvalId(id))
-          .catch(() => { setEvalId('eval-unavailable') })
+          .then(id => { if (isCurrent()) setEvalId(id) })
+          .catch(() => { if (isCurrent()) setEvalId('eval-unavailable') })
       }
     } catch (err) {
       // A superseded ask must not overwrite the newer ask's error or response.
@@ -175,12 +190,15 @@ export function useChat(isGuest = false): UseChatReturn {
         // so don't clobber whatever state reset() already set.
         return
       }
-      const msg =
-        err instanceof Error && err.message === '429'
-          ? "You've reached the daily limit — try again tomorrow."
-          : err instanceof Error && err.message === 'GUEST_UNAVAILABLE'
-          ? 'Guest access is temporarily unavailable. Please sign in to continue.'
-          : 'Something went wrong. Please try again.'
+      const rateLimited = err instanceof Error && err.message === '429'
+      const guestUnavailable = err instanceof Error && err.message === 'GUEST_UNAVAILABLE'
+      const msg = rateLimited
+        ? "You've reached the daily limit — try again tomorrow."
+        : guestUnavailable
+        ? 'Guest access is temporarily unavailable. Please sign in to continue.'
+        : 'Something went wrong. Please try again.'
+      // Retrying cannot help a daily limit or a missing guest session
+      setCanRetry(!rateLimited && !guestUnavailable)
       setError(msg)
       setParsedResponse(null)
       setChunks([])
@@ -203,6 +221,7 @@ export function useChat(isGuest = false): UseChatReturn {
     setEvalId(null)
     setHistoryId(historyId ?? null)
     setError(null)
+    setCanRetry(false)
     // History entries predate the debug panel's per-request chunk capture
     setChunks([])
   }
@@ -211,10 +230,30 @@ export function useChat(isGuest = false): UseChatReturn {
     abortControllerRef.current?.abort()
     setParsedResponse(null)
     setError(null)
+    setCanRetry(false)
     setEvalId(null)
     setHistoryId(null)
     setChunks([])
   }
 
-  return { ask, loadFromHistory, parsedResponse, isLoading, isStreaming, error, evalId, historyId, chunks, reset }
+  // Re-asks the last question with the same prior-turn history. Only offered
+  // after a failure, so the failed ask left no turn behind.
+  function retry(): void {
+    if (lastQuestion.current !== null) void ask(lastQuestion.current)
+  }
+
+  return {
+    ask,
+    retry,
+    canRetry,
+    loadFromHistory,
+    parsedResponse,
+    isLoading,
+    isStreaming,
+    error,
+    evalId,
+    historyId,
+    chunks,
+    reset,
+  }
 }
