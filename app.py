@@ -170,6 +170,34 @@ check_limiter_storage()
 
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
 GUEST_JWT_SECRET = os.getenv("GUEST_JWT_SECRET", "")
+GUEST_SECRET_MIN_LENGTH = 32
+
+
+def check_startup_config(env) -> None:
+    """Refuse to start with config that would silently disable cost controls.
+
+    On Vercel the daily budgets are only shared across instances when REDIS_URL
+    is set, and guest tokens need a real signing secret. Off Vercel, an unset
+    GUEST_JWT_SECRET only disables guest access (see guest_token).
+    """
+    on_vercel = bool(env.get("VERCEL"))
+    if on_vercel and not env.get("REDIS_URL"):
+        raise RuntimeError(
+            "REDIS_URL is required on Vercel: without it rate limits and daily cost caps are per-process and not enforced"
+        )
+    secret = env.get("GUEST_JWT_SECRET", "")
+    if not secret:
+        if on_vercel:
+            raise RuntimeError("GUEST_JWT_SECRET is required on Vercel")
+        return
+    if len(secret) < GUEST_SECRET_MIN_LENGTH:
+        raise RuntimeError(
+            f"GUEST_JWT_SECRET must be at least {GUEST_SECRET_MIN_LENGTH} characters (got {len(secret)}). "
+            'Generate one with: python3 -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+
+
+check_startup_config(os.environ)
 
 
 _jwks_cache: dict | None = None

@@ -4,7 +4,7 @@ import time
 import jwt as pyjwt
 from unittest.mock import patch
 
-TEST_GUEST_SECRET = "test-guest-secret-placeholder"
+TEST_GUEST_SECRET = "test-guest-secret-placeholder-padding-123"
 
 
 def _fake_chat_result(text="<product_tag>Other</product_tag><summary>ok</summary>"):

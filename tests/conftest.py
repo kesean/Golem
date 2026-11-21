@@ -18,7 +18,7 @@ import jwt
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-placeholder")
 os.environ.setdefault("CLERK_JWKS_URL", "https://test.clerk.dev/.well-known/jwks.json")
 
-TEST_GUEST_SECRET = "test-guest-secret-placeholder"
+TEST_GUEST_SECRET = "test-guest-secret-placeholder-padding-123"  # 32+ chars: app refuses shorter
 os.environ.setdefault("GUEST_JWT_SECRET", TEST_GUEST_SECRET)
 
 # ── Generate a test RSA key pair once per session ────────────────────────────
