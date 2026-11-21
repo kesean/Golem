@@ -157,7 +157,8 @@ class _LimiterFailureWatch(logging.Handler):
         detail = f"{record.getMessage()}: {cause!r}" if cause is not None else record.getMessage()
         logger.warning(
             "Rate limiting is NOT enforced in this process: limiter storage failed (%s). "
-            "Requests are being allowed. Check REDIS_URL and Redis health.",
+            "Per-minute and guest-token limits are being allowed; /ask answers are refused with 503 "
+            "until the daily quota can be charged. Check REDIS_URL and Redis health.",
             detail,
         )
 
@@ -426,8 +427,9 @@ def charge_quota():
       3. global daily: 70 for prod origins, or PREVIEW_GLOBAL_DAILY_LIMIT (20) in a
          separate bucket for preview origins (see _origin_class)
 
-    Returns a 429 response, or None to continue. Fails open on storage errors and
-    logs them through flask-limiter's logger, which the one-time watcher reads.
+    Returns a 429 response, or None to continue. Fails closed: a storage error is
+    logged through flask-limiter's logger and returns 503, because the request
+    cannot be charged against the budget.
     """
     if not limiter.enabled:
         return None
@@ -447,7 +449,8 @@ def charge_quota():
         elif not limiter.limiter.hit(GLOBAL_DAILY_LIMIT, "ask-global", "global"):
             return jsonify({"error": "Service limit reached"}), 429
     except Exception:
-        logging.getLogger("flask-limiter").exception("Failed to charge rate limit. Swallowing error")
+        logging.getLogger("flask-limiter").exception("Failed to charge rate limit. Refusing the request")
+        return jsonify({"error": "Rate limit service unavailable"}), 503
     return None
 
 
