@@ -41,7 +41,7 @@ def test_successful_answer_posts_one_increment_with_bearer_secret(client, mock_j
     assert req.full_url == "https://example-deployment.convex.site/stats/increment"
     assert req.get_method() == "POST"
     assert req.get_header("Authorization") == "Bearer test-stats-secret"
-    assert urlopen.call_args.kwargs["timeout"] == 3
+    assert urlopen.call_args.kwargs["timeout"] == 1
 
 
 def test_failed_answer_does_not_touch_the_counter(client, mock_jwks, valid_token, convex_configured):

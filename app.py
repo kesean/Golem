@@ -335,7 +335,7 @@ def _user_key() -> str:
         return client_ip()
 
 
-STATS_INCREMENT_TIMEOUT = 3  # seconds; the counter is cosmetic and must not hold the stream open
+STATS_INCREMENT_TIMEOUT = 1  # seconds; runs inline after "done" and holds the response open, so keep it short
 
 
 def _count_answered_question() -> None:
