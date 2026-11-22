@@ -1,3 +1,5 @@
+import { getTurnstileToken } from './turnstile'
+
 const GUEST_TOKEN_KEY = 'golem_guest_token'
 const API_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -11,7 +13,13 @@ function isTokenExpired(token: string): boolean {
 }
 
 async function fetchGuestToken(): Promise<string> {
-  const res = await fetch(`${API_URL}/guest-token`)
+  // A fresh Turnstile token per mint: each one is single-use.
+  const turnstileToken = await getTurnstileToken()
+  const res = await fetch(`${API_URL}/guest-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ turnstile_token: turnstileToken }),
+  })
   if (!res.ok) throw new Error(`Failed to fetch guest token: ${res.status}`)
   const data = await res.json()
   return data.token as string

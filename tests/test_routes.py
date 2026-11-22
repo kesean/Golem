@@ -319,8 +319,8 @@ def test_rate_limited_response_carries_security_headers(rate_limited_client, mon
     monkeypatch.setenv("VERCEL", "1")
     headers = {"X-Forwarded-For": "203.0.113.50"}
     for _ in range(10):
-        rate_limited_client.get("/guest-token", headers=headers)
-    resp = rate_limited_client.get("/guest-token", headers=headers)
+        rate_limited_client.post("/guest-token", headers=headers)
+    resp = rate_limited_client.post("/guest-token", headers=headers)
     assert resp.status_code == 429
     assert resp.headers["X-Content-Type-Options"] == "nosniff"
     assert resp.headers["Cache-Control"] == "no-store"

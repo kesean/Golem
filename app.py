@@ -5,9 +5,12 @@ app.py — Flask app and API routes.
 import os
 import re
 import json
+import math
 import time
 import uuid
+import hashlib
 import logging
+import urllib.parse
 import urllib.request
 from functools import wraps
 from flask import Flask, request, jsonify, g, Response, stream_with_context
@@ -174,6 +177,15 @@ CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
 GUEST_JWT_SECRET = os.getenv("GUEST_JWT_SECRET", "")
 GUEST_SECRET_MIN_LENGTH = 32
 
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
+TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+TURNSTILE_TIMEOUT = 5  # seconds; a slow verify must not hold a guest request open
+TURNSTILE_TOKEN_MAX_LENGTH = 2048
+
+
+def _is_production() -> bool:
+    return os.getenv("VERCEL_ENV") == "production"
+
 
 def check_startup_config(env) -> None:
     """Refuse to start with config that would silently disable cost controls.
@@ -196,6 +208,10 @@ def check_startup_config(env) -> None:
         raise RuntimeError(
             f"GUEST_JWT_SECRET must be at least {GUEST_SECRET_MIN_LENGTH} characters (got {len(secret)}). "
             'Generate one with: python3 -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+    if on_prod and not env.get("TURNSTILE_SECRET_KEY"):
+        raise RuntimeError(
+            "TURNSTILE_SECRET_KEY is required on Vercel production: guest tokens are only issued after bot verification"
         )
 
 
@@ -352,12 +368,61 @@ def require_auth(f):
     return decorated
 
 
-@app.route("/guest-token", methods=["GET"])
+class TurnstileUnavailable(OSError):
+    """Cloudflare gave no usable answer (timeout, network error, bad response). Surfaces as 503."""
+
+
+def _post_turnstile(form: dict) -> dict:
+    body = urllib.parse.urlencode(form).encode()
+    req = urllib.request.Request(TURNSTILE_VERIFY_URL, data=body, method="POST")
+    with urllib.request.urlopen(req, timeout=TURNSTILE_TIMEOUT) as resp:
+        return json.loads(resp.read())
+
+
+def verify_turnstile(token: str, remoteip: str) -> bool:
+    """True when Cloudflare accepts the token. Raises TurnstileUnavailable when no answer comes back."""
+    form = {"secret": TURNSTILE_SECRET_KEY, "response": token, "remoteip": remoteip}
+    try:
+        data = _post_turnstile(form)
+    except (OSError, ValueError) as e:  # URLError and timeouts are OSError; bad JSON is ValueError
+        raise TurnstileUnavailable(str(e)) from e
+    if not isinstance(data, dict):
+        raise TurnstileUnavailable("siteverify response is not an object")
+    return data.get("success") is True
+
+
+def _turnstile_refusal():
+    """Return an error response when the guest-token request fails bot verification, else None."""
+    if not TURNSTILE_SECRET_KEY:
+        if _is_production():
+            # Startup refuses this config; refuse here too rather than mint unverified tokens.
+            return jsonify({"error": "Bot verification not configured"}), 503
+        logger.warning("TURNSTILE_SECRET_KEY not set: skipping bot verification for guest tokens (off production only)")
+        return None
+    body = request.get_json(silent=True)
+    token = body.get("turnstile_token") if isinstance(body, dict) else None
+    if not isinstance(token, str) or not token or len(token) > TURNSTILE_TOKEN_MAX_LENGTH:
+        return jsonify({"error": "Bot verification required"}), 403
+    try:
+        accepted = verify_turnstile(token, client_ip())
+    except TurnstileUnavailable as e:
+        logger.error("Turnstile verification unavailable, refusing guest token: %s", e)
+        return jsonify({"error": "Bot verification unavailable"}), 503
+    if not accepted:
+        logger.warning("Turnstile rejected a guest token request")
+        return jsonify({"error": "Bot verification failed"}), 403
+    return None
+
+
+@app.route("/guest-token", methods=["POST"])
 @limiter.limit("10 per hour")
 @limiter.limit("20 per day", error_message="Guest token daily limit reached")
 def guest_token():
     if not GUEST_JWT_SECRET:
         return jsonify({"error": "Guest access not configured"}), 503
+    refused = _turnstile_refusal()
+    if refused is not None:
+        return refused
     now = int(time.time())
     payload = {
         "sub": str(uuid.uuid4()),

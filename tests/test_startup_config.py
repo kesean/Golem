@@ -30,7 +30,19 @@ def test_production_without_redis_url_refuses_to_start():
 
 
 def test_production_with_redis_url_starts():
-    check_startup_config({"VERCEL": "1", "VERCEL_ENV": "production", "REDIS_URL": "redis://x", "GUEST_JWT_SECRET": STRONG_SECRET})
+    check_startup_config({
+        "VERCEL": "1", "VERCEL_ENV": "production", "REDIS_URL": "redis://x",
+        "GUEST_JWT_SECRET": STRONG_SECRET, "TURNSTILE_SECRET_KEY": "test-turnstile-secret",
+    })
+
+
+def test_production_without_turnstile_secret_refuses_to_start():
+    with pytest.raises(RuntimeError, match="TURNSTILE_SECRET_KEY is required on Vercel production"):
+        check_startup_config({"VERCEL": "1", "VERCEL_ENV": "production", "REDIS_URL": "redis://x", "GUEST_JWT_SECRET": STRONG_SECRET})
+
+
+def test_preview_without_turnstile_secret_starts():
+    check_startup_config({"VERCEL": "1", "VERCEL_ENV": "preview", "REDIS_URL": "redis://x", "GUEST_JWT_SECRET": STRONG_SECRET})
 
 
 def test_preview_without_redis_or_guest_secret_starts():

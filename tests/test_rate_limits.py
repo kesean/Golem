@@ -221,7 +221,7 @@ def test_guest_daily_limit_does_not_apply_to_other_ips(rate_limited_client, cloc
 def test_guest_token_mints_capped_per_ip_per_day(rate_limited_client, clock):
     """10/hour still applies; a day's worth of mints from one IP stops at 20."""
     def mint():
-        return rate_limited_client.get("/guest-token", environ_base={"REMOTE_ADDR": "10.7.0.1"})
+        return rate_limited_client.post("/guest-token", environ_base={"REMOTE_ADDR": "10.7.0.1"})
 
     for _ in range(10):
         assert mint().status_code == 200
