@@ -26,7 +26,6 @@ export function useChat(isGuest = false): UseChatReturn {
   const { getToken } = useToken()
   const { save: saveToHistory } = useHistory(isGuest)
   const createEval = useMutation(api.evals.createEval)
-  const incrementStats = useMutation(api.stats.increment)
 
   // Abort any in-flight stream when the component unmounts, so a stray
   // fetch/reader loop doesn't keep calling setState after unmount.
@@ -159,13 +158,6 @@ export function useChat(isGuest = false): UseChatReturn {
       // Defensive: a backend serving an older /ask response shape (e.g. mid
       // rolling-deploy) may omit "chunks" entirely from the done event.
       setChunks(done.chunks ?? [])
-
-      // Unconditional — unlike history/eval below, the global counter
-      // includes guest usage, since a demo visitor is almost always a guest.
-      incrementStats({}).catch((err) => {
-        // Non-fatal to the user, but log so a silently missed count is diagnosable
-        console.warn('stats increment failed', err)
-      })
 
       if (!isGuest) {
         saveToHistory(question, done.response)

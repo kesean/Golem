@@ -330,6 +330,32 @@ def _user_key() -> str:
         return client_ip()
 
 
+STATS_INCREMENT_TIMEOUT = 3  # seconds; the counter is cosmetic and must not hold the stream open
+
+
+def _count_answered_question() -> None:
+    """Tell Convex one more question was answered (POST /stats/increment).
+
+    The counter is cosmetic, so a failure is logged and never reaches the user.
+    """
+    base = os.getenv("CONVEX_SITE_URL", "").rstrip("/")
+    secret = os.getenv("STATS_INCREMENT_SECRET", "")
+    if not base or not secret:
+        logger.warning("CONVEX_SITE_URL or STATS_INCREMENT_SECRET not set: answered-question counter not updated")
+        return
+    req = urllib.request.Request(
+        f"{base}/stats/increment",
+        data=b"{}",
+        method="POST",
+        headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=STATS_INCREMENT_TIMEOUT) as resp:
+            resp.read()
+    except OSError as e:
+        logger.warning("answered-question counter update failed: %s", e)
+
+
 def _sub_fingerprint(sub) -> str:
     """Short SHA-256 of the token subject, so logs can correlate requests without storing the user ID."""
     if not sub:
@@ -648,8 +674,10 @@ def ask():
         return f"data: {json.dumps(event)}\n\n"
 
     def generate():
+        answered = False
         try:
             for event in chat_run(question, history):
+                answered = answered or event.get("type") == "done"
                 yield sse(event)
         except Exception:
             # Broad on purpose: headers are already committed (200,
@@ -660,6 +688,9 @@ def ask():
             # carry internal details, so the client gets a fixed string.
             logger.exception("stream_run failed")
             yield sse({"type": "error", "error": STREAM_ERROR_MESSAGE})
+            return
+        if answered:
+            _count_answered_question()
 
     return Response(
         stream_with_context(generate()),

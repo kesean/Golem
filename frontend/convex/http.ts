@@ -26,8 +26,11 @@ async function constantTimeCompare(a: string, b: string): Promise<boolean> {
 }
 
 // Validate bearer token
-async function validateBearer(authHeader: string | null): Promise<boolean> {
-  const secret = process.env.EVAL_INGEST_SECRET;
+// No default for `secret`: an undefined secret must fail closed, never fall back to another route's secret.
+async function validateBearer(
+  authHeader: string | null,
+  secret: string | undefined,
+): Promise<boolean> {
   if (!secret || !authHeader) {
     return false;
   }
@@ -453,7 +456,7 @@ http.route({
   handler: httpAction(async (ctx, req) => {
     // Validate bearer token
     const authHeader = req.headers.get("Authorization");
-    if (!(await validateBearer(authHeader))) {
+    if (!(await validateBearer(authHeader, process.env.EVAL_INGEST_SECRET))) {
       return new Response(JSON.stringify({}), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -540,6 +543,26 @@ http.route({
   }),
 });
 
+// POST /stats/increment: called by the API once per successfully answered /ask.
+// Uses its own secret so the eval ingest secret never leaves the eval tooling.
+http.route({
+  path: "/stats/increment",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    if (!(await validateBearer(req.headers.get("Authorization"), process.env.STATS_INCREMENT_SECRET))) {
+      return new Response(JSON.stringify({}), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    await ctx.runMutation(internal.stats.increment, {});
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 // GET /evals/baseline
 http.route({
   path: "/evals/baseline",
@@ -547,7 +570,7 @@ http.route({
   handler: httpAction(async (ctx, req) => {
     // Validate bearer token
     const authHeader = req.headers.get("Authorization");
-    if (!(await validateBearer(authHeader))) {
+    if (!(await validateBearer(authHeader, process.env.EVAL_INGEST_SECRET))) {
       return new Response(JSON.stringify({}), {
         status: 401,
         headers: { "Content-Type": "application/json" },

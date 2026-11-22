@@ -14,16 +14,16 @@ test("getGlobalCount returns 0 when no stats row exists", async () => {
 
 test("increment creates the row with totalQuestions 1 on first call", async () => {
   const t = convexTest(schema, modules);
-  await t.mutation(api.stats.increment, {});
+  await t.mutation(internal.stats.increment, {});
   const count = await t.query(api.stats.getGlobalCount, {});
   expect(count).toBe(1);
 });
 
 test("increment patches an existing row by 1 each call", async () => {
   const t = convexTest(schema, modules);
-  await t.mutation(api.stats.increment, {});
-  await t.mutation(api.stats.increment, {});
-  await t.mutation(api.stats.increment, {});
+  await t.mutation(internal.stats.increment, {});
+  await t.mutation(internal.stats.increment, {});
+  await t.mutation(internal.stats.increment, {});
   const count = await t.query(api.stats.getGlobalCount, {});
   expect(count).toBe(3);
 });
@@ -32,8 +32,8 @@ test("increment and getGlobalCount both work with no identity (guest)", async ()
   const t = convexTest(schema, modules);
   // Deliberately no .withIdentity(...) anywhere in this test — guests must
   // be able to call both functions.
-  await t.mutation(api.stats.increment, {});
-  await t.mutation(api.stats.increment, {});
+  await t.mutation(internal.stats.increment, {});
+  await t.mutation(internal.stats.increment, {});
   const count = await t.query(api.stats.getGlobalCount, {});
   expect(count).toBe(2);
 });
@@ -64,7 +64,7 @@ test("increment folds duplicate rows into one counter without losing counts", as
     await ctx.db.insert("stats", { totalQuestions: 4 });
   });
   expect(await t.query(api.stats.getGlobalCount, {})).toBe(7);
-  await t.mutation(api.stats.increment, {});
+  await t.mutation(internal.stats.increment, {});
   expect(await t.query(api.stats.getGlobalCount, {})).toBe(8);
   const rows = await t.run(async (ctx) => ctx.db.query("stats").collect());
   expect(rows).toHaveLength(1);
@@ -73,7 +73,7 @@ test("increment folds duplicate rows into one counter without losing counts", as
 
 test("seedFromExisting throws if a stats row already exists", async () => {
   const t = convexTest(schema, modules);
-  await t.mutation(api.stats.increment, {});
+  await t.mutation(internal.stats.increment, {});
   await expect(
     t.mutation(internal.stats.seedFromExisting, {})
   ).rejects.toThrow("stats already seeded");
