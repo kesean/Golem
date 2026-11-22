@@ -326,21 +326,22 @@ def test_user_is_charged_when_only_the_global_cap_refuses(rate_limited_client, m
     assert remaining == 4
 
 
-def test_storage_error_inside_charge_fails_open_with_one_warning(rate_limited_client, mock_jwks, valid_token, monkeypatch, caplog):
+def test_storage_error_inside_charge_returns_503_and_never_answers(rate_limited_client, mock_jwks, valid_token, monkeypatch, caplog):
+    """A dead limiter store must not let a request through: the quota cannot be charged, so the answer is refused."""
     import logging
     from unittest.mock import patch as mock_patch
     import app as app_module
 
     monkeypatch.setattr(app_module._limiter_failure_watch, "tripped", False)
-    with patch("app.chat_run", return_value=_fake_chat_result()), \
+    with patch("app.chat_run", return_value=_fake_chat_result()) as chat, \
          mock_patch.object(app_module.limiter.limiter, "hit", side_effect=ConnectionError("redis down")), \
          caplog.at_level(logging.WARNING, logger="app"):
         for _ in range(2):
             resp = rate_limited_client.post("/ask", json={"question": "q"}, headers=_auth_headers(valid_token))
             resp.get_data()
-            assert resp.status_code == 200
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "NOT enforced" in r.message]
-    assert len(warnings) == 1
+            assert resp.status_code == 503
+            assert b"Rate limit service unavailable" in resp.data
+    chat.assert_not_called()
     assert any("Failed to charge rate limit" in r.message for r in caplog.records if r.levelno == logging.ERROR)
 
 

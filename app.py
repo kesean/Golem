@@ -116,9 +116,11 @@ limiter = Limiter(
 def check_limiter_storage() -> bool:
     """Log which rate-limit storage is active and whether it is reachable.
 
-    The limiter runs with swallow_errors=True (a Redis outage must not take
-    /ask down), which fails open: limits silently stop applying. This makes
-    that state loud at startup instead of invisible.
+    The per-minute and guest-token limiters run with swallow_errors=True (a
+    Redis outage must not take those routes down), so their limits stop applying
+    while Redis is unavailable. /ask stays fail-closed: it returns 503 unless its
+    daily quota can be charged. This makes the limiter state loud at startup
+    instead of invisible.
     """
     if not _redis_url:
         logger.warning(
@@ -132,7 +134,7 @@ def check_limiter_storage() -> bool:
         logger.exception("Rate-limit Redis check raised; limits are NOT enforced")
         return False
     if not healthy:
-        logger.error("Rate-limit Redis is unreachable; limits are NOT enforced (failing open)")
+        logger.error("Rate-limit Redis is unreachable; per-minute and guest-token limits are NOT enforced (/ask returns 503)")
         return False
     logger.info("Rate-limit storage: Redis reachable")
     return True
@@ -156,8 +158,9 @@ class _LimiterFailureWatch(logging.Handler):
         cause = record.exc_info[1] if record.exc_info else None
         detail = f"{record.getMessage()}: {cause!r}" if cause is not None else record.getMessage()
         logger.warning(
-            "Rate limiting is NOT enforced in this process: limiter storage failed (%s). "
-            "Requests are being allowed. Check REDIS_URL and Redis health.",
+            "Per-minute and guest-token rate limits are NOT enforced in this process: limiter storage failed (%s). "
+            "Those requests are allowed through; /ask answers are refused with 503 "
+            "until the daily quota can be charged. Check REDIS_URL and Redis health.",
             detail,
         )
 
@@ -169,6 +172,34 @@ check_limiter_storage()
 
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
 GUEST_JWT_SECRET = os.getenv("GUEST_JWT_SECRET", "")
+GUEST_SECRET_MIN_LENGTH = 32
+
+
+def check_startup_config(env) -> None:
+    """Refuse to start with config that would silently disable cost controls.
+
+    On Vercel the daily budgets are only shared across instances when REDIS_URL
+    is set, and guest tokens need a real signing secret. Off Vercel, an unset
+    GUEST_JWT_SECRET only disables guest access (see guest_token).
+    """
+    on_prod = env.get("VERCEL_ENV") == "production"
+    if on_prod and not env.get("REDIS_URL"):
+        raise RuntimeError(
+            "REDIS_URL is required on Vercel: without it rate limits and daily cost caps are per-process and not enforced"
+        )
+    secret = env.get("GUEST_JWT_SECRET", "")
+    if not secret:
+        if on_prod:
+            raise RuntimeError("GUEST_JWT_SECRET is required on Vercel")
+        return
+    if len(secret) < GUEST_SECRET_MIN_LENGTH:
+        raise RuntimeError(
+            f"GUEST_JWT_SECRET must be at least {GUEST_SECRET_MIN_LENGTH} characters (got {len(secret)}). "
+            'Generate one with: python3 -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+
+
+check_startup_config(os.environ)
 
 
 _jwks_cache: dict | None = None
@@ -426,8 +457,9 @@ def charge_quota():
       3. global daily: 70 for prod origins, or PREVIEW_GLOBAL_DAILY_LIMIT (20) in a
          separate bucket for preview origins (see _origin_class)
 
-    Returns a 429 response, or None to continue. Fails open on storage errors and
-    logs them through flask-limiter's logger, which the one-time watcher reads.
+    Returns a 429 response, or None to continue. Fails closed: a storage error is
+    logged through flask-limiter's logger and returns 503, because the request
+    cannot be charged against the budget.
     """
     if not limiter.enabled:
         return None
@@ -447,7 +479,8 @@ def charge_quota():
         elif not limiter.limiter.hit(GLOBAL_DAILY_LIMIT, "ask-global", "global"):
             return jsonify({"error": "Service limit reached"}), 429
     except Exception:
-        logging.getLogger("flask-limiter").exception("Failed to charge rate limit. Swallowing error")
+        logging.getLogger("flask-limiter").exception("Failed to charge rate limit. Refusing the request")
+        return jsonify({"error": "Rate limit service unavailable"}), 503
     return None
 
 
