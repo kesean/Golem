@@ -43,7 +43,7 @@ def test_runtime_storage_failure_warns_once_per_process(rate_limited_client, cap
          patch.object(app_module.limiter.limiter, "hit", side_effect=ConnectionError("redis down")), \
          caplog.at_level(logging.WARNING, logger="app"):
         for _ in range(2):
-            resp = rate_limited_client.get("/guest-token")
+            resp = rate_limited_client.post("/guest-token")
             assert resp.status_code == 200
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "NOT enforced" in r.message]
     assert len(warnings) == 1

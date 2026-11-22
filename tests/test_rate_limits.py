@@ -148,8 +148,8 @@ def test_parallel_guest_requests_cannot_exceed_daily_limit(rate_limited_client, 
         return payload
 
     def test_then_wait(*args, **kwargs):
-        # Only a check-then-count split calls test(); holding every thread between
-        # its check and its count is what would let all six through.
+        # The guest pre-check on the global budget calls test(). Holding every thread
+        # at that point, like the barrier above, keeps the concurrent case honest.
         result = real_test(*args, **kwargs)
         barrier.wait()
         return result
@@ -221,7 +221,7 @@ def test_guest_daily_limit_does_not_apply_to_other_ips(rate_limited_client, cloc
 def test_guest_token_mints_capped_per_ip_per_day(rate_limited_client, clock):
     """10/hour still applies; a day's worth of mints from one IP stops at 20."""
     def mint():
-        return rate_limited_client.get("/guest-token", environ_base={"REMOTE_ADDR": "10.7.0.1"})
+        return rate_limited_client.post("/guest-token", environ_base={"REMOTE_ADDR": "10.7.0.1"})
 
     for _ in range(10):
         assert mint().status_code == 200
@@ -276,6 +276,31 @@ def test_guest_ip_cap_is_10_per_day(rate_limited_client, clock, monkeypatch):
     assert statuses[:10] == [200] * 10
     assert statuses[10] == 429
     assert b"IP daily limit reached" in resp.data
+
+
+def test_guest_refused_by_spent_global_budget_does_not_burn_guest_quota(rate_limited_client, mock_jwks, clock, conftest_tokens, monkeypatch):
+    """With the global budget spent, a guest is refused without using its IP or guest-share bucket."""
+    import app as app_module
+    from limits import parse
+
+    monkeypatch.setattr(app_module, "GLOBAL_DAILY_LIMIT", parse("2 per day"))
+    with patch("app.chat_run", return_value=_fake_chat_result()):
+        for token in conftest_tokens[:2]:
+            resp = rate_limited_client.post(
+                "/ask", json={"question": "q"}, headers=_auth_headers(token),
+                environ_base={"REMOTE_ADDR": "10.9.0.2"},
+            )
+            resp.get_data()
+            assert resp.status_code == 200
+        resp = rate_limited_client.post(
+            "/ask", json={"question": "q"}, headers=_auth_headers(_guest_token(clock)),
+            environ_base={"REMOTE_ADDR": "10.9.0.1"},
+        )
+    assert resp.status_code == 429
+    assert b"Service limit reached" in resp.data
+    stats = app_module.limiter.limiter.get_window_stats
+    assert stats(app_module.GUEST_IP_DAILY_LIMIT, "ask-guest-ip", "10.9.0.1").remaining == 10
+    assert stats(app_module._guest_cap(app_module.GLOBAL_DAILY_LIMIT), "ask-global-guest", "global").remaining == 1
 
 
 def test_per_user_refusal_does_not_use_global_budget(rate_limited_client, mock_jwks, conftest_tokens):

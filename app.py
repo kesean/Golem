@@ -5,9 +5,12 @@ app.py — Flask app and API routes.
 import os
 import re
 import json
+import math
 import time
 import uuid
+import hashlib
 import logging
+import urllib.parse
 import urllib.request
 from functools import wraps
 from flask import Flask, request, jsonify, g, Response, stream_with_context
@@ -174,6 +177,20 @@ CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
 GUEST_JWT_SECRET = os.getenv("GUEST_JWT_SECRET", "")
 GUEST_SECRET_MIN_LENGTH = 32
 
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
+TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+TURNSTILE_TIMEOUT = 5  # seconds; a slow verify must not hold a guest request open
+TURNSTILE_TOKEN_MAX_LENGTH = 2048
+TURNSTILE_EXPECTED_ACTION = "guest_token"  # must match the widget's action in frontend/src/lib/turnstile.ts
+# Optional allow-list of widget hostnames (comma-separated). Unset means any hostname the widget key allows.
+TURNSTILE_EXPECTED_HOSTNAMES = {
+    h.strip() for h in os.getenv("TURNSTILE_EXPECTED_HOSTNAMES", "").split(",") if h.strip()
+}
+
+
+def _is_production() -> bool:
+    return os.getenv("VERCEL_ENV") == "production"
+
 
 def check_startup_config(env) -> None:
     """Refuse to start with config that would silently disable cost controls.
@@ -196,6 +213,10 @@ def check_startup_config(env) -> None:
         raise RuntimeError(
             f"GUEST_JWT_SECRET must be at least {GUEST_SECRET_MIN_LENGTH} characters (got {len(secret)}). "
             'Generate one with: python3 -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+    if on_prod and not env.get("TURNSTILE_SECRET_KEY"):
+        raise RuntimeError(
+            "TURNSTILE_SECRET_KEY is required on Vercel production: guest tokens are only issued after bot verification"
         )
 
 
@@ -314,6 +335,39 @@ def _user_key() -> str:
         return client_ip()
 
 
+STATS_INCREMENT_TIMEOUT = 1  # seconds; runs inline after "done" and holds the response open, so keep it short
+
+
+def _count_answered_question() -> None:
+    """Tell Convex one more question was answered (POST /stats/increment).
+
+    The counter is cosmetic, so a failure is logged and never reaches the user.
+    """
+    base = os.getenv("CONVEX_SITE_URL", "").rstrip("/")
+    secret = os.getenv("STATS_INCREMENT_SECRET", "")
+    if not base or not secret:
+        logger.warning("CONVEX_SITE_URL or STATS_INCREMENT_SECRET not set: answered-question counter not updated")
+        return
+    req = urllib.request.Request(
+        f"{base}/stats/increment",
+        data=b"{}",
+        method="POST",
+        headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=STATS_INCREMENT_TIMEOUT) as resp:
+            resp.read()
+    except OSError as e:
+        logger.warning("answered-question counter update failed: %s", e)
+
+
+def _sub_fingerprint(sub) -> str:
+    """Short SHA-256 of the token subject, so logs can correlate requests without storing the user ID."""
+    if not sub:
+        return "none"
+    return hashlib.sha256(str(sub).encode()).hexdigest()[:16]
+
+
 def require_auth(f):
     """Decorator that enforces Clerk JWT auth or guest JWT auth on a route."""
     @wraps(f)
@@ -352,12 +406,69 @@ def require_auth(f):
     return decorated
 
 
-@app.route("/guest-token", methods=["GET"])
+class TurnstileUnavailable(OSError):
+    """Cloudflare gave no usable answer (timeout, network error, bad response). Surfaces as 503."""
+
+
+def _post_turnstile(form: dict) -> dict:
+    body = urllib.parse.urlencode(form).encode()
+    req = urllib.request.Request(TURNSTILE_VERIFY_URL, data=body, method="POST")
+    with urllib.request.urlopen(req, timeout=TURNSTILE_TIMEOUT) as resp:
+        return json.loads(resp.read())
+
+
+def verify_turnstile(token: str, remoteip: str) -> bool:
+    """True when Cloudflare accepts the token for this action (and hostname, when configured).
+
+    A token from a different widget that shares the secret key is refused by the
+    action and hostname checks. Raises TurnstileUnavailable when no answer comes back.
+    """
+    form = {"secret": TURNSTILE_SECRET_KEY, "response": token, "remoteip": remoteip}
+    try:
+        data = _post_turnstile(form)
+    except (OSError, ValueError) as e:  # URLError and timeouts are OSError; bad JSON is ValueError
+        raise TurnstileUnavailable(str(e)) from e
+    if not isinstance(data, dict):
+        raise TurnstileUnavailable("siteverify response is not an object")
+    if data.get("success") is not True or data.get("action") != TURNSTILE_EXPECTED_ACTION:
+        return False
+    if TURNSTILE_EXPECTED_HOSTNAMES and data.get("hostname") not in TURNSTILE_EXPECTED_HOSTNAMES:
+        return False
+    return True
+
+
+def _turnstile_refusal():
+    """Return an error response when the guest-token request fails bot verification, else None."""
+    if not TURNSTILE_SECRET_KEY:
+        if _is_production():
+            # Startup refuses this config; refuse here too rather than mint unverified tokens.
+            return jsonify({"error": "Bot verification not configured"}), 503
+        logger.warning("TURNSTILE_SECRET_KEY not set: skipping bot verification for guest tokens (off production only)")
+        return None
+    body = request.get_json(silent=True)
+    token = body.get("turnstile_token") if isinstance(body, dict) else None
+    if not isinstance(token, str) or not token or len(token) > TURNSTILE_TOKEN_MAX_LENGTH:
+        return jsonify({"error": "Bot verification required"}), 403
+    try:
+        accepted = verify_turnstile(token, client_ip())
+    except TurnstileUnavailable as e:
+        logger.error("Turnstile verification unavailable, refusing guest token: %s", e)
+        return jsonify({"error": "Bot verification unavailable"}), 503
+    if not accepted:
+        logger.warning("Turnstile rejected a guest token request")
+        return jsonify({"error": "Bot verification failed"}), 403
+    return None
+
+
+@app.route("/guest-token", methods=["POST"])
 @limiter.limit("10 per hour")
 @limiter.limit("20 per day", error_message="Guest token daily limit reached")
 def guest_token():
     if not GUEST_JWT_SECRET:
         return jsonify({"error": "Guest access not configured"}), 503
+    refused = _turnstile_refusal()
+    if refused is not None:
+        return refused
     now = int(time.time())
     payload = {
         "sub": str(uuid.uuid4()),
@@ -425,6 +536,31 @@ def _preview_global_daily_limit():
 
 PREVIEW_GLOBAL_DAILY_LIMIT = _preview_global_daily_limit()
 
+GUEST_SHARE_DEFAULT = 0.5
+
+
+def _guest_daily_share() -> float:
+    """GUEST_DAILY_SHARE as a fraction in (0, 1]. A bad value logs and uses the default."""
+    raw = os.getenv("GUEST_DAILY_SHARE", "").strip()
+    if not raw:
+        return GUEST_SHARE_DEFAULT
+    try:
+        share = float(raw)
+        if not 0 < share <= 1:
+            raise ValueError("must be greater than 0 and at most 1")
+    except ValueError as e:
+        logger.error("GUEST_DAILY_SHARE=%r is invalid (%s); using %s", raw, e, GUEST_SHARE_DEFAULT)
+        return GUEST_SHARE_DEFAULT
+    return share
+
+
+GUEST_DAILY_SHARE = _guest_daily_share()
+
+
+def _guest_cap(global_limit):
+    """Guests' combined daily ceiling on one global budget: GUEST_DAILY_SHARE of it, at least 1."""
+    return parse(f"{max(1, math.floor(global_limit.amount * GUEST_DAILY_SHARE))} per day")
+
 
 def _origin_class() -> str:
     """Classify the request's Origin as "preview" or "prod" for the global budget.
@@ -451,11 +587,15 @@ def charge_quota():
     Called from the view, after require_auth, so forged or garbage tokens are
     never charged. hit() is atomic in the storage backend, so parallel requests
     cannot all pass a check before any of them is counted. Each refusal stops the
-    chain, so a request refused early never uses a later budget:
+    chain, so a request refused early never uses a later budget. A guest is first
+    checked against the global budget without charging it, so a spent global budget
+    refuses the guest before any guest bucket is used:
       1. per-IP daily: 10 for guests, 200 backstop for signed-in users
       2. per-user daily: 5 (guests share one bucket per IP)
       3. global daily: 70 for prod origins, or PREVIEW_GLOBAL_DAILY_LIMIT (20) in a
-         separate bucket for preview origins (see _origin_class)
+         separate bucket for preview origins (see _origin_class). Guests also pass
+         a guest share of that budget first (GUEST_DAILY_SHARE, default 50%), so
+         signed-in users always keep the rest.
 
     Returns a 429 response, or None to continue. Fails closed: a storage error is
     logged through flask-limiter's logger and returns 503, because the request
@@ -466,6 +606,15 @@ def charge_quota():
     try:
         ip = client_ip()
         is_guest = g.clerk_payload.get("role") == "guest"
+        if _origin_class() == "preview":
+            global_limit, bucket = PREVIEW_GLOBAL_DAILY_LIMIT, "preview"
+        else:
+            global_limit, bucket = GLOBAL_DAILY_LIMIT, "global"
+        # Guests look at the global budget before charging their own buckets, so a spent
+        # global budget does not use up guest quota. test() does not count; the atomic hit
+        # on the global bucket below still enforces the cap.
+        if is_guest and not limiter.limiter.test(global_limit, "ask-global", bucket):
+            return jsonify({"error": "Service limit reached"}), 429
         if is_guest:
             if not limiter.limiter.hit(GUEST_IP_DAILY_LIMIT, "ask-guest-ip", ip):
                 return jsonify({"error": "IP daily limit reached"}), 429
@@ -473,10 +622,9 @@ def charge_quota():
             return jsonify({"error": "IP daily limit reached"}), 429
         if not limiter.limiter.hit(USER_DAILY_LIMIT, "ask-user", _user_key()):
             return jsonify({"error": "Daily limit reached"}), 429
-        if _origin_class() == "preview":
-            if not limiter.limiter.hit(PREVIEW_GLOBAL_DAILY_LIMIT, "ask-global", "preview"):
-                return jsonify({"error": "Service limit reached"}), 429
-        elif not limiter.limiter.hit(GLOBAL_DAILY_LIMIT, "ask-global", "global"):
+        if is_guest and not limiter.limiter.hit(_guest_cap(global_limit), "ask-global-guest", bucket):
+            return jsonify({"error": "Service limit reached"}), 429
+        if not limiter.limiter.hit(global_limit, "ask-global", bucket):
             return jsonify({"error": "Service limit reached"}), 429
     except Exception:
         logging.getLogger("flask-limiter").exception("Failed to charge rate limit. Refusing the request")
@@ -506,6 +654,11 @@ def ask():
     All validation happens before the stream opens, so a bad request still
     gets a plain 4xx JSON response.
     """
+    # Logged for every authenticated /ask. Never the question text or the token.
+    payload = g.clerk_payload
+    kind = "guest" if payload.get("role") == "guest" else "clerk"
+    logger.info("ask ip=%s kind=%s sub=%s", client_ip(), kind, _sub_fingerprint(payload.get("sub")))
+
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
 
@@ -541,8 +694,10 @@ def ask():
         return f"data: {json.dumps(event)}\n\n"
 
     def generate():
+        answered = False
         try:
             for event in chat_run(question, history):
+                answered = answered or event.get("type") == "done"
                 yield sse(event)
         except Exception:
             # Broad on purpose: headers are already committed (200,
@@ -553,6 +708,9 @@ def ask():
             # carry internal details, so the client gets a fixed string.
             logger.exception("stream_run failed")
             yield sse({"type": "error", "error": STREAM_ERROR_MESSAGE})
+            return
+        if answered:
+            _count_answered_question()
 
     return Response(
         stream_with_context(generate()),

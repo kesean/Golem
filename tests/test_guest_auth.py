@@ -18,14 +18,14 @@ def _fake_chat_result(text="<product_tag>Other</product_tag><summary>ok</summary
 # ── /guest-token endpoint ─────────────────────────────────────────────────────
 
 def test_guest_token_returns_200_with_token(client):
-    resp = client.get("/guest-token")
+    resp = client.post("/guest-token")
     assert resp.status_code == 200
     data = resp.get_json()
     assert "token" in data
 
 
 def test_guest_token_is_valid_hs256_jwt(client):
-    resp = client.get("/guest-token")
+    resp = client.post("/guest-token")
     token = resp.get_json()["token"]
     decoded = pyjwt.decode(token, TEST_GUEST_SECRET, algorithms=["HS256"])
     assert decoded["role"] == "guest"
@@ -34,8 +34,8 @@ def test_guest_token_is_valid_hs256_jwt(client):
 
 
 def test_guest_token_uuids_are_unique(client):
-    t1 = client.get("/guest-token").get_json()["token"]
-    t2 = client.get("/guest-token").get_json()["token"]
+    t1 = client.post("/guest-token").get_json()["token"]
+    t2 = client.post("/guest-token").get_json()["token"]
     p1 = pyjwt.decode(t1, TEST_GUEST_SECRET, algorithms=["HS256"])
     p2 = pyjwt.decode(t2, TEST_GUEST_SECRET, algorithms=["HS256"])
     assert p1["sub"] != p2["sub"]

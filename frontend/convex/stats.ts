@@ -1,4 +1,4 @@
-import { mutation, query, internalMutation } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 
 // The counter is one row. Two first-ever writes that both saw an empty table
 // could each insert one, so every read and write treats ALL rows (a small
@@ -17,11 +17,10 @@ export const getGlobalCount = query({
   },
 });
 
-// Public — no auth required, by design. Called once per successfully
-// answered question, for guests and signed-in users alike. Guests have no
-// Convex identity (Convex only trusts Clerk), so an auth check here would
-// drop guest usage. Accepted risk: anyone can inflate this cosmetic counter.
-export const increment = mutation({
+// Internal only. Called by the backend after each successful /ask, through the
+// bearer-protected POST /stats/increment route in convex/http.ts. Clients cannot
+// call it, so the counter cannot be inflated by anyone who can open the page.
+export const increment = internalMutation({
   args: {},
   handler: async (ctx) => {
     const rows = await ctx.db.query("stats").take(STATS_ROW_SCAN);

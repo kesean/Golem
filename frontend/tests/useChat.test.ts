@@ -65,27 +65,27 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse()))
 })
 
-describe('useChat stats increment', () => {
-  it('increments the global counter for a guest ask, without saving history/eval', async () => {
+describe('useChat answered-question counter', () => {
+  it('a guest ask does not write the counter from the browser, nor save history/eval', async () => {
     const { result } = renderHook(() => useChat(true))
 
     await act(async () => {
       await result.current.ask('Why am I getting a 401?')
     })
 
-    expect(incrementMock).toHaveBeenCalledTimes(1)
+    expect(incrementMock).not.toHaveBeenCalled()
     expect(createEvalMock).not.toHaveBeenCalled()
     expect(saveMock).not.toHaveBeenCalled()
   })
 
-  it('increments the global counter for a signed-in ask too', async () => {
+  it('a signed-in ask does not write the counter from the browser; the backend does', async () => {
     const { result } = renderHook(() => useChat(false))
 
     await act(async () => {
       await result.current.ask('Why am I getting a 401?')
     })
 
-    expect(incrementMock).toHaveBeenCalledTimes(1)
+    expect(incrementMock).not.toHaveBeenCalled()
     expect(createEvalMock).toHaveBeenCalledTimes(1)
   })
 })

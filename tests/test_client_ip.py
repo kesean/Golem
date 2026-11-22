@@ -33,6 +33,6 @@ def test_guest_token_limit_is_per_client_on_vercel(monkeypatch, rate_limited_cli
     a = {"X-Forwarded-For": "203.0.113.7"}
     b = {"X-Forwarded-For": "198.51.100.9"}
     for _ in range(10):
-        assert client.get("/guest-token", headers=a).status_code == 200
-    assert client.get("/guest-token", headers=a).status_code == 429
-    assert client.get("/guest-token", headers=b).status_code == 200
+        assert client.post("/guest-token", headers=a).status_code == 200
+    assert client.post("/guest-token", headers=a).status_code == 429
+    assert client.post("/guest-token", headers=b).status_code == 200
