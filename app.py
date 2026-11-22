@@ -490,6 +490,31 @@ def _preview_global_daily_limit():
 
 PREVIEW_GLOBAL_DAILY_LIMIT = _preview_global_daily_limit()
 
+GUEST_SHARE_DEFAULT = 0.5
+
+
+def _guest_daily_share() -> float:
+    """GUEST_DAILY_SHARE as a fraction in (0, 1]. A bad value logs and uses the default."""
+    raw = os.getenv("GUEST_DAILY_SHARE", "").strip()
+    if not raw:
+        return GUEST_SHARE_DEFAULT
+    try:
+        share = float(raw)
+        if not 0 < share <= 1:
+            raise ValueError("must be greater than 0 and at most 1")
+    except ValueError as e:
+        logger.error("GUEST_DAILY_SHARE=%r is invalid (%s); using %s", raw, e, GUEST_SHARE_DEFAULT)
+        return GUEST_SHARE_DEFAULT
+    return share
+
+
+GUEST_DAILY_SHARE = _guest_daily_share()
+
+
+def _guest_cap(global_limit):
+    """Guests' combined daily ceiling on one global budget: GUEST_DAILY_SHARE of it, at least 1."""
+    return parse(f"{max(1, math.floor(global_limit.amount * GUEST_DAILY_SHARE))} per day")
+
 
 def _origin_class() -> str:
     """Classify the request's Origin as "preview" or "prod" for the global budget.
@@ -520,7 +545,9 @@ def charge_quota():
       1. per-IP daily: 10 for guests, 200 backstop for signed-in users
       2. per-user daily: 5 (guests share one bucket per IP)
       3. global daily: 70 for prod origins, or PREVIEW_GLOBAL_DAILY_LIMIT (20) in a
-         separate bucket for preview origins (see _origin_class)
+         separate bucket for preview origins (see _origin_class). Guests also pass
+         a guest share of that budget first (GUEST_DAILY_SHARE, default 50%), so
+         signed-in users always keep the rest.
 
     Returns a 429 response, or None to continue. Fails closed: a storage error is
     logged through flask-limiter's logger and returns 503, because the request
@@ -539,9 +566,12 @@ def charge_quota():
         if not limiter.limiter.hit(USER_DAILY_LIMIT, "ask-user", _user_key()):
             return jsonify({"error": "Daily limit reached"}), 429
         if _origin_class() == "preview":
-            if not limiter.limiter.hit(PREVIEW_GLOBAL_DAILY_LIMIT, "ask-global", "preview"):
-                return jsonify({"error": "Service limit reached"}), 429
-        elif not limiter.limiter.hit(GLOBAL_DAILY_LIMIT, "ask-global", "global"):
+            global_limit, bucket = PREVIEW_GLOBAL_DAILY_LIMIT, "preview"
+        else:
+            global_limit, bucket = GLOBAL_DAILY_LIMIT, "global"
+        if is_guest and not limiter.limiter.hit(_guest_cap(global_limit), "ask-global-guest", bucket):
+            return jsonify({"error": "Service limit reached"}), 429
+        if not limiter.limiter.hit(global_limit, "ask-global", bucket):
             return jsonify({"error": "Service limit reached"}), 429
     except Exception:
         logging.getLogger("flask-limiter").exception("Failed to charge rate limit. Refusing the request")
