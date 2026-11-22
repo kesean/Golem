@@ -587,7 +587,9 @@ def charge_quota():
     Called from the view, after require_auth, so forged or garbage tokens are
     never charged. hit() is atomic in the storage backend, so parallel requests
     cannot all pass a check before any of them is counted. Each refusal stops the
-    chain, so a request refused early never uses a later budget:
+    chain, so a request refused early never uses a later budget. A guest is first
+    checked against the global budget without charging it, so a spent global budget
+    refuses the guest before any guest bucket is used:
       1. per-IP daily: 10 for guests, 200 backstop for signed-in users
       2. per-user daily: 5 (guests share one bucket per IP)
       3. global daily: 70 for prod origins, or PREVIEW_GLOBAL_DAILY_LIMIT (20) in a
@@ -604,6 +606,15 @@ def charge_quota():
     try:
         ip = client_ip()
         is_guest = g.clerk_payload.get("role") == "guest"
+        if _origin_class() == "preview":
+            global_limit, bucket = PREVIEW_GLOBAL_DAILY_LIMIT, "preview"
+        else:
+            global_limit, bucket = GLOBAL_DAILY_LIMIT, "global"
+        # Guests look at the global budget before charging their own buckets, so a spent
+        # global budget does not use up guest quota. test() does not count; the atomic hit
+        # on the global bucket below still enforces the cap.
+        if is_guest and not limiter.limiter.test(global_limit, "ask-global", bucket):
+            return jsonify({"error": "Service limit reached"}), 429
         if is_guest:
             if not limiter.limiter.hit(GUEST_IP_DAILY_LIMIT, "ask-guest-ip", ip):
                 return jsonify({"error": "IP daily limit reached"}), 429
@@ -611,10 +622,6 @@ def charge_quota():
             return jsonify({"error": "IP daily limit reached"}), 429
         if not limiter.limiter.hit(USER_DAILY_LIMIT, "ask-user", _user_key()):
             return jsonify({"error": "Daily limit reached"}), 429
-        if _origin_class() == "preview":
-            global_limit, bucket = PREVIEW_GLOBAL_DAILY_LIMIT, "preview"
-        else:
-            global_limit, bucket = GLOBAL_DAILY_LIMIT, "global"
         if is_guest and not limiter.limiter.hit(_guest_cap(global_limit), "ask-global-guest", bucket):
             return jsonify({"error": "Service limit reached"}), 429
         if not limiter.limiter.hit(global_limit, "ask-global", bucket):
