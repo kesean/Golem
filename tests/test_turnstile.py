@@ -26,7 +26,7 @@ def _mint(client, body=None):
 # ── Verification outcomes on /guest-token ─────────────────────────────────────
 
 def test_turnstile_success_issues_guest_token(client, turnstile_on):
-    with patch.object(turnstile_on, "_post_turnstile", return_value={"success": True}) as post:
+    with patch.object(turnstile_on, "_post_turnstile", return_value={"success": True, "action": "guest_token"}) as post:
         resp = _mint(client)
     assert resp.status_code == 200
     assert "token" in resp.get_json()
@@ -81,7 +81,7 @@ def test_oversized_turnstile_token_is_refused(client, turnstile_on):
 # ── verify_turnstile request shape ────────────────────────────────────────────
 
 def test_verify_sends_secret_response_and_remoteip(turnstile_on):
-    with patch.object(turnstile_on, "_post_turnstile", return_value={"success": True}) as post:
+    with patch.object(turnstile_on, "_post_turnstile", return_value={"success": True, "action": "guest_token"}) as post:
         assert turnstile_on.verify_turnstile("tok-xyz", "203.0.113.7") is True
     assert post.call_args.args[0] == {"secret": TEST_SECRET, "response": "tok-xyz", "remoteip": "203.0.113.7"}
 
@@ -89,6 +89,45 @@ def test_verify_sends_secret_response_and_remoteip(turnstile_on):
 def test_verify_treats_non_true_success_as_rejected(turnstile_on):
     with patch.object(turnstile_on, "_post_turnstile", return_value={"success": "yes"}):
         assert turnstile_on.verify_turnstile("tok", "203.0.113.7") is False
+
+
+def test_wrong_action_returns_403_and_no_token(client, turnstile_on):
+    ok_but_other_widget = {"success": True, "action": "contact_form", "hostname": "example.test"}
+    with patch.object(turnstile_on, "_post_turnstile", return_value=ok_but_other_widget):
+        resp = _mint(client)
+    assert resp.status_code == 403
+    assert "token" not in resp.get_json()
+
+
+def test_missing_action_returns_403(client, turnstile_on):
+    with patch.object(turnstile_on, "_post_turnstile", return_value={"success": True}):
+        resp = _mint(client)
+    assert resp.status_code == 403
+
+
+def test_wrong_hostname_returns_403_when_allow_list_set(client, turnstile_on, monkeypatch):
+    monkeypatch.setattr(turnstile_on, "TURNSTILE_EXPECTED_HOSTNAMES", {"app.example.test"})
+    ok_on_other_host = {"success": True, "action": "guest_token", "hostname": "evil.example.test"}
+    with patch.object(turnstile_on, "_post_turnstile", return_value=ok_on_other_host):
+        resp = _mint(client)
+    assert resp.status_code == 403
+    assert "token" not in resp.get_json()
+
+
+def test_matching_hostname_issues_token_when_allow_list_set(client, turnstile_on, monkeypatch):
+    monkeypatch.setattr(turnstile_on, "TURNSTILE_EXPECTED_HOSTNAMES", {"app.example.test"})
+    ok = {"success": True, "action": "guest_token", "hostname": "app.example.test"}
+    with patch.object(turnstile_on, "_post_turnstile", return_value=ok):
+        resp = _mint(client)
+    assert resp.status_code == 200
+
+
+def test_hostname_is_not_checked_when_allow_list_unset(client, turnstile_on, monkeypatch):
+    monkeypatch.setattr(turnstile_on, "TURNSTILE_EXPECTED_HOSTNAMES", set())
+    ok = {"success": True, "action": "guest_token", "hostname": "anything.example.test"}
+    with patch.object(turnstile_on, "_post_turnstile", return_value=ok):
+        resp = _mint(client)
+    assert resp.status_code == 200
 
 
 # ── Off production ────────────────────────────────────────────────────────────

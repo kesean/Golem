@@ -181,6 +181,11 @@ TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 TURNSTILE_TIMEOUT = 5  # seconds; a slow verify must not hold a guest request open
 TURNSTILE_TOKEN_MAX_LENGTH = 2048
+TURNSTILE_EXPECTED_ACTION = "guest_token"  # must match the widget's action in frontend/src/lib/turnstile.ts
+# Optional allow-list of widget hostnames (comma-separated). Unset means any hostname the widget key allows.
+TURNSTILE_EXPECTED_HOSTNAMES = {
+    h.strip() for h in os.getenv("TURNSTILE_EXPECTED_HOSTNAMES", "").split(",") if h.strip()
+}
 
 
 def _is_production() -> bool:
@@ -413,7 +418,11 @@ def _post_turnstile(form: dict) -> dict:
 
 
 def verify_turnstile(token: str, remoteip: str) -> bool:
-    """True when Cloudflare accepts the token. Raises TurnstileUnavailable when no answer comes back."""
+    """True when Cloudflare accepts the token for this action (and hostname, when configured).
+
+    A token from a different widget that shares the secret key is refused by the
+    action and hostname checks. Raises TurnstileUnavailable when no answer comes back.
+    """
     form = {"secret": TURNSTILE_SECRET_KEY, "response": token, "remoteip": remoteip}
     try:
         data = _post_turnstile(form)
@@ -421,7 +430,11 @@ def verify_turnstile(token: str, remoteip: str) -> bool:
         raise TurnstileUnavailable(str(e)) from e
     if not isinstance(data, dict):
         raise TurnstileUnavailable("siteverify response is not an object")
-    return data.get("success") is True
+    if data.get("success") is not True or data.get("action") != TURNSTILE_EXPECTED_ACTION:
+        return False
+    if TURNSTILE_EXPECTED_HOSTNAMES and data.get("hostname") not in TURNSTILE_EXPECTED_HOSTNAMES:
+        return False
+    return True
 
 
 def _turnstile_refusal():

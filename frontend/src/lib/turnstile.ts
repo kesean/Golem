@@ -4,12 +4,15 @@
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''
 const SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+// The backend refuses tokens whose action differs (app.py TURNSTILE_EXPECTED_ACTION).
+const TURNSTILE_ACTION = 'guest_token'
 
 interface TurnstileApi {
   render(
     container: HTMLElement,
     options: {
       sitekey: string
+      action: string
       size: 'invisible'
       callback: (token: string) => void
       'error-callback': () => void
@@ -66,6 +69,7 @@ export async function getTurnstileToken(): Promise<string | null> {
     }
     widgetId = turnstile.render(container, {
       sitekey: SITE_KEY,
+      action: TURNSTILE_ACTION,
       size: 'invisible',
       callback: (token) => {
         cleanup()
