@@ -330,6 +330,13 @@ def _user_key() -> str:
         return client_ip()
 
 
+def _sub_fingerprint(sub) -> str:
+    """Short SHA-256 of the token subject, so logs can correlate requests without storing the user ID."""
+    if not sub:
+        return "none"
+    return hashlib.sha256(str(sub).encode()).hexdigest()[:16]
+
+
 def require_auth(f):
     """Decorator that enforces Clerk JWT auth or guest JWT auth on a route."""
     @wraps(f)
@@ -601,6 +608,11 @@ def ask():
     All validation happens before the stream opens, so a bad request still
     gets a plain 4xx JSON response.
     """
+    # Logged for every authenticated /ask. Never the question text or the token.
+    payload = g.clerk_payload
+    kind = "guest" if payload.get("role") == "guest" else "clerk"
+    logger.info("ask ip=%s kind=%s sub=%s", client_ip(), kind, _sub_fingerprint(payload.get("sub")))
+
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 415
 
